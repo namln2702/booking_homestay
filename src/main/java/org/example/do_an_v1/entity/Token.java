@@ -3,7 +3,7 @@ package org.example.do_an_v1.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.do_an_v1.enums.StatusToken;
+import org.example.do_an_v1.enums.Status;
 
 @Entity
 @NoArgsConstructor
@@ -18,7 +18,7 @@ public class Token extends BaseEntity{
     private String token;
 
     @Column(name = "status", nullable = false)
-    private StatusToken statusToken ;
+    private Status statusToken ;
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)

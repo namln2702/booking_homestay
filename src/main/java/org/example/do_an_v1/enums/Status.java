@@ -1,6 +1,6 @@
 package org.example.do_an_v1.enums;
 
-public enum StatusToken {
+public enum Status {
 
     ACTIVE(1),
     INACTIVE(2);
@@ -9,7 +9,7 @@ public enum StatusToken {
 
     private int code;
 
-    StatusToken(int code){
+    Status(int code){
         this.code = code;
     }
 }

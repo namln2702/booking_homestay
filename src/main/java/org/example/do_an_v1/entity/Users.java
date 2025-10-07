@@ -4,6 +4,7 @@ package org.example.do_an_v1.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.do_an_v1.enums.RoleUser;
+import org.example.do_an_v1.enums.Status;
 
 import java.util.Set;
 
@@ -38,8 +39,18 @@ public class Users extends BaseEntity {
     @Column(name = "avatar_url", nullable = true)
     private String avatarUrl;
 
-    @Column(name = "google_id", nullable = true)
+    @Column(name = "age" , nullable = false)
+    private Integer age;
+
+    @Column(name = "name" , nullable = false)
+    private String name;
+
+    @Column(name = "google_id", nullable = false)
     private String googleId;
+
+
+    @Column(name = "email_verify", nullable = false)
+    private Boolean emailVerify;
 
     @OneToOne(mappedBy = "user")
     private Admins admin;

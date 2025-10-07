@@ -4,7 +4,7 @@ package org.example.do_an_v1.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.do_an_v1.enums.LevelAdmin;
-import org.example.do_an_v1.enums.StatusAdmin;
+import org.example.do_an_v1.enums.Status;
 
 @Entity
 @NoArgsConstructor
@@ -22,7 +22,7 @@ public class Admins extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status",  nullable = false )
-    private StatusAdmin statusAdmin = StatusAdmin.ACTIVE;
+    private Status status = Status.ACTIVE;
 
 
     // Tac dong mot bang thi anh huong bang con lai

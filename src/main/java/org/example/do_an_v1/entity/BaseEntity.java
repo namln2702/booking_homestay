@@ -13,10 +13,8 @@ import java.time.LocalDate;
 
 // Khong tao trong db, class cha chua cac truong chung
 @MappedSuperclass
-
 // Tu dong cap nhap cac gia tri @CreatedDate, @LastModifiedDate khi thao tac voi table
 @EntityListeners(AuditingEntityListener.class)
-@Entity
 @Getter
 @Setter
 public class BaseEntity {

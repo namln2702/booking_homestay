@@ -3,7 +3,7 @@ package org.example.do_an_v1.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.do_an_v1.enums.StatusCustomer;
+import org.example.do_an_v1.enums.Status;
 
 @Entity
 @NoArgsConstructor
@@ -16,7 +16,7 @@ public class Customers extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status",  nullable = false )
-    private StatusCustomer statusAdmin = StatusCustomer.ACTIVE;
+    private Status statusAdmin = Status.ACTIVE;
 
     @Column(name = "date_of_birth", nullable = false)
     private String dateOfBirth;
