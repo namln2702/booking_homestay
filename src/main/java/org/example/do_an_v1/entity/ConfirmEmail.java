@@ -4,6 +4,7 @@ package org.example.do_an_v1.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.*;
 import org.example.do_an_v1.enums.Status;
 
@@ -18,9 +19,10 @@ import java.util.Date;
 @AllArgsConstructor
 @NoArgsConstructor
 // Dung cho ca xac thuc tai khoan, quen mat khau
+@Table(name = "tbl_confirm_email")
 public class ConfirmEmail extends BaseEntity {
 
-    @Column(name = "email", nullable = false, unique = true)
+    @Column(name = "email", nullable = false)
     private String email;
 
     @Column(name = "code")
@@ -28,5 +30,7 @@ public class ConfirmEmail extends BaseEntity {
 
     @Column(name = "expired_at")
     private LocalDateTime expired_at;
+
+
 
 }

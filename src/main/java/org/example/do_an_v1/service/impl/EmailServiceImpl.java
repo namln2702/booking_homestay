@@ -1,21 +1,12 @@
 package org.example.do_an_v1.service.impl;
 
-import org.example.do_an_v1.dto.CodeForEmail;
-import org.example.do_an_v1.dto.UserDTO;
-import org.example.do_an_v1.entity.Users;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.UserRepository;
 import org.example.do_an_v1.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
-
-import java.security.SecureRandom;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 
 @Service

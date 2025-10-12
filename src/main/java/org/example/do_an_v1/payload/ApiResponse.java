@@ -1,7 +1,6 @@
 package org.example.do_an_v1.payload;
 
 
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

@@ -24,7 +24,7 @@ public class Preferences extends BaseEntity {
     private String description;
 
     @ManyToMany
-    Set<Users> users;
+    Set<User> users;
     
 
 
