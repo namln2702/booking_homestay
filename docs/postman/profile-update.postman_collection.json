@@ -1,0 +1,403 @@
+{
+  "info": {
+    "_postman_id": "3a3d7f2e-5b79-4b18-9f95-7c2b2f2c0031",
+    "name": "Profile Update API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "booking-homestay-codex"
+  },
+  "item": [
+    {
+      "name": "Customer - Update Profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{customerName}}\",\n  \"phone\": \"{{customerPhone}}\",\n  \"age\": {{customerAge}},\n  \"avatarUrl\": \"{{customerAvatarUrl}}\",\n  \"dateOfBirth\": \"{{customerDob}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/profile/customers/{{customerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "profile",
+            "customers",
+            "{{customerId}}"
+          ]
+        },
+        "description": "Updates the profile attributes for a customer user."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Response status code matches payload\", function () {",
+              "    pm.expect(jsonData.status).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"Response data reflects updated customer fields\", function () {",
+              "    pm.expect(jsonData).to.have.property('data');",
+              "    pm.expect(jsonData.data).to.include({",
+              "        name: pm.variables.get('customerName'),",
+              "        phone: pm.variables.get('customerPhone')",
+              "    });",
+              "    pm.expect(jsonData.data).to.have.property('roleUser', 'CUSTOMER');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Host - Update Profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{hostName}}\",\n  \"phone\": \"{{hostPhone}}\",\n  \"age\": {{hostAge}},\n  \"avatarUrl\": \"{{hostAvatarUrl}}\",\n  \"businessName\": \"{{hostBusinessName}}\",\n  \"qrCodeUrl\": \"{{hostQrCodeUrl}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/profile/hosts/{{hostId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "profile",
+            "hosts",
+            "{{hostId}}"
+          ]
+        },
+        "description": "Updates the profile attributes for a host user."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Response data contains host role\", function () {",
+              "    pm.expect(jsonData.data).to.have.property('roleUser', 'HOST');",
+              "});",
+              "",
+              "pm.test(\"Business name persisted\", function () {",
+              "    pm.expect(jsonData.data.businessName).to.eql(pm.variables.get('hostBusinessName'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Update Profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{adminName}}\",\n  \"phone\": \"{{adminPhone}}\",\n  \"age\": {{adminAge}},\n  \"avatarUrl\": \"{{adminAvatarUrl}}\",\n  \"levelAdmin\": \"{{adminLevel}}\",\n  \"status\": \"{{adminStatus}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/profile/admins/{{adminId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "profile",
+            "admins",
+            "{{adminId}}"
+          ]
+        },
+        "description": "Updates the profile attributes for an admin user."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Admin role asserted\", function () {",
+              "    pm.expect(jsonData.data).to.have.property('roleUser', 'ADMIN');",
+              "});",
+              "",
+              "pm.test(\"Level and status synced\", function () {",
+              "    pm.expect(jsonData.data.levelAdmin).to.eql(pm.variables.get('adminLevel'));",
+              "    pm.expect(jsonData.data.status).to.eql(pm.variables.get('adminStatus'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Invite",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const uniqueSuffix = Date.now();",
+              "pm.collectionVariables.set('adminInviteEmail', `admin.${uniqueSuffix}@example.com`);",
+              "pm.collectionVariables.set('adminInviteFullName', `Automation Admin ${uniqueSuffix}`);",
+              "pm.collectionVariables.set('adminInvitePhone', '+84123456780');",
+              "pm.collectionVariables.set('adminInviteLevel', 'ADMIN');",
+              "pm.collectionVariables.unset('adminActivationCode');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Response status code matches payload\", function () {",
+              "    pm.expect(jsonData.status).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"Activation code issued\", function () {",
+              "    pm.expect(jsonData.data.activationCode).to.match(/^[0-9]{6}$/);",
+              "});",
+              "",
+              "pm.test(\"Admin record created in pending state\", function () {",
+              "    pm.expect(jsonData.data.admin.roleUser).to.eql('ADMIN');",
+              "    pm.expect(jsonData.data.admin.status).to.eql('INACTIVE');",
+              "});",
+              "",
+              "pm.collectionVariables.set('adminActivationCode', jsonData.data.activationCode);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminInviteEmail}}\",\n  \"fullName\": \"{{adminInviteFullName}}\",\n  \"levelAdmin\": \"{{adminInviteLevel}}\",\n  \"phone\": \"{{adminInvitePhone}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admins/invite",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admins",
+            "invite"
+          ]
+        },
+        "description": "Super Admin invites a new admin account, issuing a 24-hour activation code."
+      },
+      "response": []
+    },
+    {
+      "name": "Admin - Activate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminInviteEmail}}\",\n  \"code\": \"{{adminActivationCode}}\",\n  \"fullName\": \"{{adminInviteFullName}}\",\n  \"phone\": \"{{adminInvitePhone}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admins/activate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admins",
+            "activate"
+          ]
+        },
+        "description": "Invited admin redeems their activation code and finalizes their account."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Account is active\", function () {",
+              "    pm.expect(jsonData.data.status).to.eql('ACTIVE');",
+              "});",
+              "",
+              "pm.test(\"Role remains admin\", function () {",
+              "    pm.expect(jsonData.data.roleUser).to.eql('ADMIN');",
+              "});",
+              "",
+              "pm.collectionVariables.unset('adminActivationCode');"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "customerId",
+      "value": "1"
+    },
+    {
+      "key": "customerName",
+      "value": "Jane Customer"
+    },
+    {
+      "key": "customerPhone",
+      "value": "+84123456789"
+    },
+    {
+      "key": "customerAge",
+      "value": "28"
+    },
+    {
+      "key": "customerAvatarUrl",
+      "value": "https://example.com/avatar/customer.jpg"
+    },
+    {
+      "key": "customerDob",
+      "value": "1996-03-21"
+    },
+    {
+      "key": "hostId",
+      "value": "2"
+    },
+    {
+      "key": "hostName",
+      "value": "Henry Host"
+    },
+    {
+      "key": "hostPhone",
+      "value": "+84098765432"
+    },
+    {
+      "key": "hostAge",
+      "value": "35"
+    },
+    {
+      "key": "hostAvatarUrl",
+      "value": "https://example.com/avatar/host.jpg"
+    },
+    {
+      "key": "hostBusinessName",
+      "value": "Henry Homestays Co."
+    },
+    {
+      "key": "hostQrCodeUrl",
+      "value": "https://example.com/qr/host.png"
+    },
+    {
+      "key": "adminId",
+      "value": "3"
+    },
+    {
+      "key": "adminName",
+      "value": "Alice Admin"
+    },
+    {
+      "key": "adminPhone",
+      "value": "+84011223344"
+    },
+    {
+      "key": "adminAge",
+      "value": "32"
+    },
+    {
+      "key": "adminAvatarUrl",
+      "value": "https://example.com/avatar/admin.jpg"
+    },
+    {
+      "key": "adminLevel",
+      "value": "SUPER_ADMIN"
+    },
+    {
+      "key": "adminStatus",
+      "value": "ACTIVE"
+    },
+    {
+      "key": "adminInviteEmail",
+      "value": ""
+    },
+    {
+      "key": "adminInviteFullName",
+      "value": ""
+    },
+    {
+      "key": "adminInvitePhone",
+      "value": ""
+    },
+    {
+      "key": "adminInviteLevel",
+      "value": "ADMIN"
+    },
+    {
+      "key": "adminActivationCode",
+      "value": ""
+    }
+  ]
+}
