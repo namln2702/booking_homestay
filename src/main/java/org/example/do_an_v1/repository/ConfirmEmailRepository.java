@@ -11,6 +11,6 @@ import org.springframework.stereotype.Repository;
 public interface ConfirmEmailRepository extends JpaRepository<ConfirmEmail, Integer> {
 
 
-    @Query(value = "select ce from ConfirmEmail ce where ce.email = :email and ce.code = :code order by ce.cratedAt desc limit 1")
+    @Query(value = "select ce from ConfirmEmail ce where ce.email = :email and ce.code = :code order by ce.createdAt desc limit 1")
     ConfirmEmail findByEmailAndCode(@Param("email") String email,@Param("code") String code);
 }

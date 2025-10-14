@@ -1,0 +1,43 @@
+package org.example.do_an_v1.controller;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.request.AdminProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.HostProfileUpdateRequest;
+import org.example.do_an_v1.payload.ApiResponse;
+import org.example.do_an_v1.service.ProfileService;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/profile")
+public class ProfileController {
+
+    private final ProfileService profileService;
+
+    @PutMapping("/customers/{userId}")
+    public ApiResponse<CustomerDTO> updateCustomerProfile(@PathVariable Long userId,
+                                                          @RequestBody @Valid CustomerProfileUpdateRequest request) {
+        return profileService.updateCustomerProfile(userId, request);
+    }
+
+    @PutMapping("/hosts/{userId}")
+    public ApiResponse<HostDTO> updateHostProfile(@PathVariable Long userId,
+                                                  @RequestBody @Valid HostProfileUpdateRequest request) {
+        return profileService.updateHostProfile(userId, request);
+    }
+
+    @PutMapping("/admins/{userId}")
+    public ApiResponse<AdminDTO> updateAdminProfile(@PathVariable Long userId,
+                                                    @RequestBody @Valid AdminProfileUpdateRequest request) {
+        return profileService.updateAdminProfile(userId, request);
+    }
+}
