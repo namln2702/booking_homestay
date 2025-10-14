@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
-import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.ConfirmEmail;
+import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.LevelAdmin;
 import org.example.do_an_v1.enums.RoleUser;
@@ -13,6 +13,7 @@ import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
+import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.repository.AdminRepository;
 import org.example.do_an_v1.repository.ConfirmEmailRepository;
 import org.example.do_an_v1.repository.UserRepository;
@@ -41,7 +42,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminDTO> inviteAdmin(AdminInviteRequest request) throws RuntimeException {
+    public ApiResponse<AdminInvitationResponse> inviteAdmin(AdminInviteRequest request) throws RuntimeException {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         User user = userRepository.findByEmail(normalizedEmail);
@@ -53,8 +54,13 @@ public class AdminServiceImpl implements AdminService {
                     .build();
         } else if (Objects.nonNull(user.getAdmin()) && Status.ACTIVE.equals(user.getAdmin().getStatus())) {
             Admin existingAdmin = user.getAdmin();
-            return new ApiResponse<>(409, "Admin account already active for email: " + normalizedEmail,
-                    profileMapper.toAdminDTO(existingAdmin));
+            AdminInvitationResponse conflictResponse = AdminInvitationResponse.builder()
+                    .admin(profileMapper.toAdminDTO(existingAdmin))
+                    .activationCode(null)
+                    .build();
+            return new ApiResponse<>(409,
+                    "Admin account already active for email: " + normalizedEmail,
+                    conflictResponse);
         } else {
             user.setName(request.getFullName());
             if (Objects.nonNull(request.getPhone())) {
@@ -87,7 +93,14 @@ public class AdminServiceImpl implements AdminService {
 
         emailService.sendSimpleEmail(normalizedEmail, buildInvitationMessage(inviteCode));
 
-        return new ApiResponse<>(200, "Invitation sent successfully", profileMapper.toAdminDTO(admin));
+        AdminInvitationResponse response = AdminInvitationResponse.builder()
+                .admin(profileMapper.toAdminDTO(admin))
+                .activationCode(inviteCode)
+                .build();
+
+        return new ApiResponse<>(200,
+                "Invitation sent successfully. Activation code is returned for testing purposes only.",
+                response);
     }
 
     @Override
@@ -137,4 +150,3 @@ public class AdminServiceImpl implements AdminService {
         return "You have been invited to join the admin team. Use this one-time activation code within 24 hours: " + code;
     }
 }
-
