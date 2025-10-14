@@ -1,31 +1,40 @@
 package org.example.do_an_v1.controller;
 
 
-import org.example.do_an_v1.dto.UserDTO;
+import lombok.extern.slf4j.Slf4j;
+import org.example.do_an_v1.dto.CodeForEmail;
 import org.example.do_an_v1.payload.ApiResponse;
-import org.example.do_an_v1.service.EmailService;
+import org.example.do_an_v1.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 
+
+@Slf4j
 @RestController
 @RequestMapping("/user")
 public class UserController {
 
 
     @Autowired
-    private EmailService emailService;
-//    @PostMapping("/register")
-//    ApiResponse<> register(@RequestBody UserDTO userDTO){
-//        return new ResponseEntity<>(HttpStatus.OK);
-//    }
+    private UserService userService;
+
+
+    @PostMapping("/login-register-with-email")
+    ApiResponse<CodeForEmail> register(@RequestParam String email){
+        return userService.loginRegWithEmail(email);
+    }
 //
-//    @PostMapping("")
-//    ResponseEntity<?> changePassword(@RequestBody UserReq userReq){
-//        return new ResponseEntity<>(HttpStatus.OK);
-//    }
+    @PostMapping("/confirm-email")
+    ApiResponse<?> confirmEmail(@RequestBody CodeForEmail codeForEmail){
+        return userService.confirmEmail(codeForEmail);
+    }
+
+    @PostMapping("/login-register-with-google")
+    ApiResponse<?> getTokenWithTokenGG(@RequestParam("code") String tokenGG){
+        log.info(tokenGG);
+        return userService.loginRegEmailWithGoogle(tokenGG);
+    }
 
 
 //    @GetMapping("/test-email")
