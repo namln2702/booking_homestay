@@ -19,4 +19,20 @@ public class UserDTOMapUser {
                 .googleId(userDTO.getGoogleId())
                 .build();
     }
+
+    public UserDTO userMapUserDTO(User user){
+
+        return UserDTO.builder()
+                .name(user.getName())
+                .age(user.getAge())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl())
+                .isOnline(user.getIsOnline())
+                .username(user.getUsername())
+                .googleId(user.getGoogleId())
+                .build();
+
+    }
+
 }

@@ -22,13 +22,10 @@ public class UserDTO {
     private String name;
     private Integer age;
 
-    private RoleUser roleUser;
-
     private Boolean isOnline;
 
     private String avatarUrl;
 
     private String googleId;
 
-    private Status emailVerify;
 }

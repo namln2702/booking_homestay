@@ -1,6 +1,7 @@
 package org.example.do_an_v1.service;
 
 import org.example.do_an_v1.dto.CodeForEmail;
+import org.example.do_an_v1.dto.LogoutRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 
 public interface UserService {
@@ -12,6 +13,7 @@ public interface UserService {
     ApiResponse<?> confirmEmail(CodeForEmail codeForEmail) throws RuntimeException;
 
 
+    ApiResponse<?> logout() throws RuntimeException;
 
     // Register with google
     ApiResponse<?> loginRegEmailWithGoogle(String tokenGG) throws RuntimeException;

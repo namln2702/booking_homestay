@@ -4,18 +4,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.dto.*;
 //import org.example.do_an_v1.dto.SendGoogle;
 import org.example.do_an_v1.entity.*;
-import org.example.do_an_v1.mapper.UserDTOMapUser;
+import org.example.do_an_v1.enums.RoleUser;
+import org.example.do_an_v1.mapper.AdminMapper;
+import org.example.do_an_v1.mapper.CustomerMapper;
+import org.example.do_an_v1.mapper.HostMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -25,6 +32,8 @@ import java.util.stream.IntStream;
 @Slf4j
 @Service
 public class UserServiceImpl implements UserService {
+    @Autowired
+    private AdminRepository adminRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -33,8 +42,13 @@ public class UserServiceImpl implements UserService {
     private CustomerRepository customerRepository;
 
     @Autowired
+    private InvalidateTokenRepository invalidateTokenRepository;
+
+    @Autowired
     private ConfirmEmailRepository confirmEmailRepository;
 
+    @Autowired
+    private HostRepository hostRepository;
 
     @Autowired
     private GoogleRepository googleRepository;
@@ -46,10 +60,9 @@ public class UserServiceImpl implements UserService {
     private EmailService emailService;
 
     @Autowired
-    private UserDTOMapUser userDTOMapUser;
+    private SecurityService securityService;
 
-    @Autowired
-    private HostRepository hostRepository;
+
 
     @Value("${outbound.identity.client-id}")
     private String CLIENT_ID ;
@@ -63,6 +76,8 @@ public class UserServiceImpl implements UserService {
     private final String GRANT_TYPE = "authorization_code";
 
 
+
+    // Check login/register user
     @Override
     public ApiResponse<CodeForEmail> loginRegWithEmail(String email) throws RuntimeException{
 
@@ -73,6 +88,11 @@ public class UserServiceImpl implements UserService {
             user = userRepository.save(User.builder()
                             .email(email)
                     .build());
+            customerRepository.save(Customer.builder()
+                            .user(user)
+                            .role(RoleUser.CUSTOMER)
+                    .build());
+
         }
         String code = secureRandomNumbers();
 
@@ -136,30 +156,67 @@ public class UserServiceImpl implements UserService {
     }
 
 
+    @Override
+    public ApiResponse<?> logout() throws RuntimeException{
+
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Jwt jwt = (Jwt) authentication.getPrincipal();
+            String tokenId = jwt.getId();
+            Date date = Date.from(jwt.getExpiresAt());
+
+            invalidateTokenRepository.save(InvalidateToken.builder()
+                    .tokenId(tokenId)
+                    .expired(date)
+                    .build());
+        }
+        catch (Exception e){
+            throw new  RuntimeException("Token already exits");
+        }
+
+
+        return new ApiResponse<>(200, "Logout success", null);
+    }
+
+    //    Kiem tra xem email da ton tai hay chua. Neu chua ton tai tao ra 1 customer moi
+//    neu co roi tra ve (customer or host or admin)
     public ApiResponse<?> checkUser(User user){
-        if(Objects.isNull(user)){
-            return new ApiResponse<>(200, "Register customer success", customerRepository.save(Customer.builder()
-                    .user(user)
-                    .build()));
+
+        String token = "";
+
+        Customer customer = customerRepository.findByUser(user);
+        if(Objects.nonNull(customer)){
+
+            CustomerDTO customerDTO  = CustomerMapper.customerMapCustomerDTO(customer);
+            token = securityService.createTokenSystem(user, RoleUser.CUSTOMER.toString());
+            return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
+                    .token(token)
+                    .user(customerDTO)
+                    .build());
         }
 
-        else {
-            Customer customer = customerRepository.findByUser(user);
-            if(Objects.nonNull(customer)){
-                return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                        .build());
-            }
+        Host host = hostRepository.findByUser(user);
+        if(Objects.nonNull(host)){
 
-            Host host = hostRepository.findByUser(user);
-            if(Objects.nonNull(host)){
-                return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder().build());
-            }
+            HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
+            token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
+
+            return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
+                    .user(hostDTO)
+                    .token(token)
+                    .build());
         }
+
+
+        Admin admin = adminRepository.findByUser(user);
+
+
+        AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
+        token = securityService.createTokenSystem(user, RoleUser.ADMIN.toString());
 
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                .user(customerRepository.save(Customer.builder()
-                        .user(user)
-                        .build()))
+                .user(adminDTO)
+                .token(token)
                 .build());
 
     }
@@ -183,9 +240,7 @@ public class UserServiceImpl implements UserService {
     // Create code
     public String secureRandomNumbers() {
 
-
         CustomerDTO customerDTO = CustomerDTO.builder()
-
                 .build();
 
         SecureRandom secureRandom = new SecureRandom();
@@ -197,5 +252,10 @@ public class UserServiceImpl implements UserService {
 
         return result;
     }
+
+
+
+
+
 
 }

@@ -43,6 +43,8 @@ public class User extends BaseEntity {
     @Column(name = "google_id", nullable = true)
     private String googleId;
 
+
+
     @OneToOne(mappedBy = "user")
     private Admin admin;
 
