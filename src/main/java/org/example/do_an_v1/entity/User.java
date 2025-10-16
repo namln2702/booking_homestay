@@ -44,7 +44,6 @@ public class User extends BaseEntity {
     private String googleId;
 
 
-
     @OneToOne(mappedBy = "user")
     private Admin admin;
 
