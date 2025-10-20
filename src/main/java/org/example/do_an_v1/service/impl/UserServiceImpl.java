@@ -83,8 +83,12 @@ public class UserServiceImpl implements UserService {
 
         User user = userRepository.findByEmail(email);
 
+
         // Check xem da ton tai trong DB chua
         if(Objects.isNull(user)) {
+
+
+
             user = userRepository.save(User.builder()
                             .email(email)
                     .build());
@@ -94,8 +98,17 @@ public class UserServiceImpl implements UserService {
                     .build());
 
         }
+
+
+        // Check kiem tra co phai Admin khong
+        if(Objects.nonNull(user.getAdmin())){
+            return new ApiResponse<>(400, "Email invalid", null);
+        }
+
         String code = secureRandomNumbers();
 
+
+        // Tao code xac thuc
         ConfirmEmail confirmEmail = confirmEmailRepository.save(ConfirmEmail.builder()
                         .code(code)
                         .email(user.getEmail())
@@ -152,6 +165,23 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(infoUserFromGoogleDTO.getEmail());
 
 
+        if(Objects.isNull(user)) {
+
+            user = userRepository.save(User.builder()
+                    .email(infoUserFromGoogleDTO.getEmail())
+                    .build());
+            customerRepository.save(Customer.builder()
+                    .user(user)
+                    .role(RoleUser.CUSTOMER)
+                    .build());
+
+        }
+        // Check user da ton tai chua
+        else if (Objects.nonNull(user.getAdmin())){
+            return new ApiResponse<>(400, "Email invalid", null);
+        }
+
+
         return checkUser(user);
     }
 
@@ -196,29 +226,14 @@ public class UserServiceImpl implements UserService {
         }
 
         Host host = hostRepository.findByUser(user);
-        if(Objects.nonNull(host)){
 
-            HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
-            token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
-
-            return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                    .user(hostDTO)
-                    .token(token)
-                    .build());
-        }
-
-
-        Admin admin = adminRepository.findByUser(user);
-
-
-        AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
-        token = securityService.createTokenSystem(user, RoleUser.ADMIN.toString());
+        HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
+        token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
 
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                .user(adminDTO)
+                .user(hostDTO)
                 .token(token)
                 .build());
-
     }
 
     public AccessTokenGoogleDTO getAccessTokenDTO(String authCode) throws RuntimeException{

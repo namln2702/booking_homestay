@@ -24,7 +24,7 @@ public class ProfileMapper {
                 .avatarUrl(user.getAvatarUrl())
                 .isOnline(user.getIsOnline())
                 .googleId(user.getGoogleId())
-                .roleUser(customer.getRole())
+                .role(customer.getRole())
                 .status(customer.getStatus())
                 .dateOfBirth(customer.getDateOfBirth())
                 .qrCodeUrl(customer.getQrCodeUrl())
@@ -44,10 +44,10 @@ public class ProfileMapper {
                 .avatarUrl(user.getAvatarUrl())
                 .isOnline(user.getIsOnline())
                 .googleId(user.getGoogleId())
-                .roleUser(host.getRole())
+                .role(host.getRole())
                 .businessName(host.getBusinessName())
                 .qrCodeUrl(host.getQrCodeUrl())
-                .status(host.getStatusHost())
+                .statusHost(host.getStatusHost())
                 .build();
     }
 
@@ -63,7 +63,7 @@ public class ProfileMapper {
                 .avatarUrl(user.getAvatarUrl())
                 .isOnline(user.getIsOnline())
                 .googleId(user.getGoogleId())
-                .roleUser(admin.getRole())
+                .role(admin.getRole())
                 .levelAdmin(admin.getLevelAdmin())
                 .status(admin.getStatus())
                 .build();

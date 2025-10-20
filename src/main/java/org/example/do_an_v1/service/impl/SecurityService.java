@@ -52,7 +52,7 @@ public class SecurityService {
                 .expirationTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.MINUTES).toEpochMilli()))
                 .jwtID(UUID.randomUUID().toString())
                 .claim("id", u.getId())
-                .claim("scope","ROLE_" + role)
+                .claim("scope","ROLE_" + role) // ROLE_ADMIN
                 .build();
 
         Payload payload = new Payload(jwtClaimsSet.toJSONObject());

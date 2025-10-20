@@ -8,6 +8,7 @@ import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +26,8 @@ public class AdminController {
         return adminService.inviteAdmin(request);
     }
 
+
+    @PreAuthorize("ADMIN")
     @PostMapping("/activate")
     public ApiResponse<AdminDTO> activateAdmin(@RequestBody @Valid AdminActivationRequest request) {
         return adminService.activateAdmin(request);

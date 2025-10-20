@@ -21,7 +21,7 @@ public class UserController {
 
 
     @PostMapping("/login-register-with-email")
-    ApiResponse<CodeForEmail> register(@RequestParam String email){
+    ApiResponse<CodeForEmail> loginRegister(@RequestParam String email){
         return userService.loginRegWithEmail(email);
     }
 //
