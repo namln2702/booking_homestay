@@ -12,20 +12,19 @@ import java.util.Set;
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @Setter
 @Getter
+@Builder
 @Table(name = "tbl_preferences")
-public class Preferences extends BaseEntity {
+public class Preference extends BaseEntity {
+
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "description", nullable = false)
+    @Column(name = "description")
     private String description;
 
     @ManyToMany
-    Set<User> users;
-    
-
+    Set<Customer> listCustomer;
 
 }

@@ -6,6 +6,8 @@ import lombok.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.StatusHost;
 
+import java.util.Set;
+
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
@@ -34,5 +36,8 @@ public class Host extends BaseEntity{
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     @MapsId
     private User user;
+
+    @OneToMany(mappedBy = "host", cascade = CascadeType.ALL)
+    Set<Homestay> homestays;
 
 }

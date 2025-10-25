@@ -6,6 +6,8 @@ import lombok.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
 
+import java.util.Set;
+
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,6 +38,15 @@ public class Customer extends BaseEntity{
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     @MapsId
     private User user;
+
+    @ManyToMany
+    Set<Preferences> listPreferences;
+
+    @OneToMany(mappedBy = "customer")
+    Set<Review> reviews;
+
+    @OneToMany(mappedBy = "customer")
+    Set<Bill> listBill;
 
 
 }

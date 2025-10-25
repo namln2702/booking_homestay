@@ -24,10 +24,6 @@ public class User extends BaseEntity {
     @Column(name = "phone", nullable = true)
     private String phone;
 
-//    @Enumerated(EnumType.STRING)
-//    @Column(name = "role", nullable = true)
-//    private RoleUser roleUser;
-
     @Column(name = "is_online", nullable = true)
     private Boolean isOnline;
 
@@ -43,7 +39,6 @@ public class User extends BaseEntity {
     @Column(name = "google_id", nullable = true)
     private String googleId;
 
-
     @OneToOne(mappedBy = "user")
     private Admin admin;
 
@@ -57,5 +52,13 @@ public class User extends BaseEntity {
     private Set<Token> tokens;
 
     @ManyToMany
-    private Set<Preferences> preferences;
+    private Set<Preference> preferences;
+
+    @OneToMany(mappedBy = "fromUser")
+    @JoinColumn(name = "from_user")
+    Set<Transaction> listTransactionForFromUser;
+
+    @OneToMany(mappedBy = "toUser")
+    @JoinColumn(name = "to_user")
+    Set<Transaction> listTransactionForToUser;
 }

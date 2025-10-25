@@ -7,6 +7,8 @@ import org.example.do_an_v1.enums.LevelAdmin;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
 
+import java.util.Set;
+
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,4 +38,10 @@ public class Admin extends BaseEntity{
     @MapsId
     private User user;
 
+
+    @OneToMany(mappedBy = "admin", cascade = CascadeType.ALL)
+    Set<HomestayPenalties> listHomestayPenalties;
+
+    @OneToMany(mappedBy = "admin", cascade = CascadeType.ALL)
+    Set<Complaint> listComplaint;
 }
