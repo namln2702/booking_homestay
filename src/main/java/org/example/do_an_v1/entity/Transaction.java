@@ -21,10 +21,6 @@ public class Transaction extends BaseEntity{
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "type", nullable = false, length = 50)
-    private String type;
-
-
     // Phan loai transaction
     @Column(name = "type", length = 20)
     private TypeTransaction transactionType;
