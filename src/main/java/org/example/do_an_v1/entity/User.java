@@ -55,10 +55,8 @@ public class User extends BaseEntity {
     private Set<Preference> preferences;
 
     @OneToMany(mappedBy = "fromUser")
-    @JoinColumn(name = "from_user")
     Set<Transaction> listTransactionForFromUser;
 
     @OneToMany(mappedBy = "toUser")
-    @JoinColumn(name = "to_user")
     Set<Transaction> listTransactionForToUser;
 }

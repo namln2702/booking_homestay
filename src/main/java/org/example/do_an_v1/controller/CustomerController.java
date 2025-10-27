@@ -32,5 +32,7 @@ public class CustomerController {
     public ApiResponse<?> registerWithGoogle(@RequestParam("code") String tokenGG) {
         return customerService.registerEmailWithGoogle(tokenGG);
     }
+
+
 }
 

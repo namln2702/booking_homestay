@@ -19,7 +19,7 @@ public class Customer extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status",  nullable = true )
-    private Status status = Status.ACTIVE;
+    private Status status = Status.INACTIVE;
 
     @Column(name = "date_of_birth", nullable = true)
     private String dateOfBirth;
@@ -40,7 +40,7 @@ public class Customer extends BaseEntity{
     private User user;
 
     @ManyToMany
-    Set<Preferences> listPreferences;
+    Set<Preference> listPreferences;
 
     @OneToMany(mappedBy = "customer")
     Set<Review> reviews;
