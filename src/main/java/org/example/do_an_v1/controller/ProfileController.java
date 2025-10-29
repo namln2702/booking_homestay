@@ -23,18 +23,21 @@ public class ProfileController {
 
     private final ProfileService profileService;
 
+    // Update or create the customer profile tied to the given user
     @PutMapping("/customers/{userId}")
     public ApiResponse<CustomerDTO> updateCustomerProfile(@PathVariable Long userId,
                                                           @RequestBody @Valid CustomerProfileUpdateRequest request) {
         return profileService.updateCustomerProfile(userId, request);
     }
 
+    // Update or create the host profile tied to the given user
     @PutMapping("/hosts/{userId}")
     public ApiResponse<HostDTO> updateHostProfile(@PathVariable Long userId,
                                                   @RequestBody @Valid HostProfileUpdateRequest request) {
         return profileService.updateHostProfile(userId, request);
     }
 
+    // Update or create the admin profile tied to the given user
     @PutMapping("/admins/{userId}")
     public ApiResponse<AdminDTO> updateAdminProfile(@PathVariable Long userId,
                                                     @RequestBody @Valid AdminProfileUpdateRequest request) {

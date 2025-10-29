@@ -21,6 +21,7 @@ public class AdminController {
 
     private final AdminService adminService;
 
+    // Issue a new admin invitation email and return the invitation payload
     @PostMapping("/invite")
     public ApiResponse<AdminInvitationResponse> inviteAdmin(@RequestBody @Valid AdminInviteRequest request) {
         return adminService.inviteAdmin(request);
@@ -28,6 +29,7 @@ public class AdminController {
 
 
     @PreAuthorize("ADMIN")
+    // Activate an invited admin account once they provide the confirmation details
     @PostMapping("/activate")
     public ApiResponse<AdminDTO> activateAdmin(@RequestBody @Valid AdminActivationRequest request) {
         return adminService.activateAdmin(request);

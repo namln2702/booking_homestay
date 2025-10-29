@@ -40,7 +40,7 @@ public class Customer extends BaseEntity{
     private User user;
 
     @ManyToMany
-    Set<Preferences> listPreferences;
+    Set<Preference> listPreferences;
 
     @OneToMany(mappedBy = "customer")
     Set<Review> reviews;

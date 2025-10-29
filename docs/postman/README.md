@@ -1,6 +1,6 @@
 # Profile Update API Postman Tests
 
-This directory contains `profile-update.postman_collection.json`, a Postman collection that exercises the new profile update endpoints for customers, hosts, and admins.
+This directory contains Postman collections for exercising the Booking Homestay API flows.
 
 ## Using the Collection
 
@@ -10,3 +10,8 @@ This directory contains `profile-update.postman_collection.json`, a Postman coll
 4. Send each request. The bundled tests will assert HTTP status 200 and validate key fields in the JSON response payload.
 
 If your API requires authentication, add the appropriate headers or tokens to each request or configure them at the collection level before running the tests.
+
+## Collections
+
+- `profile-update.postman_collection.json`: Exercises the profile update endpoints for customers, hosts, and admins.
+- `customer-host-registration-flow.postman_collection.json`: Walks through the full registration flow for customer and host accounts, including user creation, email confirmation, profile registration, and retrieval checks.
