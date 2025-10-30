@@ -1,0 +1,141 @@
+{
+  "info": {
+    "_postman_id": "0e3b2e6a-8f7f-4c72-b5a5-c0a07a4dff5f",
+    "name": "Admin Registration Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "booking-homestay"
+  },
+  "item": [
+    {
+      "name": "Invite Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{superAdminToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{inviteeEmail}}\",\n  \"fullName\": \"{{inviteeName}}\",\n  \"phone\": \"{{inviteePhone}}\",\n  \"levelAdmin\": \"ADMIN\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admins/invite",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admins",
+            "invite"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Response has data payload', function () {",
+              "    pm.expect(json.data).to.be.an('object');",
+              "});",
+              "",
+              "pm.test('Activation code is 6 digits', function () {",
+              "    pm.expect(json.data.activationCode).to.match(/^[0-9]{6}$/);",
+              "});",
+              "",
+              "const requestBody = pm.request.body && pm.request.body.raw ? JSON.parse(pm.request.body.raw) : {};",
+              "pm.environment.set('adminActivationEmail', requestBody.email || '');",
+              "pm.environment.set('adminActivationCode', json.data.activationCode);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activate Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminActivationEmail}}\",\n  \"code\": \"{{adminActivationCode}}\",\n  \"fullName\": \"{{inviteeName}}\",\n  \"phone\": \"{{inviteePhone}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admins/activate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admins",
+            "activate"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Admin DTO returned', function () {",
+              "    pm.expect(json.data).to.be.an('object');",
+              "    pm.expect(json.data.email).to.eql(pm.environment.get('adminActivationEmail'));",
+              "});",
+              "",
+              "pm.test('Admin is active after activation', function () {",
+              "    pm.expect(json.data.status).to.eql('ACTIVE');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "superAdminToken",
+      "value": ""
+    },
+    {
+      "key": "inviteeEmail",
+      "value": "new.admin@example.com"
+    },
+    {
+      "key": "inviteeName",
+      "value": "New Admin"
+    },
+    {
+      "key": "inviteePhone",
+      "value": "0123456789"
+    }
+  ]
+}

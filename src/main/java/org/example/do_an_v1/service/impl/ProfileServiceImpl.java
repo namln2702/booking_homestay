@@ -4,13 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HostDTO;
-import org.example.do_an_v1.dto.request.AdminProfileUpdateRequest;
-import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
-import org.example.do_an_v1.dto.request.HostProfileUpdateRequest;
+import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.Host;
-import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.User;
+import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -36,38 +34,40 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> updateCustomerProfile(Long userId, CustomerProfileUpdateRequest request) {
+    public ApiResponse<CustomerDTO> updateCustomerProfile(Long userId, CustomerDTO request) {
+        if (request == null) {
+            return badRequest("Customer profile payload is required");
+        }
+        ApiResponse<CustomerDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
+        if (mismatchResponse != null) {
+            return mismatchResponse;
+        }
+
         Customer customer = customerRepository.findById(userId).orElse(null);
         boolean isNew = false;
 
         if (customer == null) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
-            customer = Customer.builder().user(user).build();
+            customer = Customer.builder()
+                    .user(user)
+                    .role(RoleUser.CUSTOMER)
+                    .build();
             isNew = true;
         }
 
         User user = customer.getUser();
+        boolean hasChanges = isNew;
 
-        boolean hasChanges = false;
+        hasChanges |= applyMutableUserFields(user,
+                request.getUsername(),
+                request.getName(),
+                request.getPhone(),
+                request.getAge(),
+                request.getAvatarUrl());
 
-        if (request.getName() != null && !Objects.equals(request.getName(), user.getName())) {
-            user.setName(request.getName());
-            hasChanges = true;
-        }
-
-        if (request.getPhone() != null && !Objects.equals(request.getPhone(), user.getPhone())) {
-            user.setPhone(request.getPhone());
-            hasChanges = true;
-        }
-
-        if (request.getAge() != null && !Objects.equals(request.getAge(), user.getAge())) {
-            user.setAge(request.getAge());
-            hasChanges = true;
-        }
-
-        if (request.getAvatarUrl() != null && !Objects.equals(request.getAvatarUrl(), user.getAvatarUrl())) {
-            user.setAvatarUrl(request.getAvatarUrl());
+        if (request.getStatus() != null && !Objects.equals(request.getStatus(), customer.getStatus())) {
+            customer.setStatus(request.getStatus());
             hasChanges = true;
         }
 
@@ -76,48 +76,63 @@ public class ProfileServiceImpl implements ProfileService {
             hasChanges = true;
         }
 
-        if (hasChanges || isNew) {
-            customerRepository.save(customer);
-            return new ApiResponse<>(200, "Customer profile updated successfully", profileMapper.toCustomerDTO(customer));
+        if (request.getQrCodeUrl() != null && !Objects.equals(request.getQrCodeUrl(), customer.getQrCodeUrl())) {
+            customer.setQrCodeUrl(request.getQrCodeUrl());
+            hasChanges = true;
         }
 
-        return new ApiResponse<>(200, "No changes detected for customer profile", profileMapper.toCustomerDTO(customer));
+        // lastBooking is derived from booking workflows and should not be overridden by profile updates
+
+        if (customer.getRole() != RoleUser.CUSTOMER) {
+            customer.setRole(RoleUser.CUSTOMER);
+            hasChanges = true;
+        }
+
+        if (!hasChanges) {
+            return new ApiResponse<>(200, "No changes detected for customer profile", profileMapper.toCustomerDTO(customer));
+        }
+
+        Customer savedCustomer = customerRepository.save(customer);
+        String message = isNew ? "Customer profile created successfully" : "Customer profile updated successfully";
+        return new ApiResponse<>(200, message, profileMapper.toCustomerDTO(savedCustomer));
     }
 
     @Override
     @Transactional
-    public ApiResponse<HostDTO> updateHostProfile(Long userId, HostProfileUpdateRequest request) {
+    public ApiResponse<HostDTO> updateHostProfile(Long userId, HostDTO request) {
+        if (request == null) {
+            return badRequest("Host profile payload is required");
+        }
+        ApiResponse<HostDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
+        if (mismatchResponse != null) {
+            return mismatchResponse;
+        }
+
         Host host = hostRepository.findById(userId).orElse(null);
         boolean isNew = false;
 
         if (host == null) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
-            host = Host.builder().user(user).build();
+            host = Host.builder()
+                    .user(user)
+                    .role(RoleUser.HOST)
+                    .build();
             isNew = true;
         }
 
         User user = host.getUser();
+        boolean hasChanges = isNew;
 
-        boolean hasChanges = false;
+        hasChanges |= applyMutableUserFields(user,
+                request.getUsername(),
+                request.getName(),
+                request.getPhone(),
+                request.getAge(),
+                request.getAvatarUrl());
 
-        if (request.getName() != null && !Objects.equals(request.getName(), user.getName())) {
-            user.setName(request.getName());
-            hasChanges = true;
-        }
-
-        if (request.getPhone() != null && !Objects.equals(request.getPhone(), user.getPhone())) {
-            user.setPhone(request.getPhone());
-            hasChanges = true;
-        }
-
-        if (request.getAge() != null && !Objects.equals(request.getAge(), user.getAge())) {
-            user.setAge(request.getAge());
-            hasChanges = true;
-        }
-
-        if (request.getAvatarUrl() != null && !Objects.equals(request.getAvatarUrl(), user.getAvatarUrl())) {
-            user.setAvatarUrl(request.getAvatarUrl());
+        if (request.getStatusHost() != null && !Objects.equals(request.getStatusHost(), host.getStatusHost())) {
+            host.setStatusHost(request.getStatusHost());
             hasChanges = true;
         }
 
@@ -131,50 +146,53 @@ public class ProfileServiceImpl implements ProfileService {
             hasChanges = true;
         }
 
-        if (hasChanges || isNew) {
-            hostRepository.save(host);
-            return new ApiResponse<>(200, "Host profile updated successfully", profileMapper.toHostDTO(host));
+        if (host.getRole() != RoleUser.HOST) {
+            host.setRole(RoleUser.HOST);
+            hasChanges = true;
         }
 
-        return new ApiResponse<>(200, "No changes detected for host profile", profileMapper.toHostDTO(host));
+        if (!hasChanges) {
+            return new ApiResponse<>(200, "No changes detected for host profile", profileMapper.toHostDTO(host));
+        }
+
+        Host savedHost = hostRepository.save(host);
+        String message = isNew ? "Host profile created successfully" : "Host profile updated successfully";
+        return new ApiResponse<>(200, message, profileMapper.toHostDTO(savedHost));
     }
 
     @Override
     @Transactional
-    public ApiResponse<AdminDTO> updateAdminProfile(Long userId, AdminProfileUpdateRequest request) {
+    public ApiResponse<AdminDTO> updateAdminProfile(Long userId, AdminDTO request) {
+        if (request == null) {
+            return badRequest("Admin profile payload is required");
+        }
+        ApiResponse<AdminDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
+        if (mismatchResponse != null) {
+            return mismatchResponse;
+        }
+
         Admin admin = adminRepository.findById(userId).orElse(null);
         boolean isNew = false;
 
         if (admin == null) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
-            admin = Admin.builder().user(user).build();
+            admin = Admin.builder()
+                    .user(user)
+                    .role(RoleUser.ADMIN)
+                    .build();
             isNew = true;
         }
 
         User user = admin.getUser();
+        boolean hasChanges = isNew;
 
-        boolean hasChanges = false;
-
-        if (request.getName() != null && !Objects.equals(request.getName(), user.getName())) {
-            user.setName(request.getName());
-            hasChanges = true;
-        }
-
-        if (request.getPhone() != null && !Objects.equals(request.getPhone(), user.getPhone())) {
-            user.setPhone(request.getPhone());
-            hasChanges = true;
-        }
-
-        if (request.getAge() != null && !Objects.equals(request.getAge(), user.getAge())) {
-            user.setAge(request.getAge());
-            hasChanges = true;
-        }
-
-        if (request.getAvatarUrl() != null && !Objects.equals(request.getAvatarUrl(), user.getAvatarUrl())) {
-            user.setAvatarUrl(request.getAvatarUrl());
-            hasChanges = true;
-        }
+        hasChanges |= applyMutableUserFields(user,
+                request.getUsername(),
+                request.getName(),
+                request.getPhone(),
+                request.getAge(),
+                request.getAvatarUrl());
 
         if (request.getLevelAdmin() != null && !Objects.equals(request.getLevelAdmin(), admin.getLevelAdmin())) {
             admin.setLevelAdmin(request.getLevelAdmin());
@@ -186,11 +204,64 @@ public class ProfileServiceImpl implements ProfileService {
             hasChanges = true;
         }
 
-        if (hasChanges || isNew) {
-            adminRepository.save(admin);
-            return new ApiResponse<>(200, "Admin profile updated successfully", profileMapper.toAdminDTO(admin));
+        if (admin.getRole() != RoleUser.ADMIN) {
+            admin.setRole(RoleUser.ADMIN);
+            hasChanges = true;
         }
 
-        return new ApiResponse<>(200, "No changes detected for admin profile", profileMapper.toAdminDTO(admin));
+        if (!hasChanges) {
+            return new ApiResponse<>(200, "No changes detected for admin profile", profileMapper.toAdminDTO(admin));
+        }
+
+        Admin savedAdmin = adminRepository.save(admin);
+        String message = isNew ? "Admin profile created successfully" : "Admin profile updated successfully";
+        return new ApiResponse<>(200, message, profileMapper.toAdminDTO(savedAdmin));
+    }
+
+    private boolean applyMutableUserFields(User user,
+                                           String username,
+                                           String name,
+                                           String phone,
+                                           Integer age,
+                                           String avatarUrl) {
+        boolean changed = false;
+
+        if (username != null && !Objects.equals(username, user.getUsername())) {
+            user.setUsername(username);
+            changed = true;
+        }
+
+        if (name != null && !Objects.equals(name, user.getName())) {
+            user.setName(name);
+            changed = true;
+        }
+
+        if (phone != null && !Objects.equals(phone, user.getPhone())) {
+            user.setPhone(phone);
+            changed = true;
+        }
+
+        if (age != null && !Objects.equals(age, user.getAge())) {
+            user.setAge(age);
+            changed = true;
+        }
+
+        if (avatarUrl != null && !Objects.equals(avatarUrl, user.getAvatarUrl())) {
+            user.setAvatarUrl(avatarUrl);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private <T> ApiResponse<T> validateUserConsistency(Long pathUserId, Long payloadUserId) {
+        if (payloadUserId != null && !Objects.equals(pathUserId, payloadUserId)) {
+            return badRequest("Payload userId does not match request path");
+        }
+        return null;
+    }
+
+    private <T> ApiResponse<T> badRequest(String message) {
+        return new ApiResponse<>(400, message, null);
     }
 }

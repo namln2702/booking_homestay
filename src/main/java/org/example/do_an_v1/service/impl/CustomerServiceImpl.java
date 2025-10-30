@@ -2,7 +2,7 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.CustomerDTO;
-import org.example.do_an_v1.dto.request.CustomerRegistrationRequest;
+import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.RoleUser;
@@ -26,8 +26,12 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> registerCustomer(CustomerRegistrationRequest request) throws RuntimeException {
-        User user = userRegistrationSupport.getUserOrThrow(request.getUserId());
+    public ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO dto) throws RuntimeException {
+        if (dto == null || dto.getIdUser() == null) {
+            throw new IllegalArgumentException("Customer DTO must include idUser");
+        }
+
+        User user = userRegistrationSupport.getUserOrThrow(dto.getIdUser());
 
         Customer customer = customerRepository.findById(user.getId()).orElse(null);
         boolean isNew = false;
@@ -42,22 +46,31 @@ public class CustomerServiceImpl implements CustomerService {
 
         boolean hasChanges = isNew;
 
-        if (userRegistrationSupport.applyUserAttributes(user, request)) {
+        UserRegistrationRequest userRequest = new UserRegistrationRequest(
+                dto.getIdUser(),
+                dto.getUsername(),
+                dto.getName(),
+                dto.getPhone(),
+                dto.getAge(),
+                dto.getAvatarUrl()
+        );
+
+        if (userRegistrationSupport.applyUserAttributes(user, userRequest)) {
             hasChanges = true;
         }
 
-        if (request.getStatus() != null && !Objects.equals(request.getStatus(), customer.getStatus())) {
-            customer.setStatus(request.getStatus());
+        if (dto.getStatus() != null && !Objects.equals(dto.getStatus(), customer.getStatus())) {
+            customer.setStatus(dto.getStatus());
             hasChanges = true;
         }
 
-        if (request.getDateOfBirth() != null && !Objects.equals(request.getDateOfBirth(), customer.getDateOfBirth())) {
-            customer.setDateOfBirth(request.getDateOfBirth());
+        if (dto.getDateOfBirth() != null && !Objects.equals(dto.getDateOfBirth(), customer.getDateOfBirth())) {
+            customer.setDateOfBirth(dto.getDateOfBirth());
             hasChanges = true;
         }
 
-        if (request.getQrCodeUrl() != null && !Objects.equals(request.getQrCodeUrl(), customer.getQrCodeUrl())) {
-            customer.setQrCodeUrl(request.getQrCodeUrl());
+        if (dto.getQrCodeUrl() != null && !Objects.equals(dto.getQrCodeUrl(), customer.getQrCodeUrl())) {
+            customer.setQrCodeUrl(dto.getQrCodeUrl());
             hasChanges = true;
         }
 
@@ -74,7 +87,7 @@ public class CustomerServiceImpl implements CustomerService {
 
         // createdAt/updatedAt live on BaseEntity and are populated through auditing, never via the request payload
         Customer savedCustomer = customerRepository.save(customer);
-        String message = isNew ? "Customer registered successfully" : "Customer information updated successfully";
+        String message = isNew ? "Customer profile created successfully" : "Customer information updated successfully";
 
         return new ApiResponse<>(200, message, profileMapper.toCustomerDTO(savedCustomer));
     }

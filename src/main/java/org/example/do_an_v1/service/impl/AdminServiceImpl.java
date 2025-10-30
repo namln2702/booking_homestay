@@ -42,7 +42,11 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminInvitationResponse> inviteAdmin(AdminInviteRequest request) throws RuntimeException {
+    public ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException {
+        Admin actingAdmin = adminRepository.findById(actorAdminId).orElse(null);
+        if (Objects.isNull(actingAdmin) || actingAdmin.getLevelAdmin() != LevelAdmin.SUPER_ADMIN) {
+            return new ApiResponse<>(403, "Only super admins may invite new admins", null);
+        }
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         User user = userRepository.findByEmail(normalizedEmail);

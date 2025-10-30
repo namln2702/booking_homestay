@@ -5,6 +5,7 @@ import org.example.do_an_v1.dto.*;
 //import org.example.do_an_v1.dto.SendGoogle;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
+import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.mapper.AdminMapper;
 import org.example.do_an_v1.mapper.CustomerMapper;
 import org.example.do_an_v1.mapper.HostMapper;
@@ -101,7 +102,7 @@ public class UserServiceImpl implements UserService {
 
 
         // Check kiem tra co phai Admin khong
-        if(Objects.nonNull(user.getAdmin())){
+        if(!Objects.nonNull(user.getAdmin())){
             return new ApiResponse<>(400, "Email invalid", null);
         }
 
@@ -199,6 +200,15 @@ public class UserServiceImpl implements UserService {
                     .tokenId(tokenId)
                     .expired(date)
                     .build());
+            Object idClaim = jwt.getClaims().get("id");
+            if (idClaim instanceof Number number) {
+                userRepository.findById(number.longValue()).ifPresent(user -> {
+                    if (!Boolean.FALSE.equals(user.getIsOnline())) {
+                        user.setIsOnline(false);
+                        userRepository.save(user);
+                    }
+                });
+            }
         }
         catch (Exception e){
             throw new  RuntimeException("Token already exits");
@@ -208,32 +218,62 @@ public class UserServiceImpl implements UserService {
         return new ApiResponse<>(200, "Logout success", null);
     }
 
-    //    Kiem tra xem email da ton tai hay chua. Neu chua ton tai tao ra 1 customer moi
+//    Kiem tra xem email da ton tai hay chua. Neu chua ton tai tao ra 1 customer moi
 //    neu co roi tra ve (customer or host or admin)
     public ApiResponse<?> checkUser(User user){
 
-        String token = "";
+        if (!Boolean.TRUE.equals(user.getIsOnline())) {
+            user.setIsOnline(true);
+            userRepository.save(user);
+        }
 
-        Customer customer = customerRepository.findByUser(user);
-        if(Objects.nonNull(customer)){
-
-            CustomerDTO customerDTO  = CustomerMapper.customerMapCustomerDTO(customer);
-            token = securityService.createTokenSystem(user, RoleUser.CUSTOMER.toString());
+        // uu tien check admin truoc
+        Admin admin = adminRepository.findByUser(user);
+        if (Objects.nonNull(admin)) {
+            if (admin.getStatus() != Status.ACTIVE) {
+                return new ApiResponse<>(423, "Admin account is not active", null);
+            }
+            AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
+            String token = securityService.createTokenSystem(user, RoleUser.ADMIN.toString());
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .token(token)
-                    .user(customerDTO)
+                    .user(adminDTO)
                     .build());
         }
 
         Host host = hostRepository.findByUser(user);
+        if (Objects.nonNull(host)) {
+            // da la host thi phai la customer, vi vay add them row vao bang customer
+            ensureCustomerExists(user);
 
-        HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
-        token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
+            HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
+            String token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
 
+            return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
+                    .user(hostDTO)
+                    .token(token)
+                    .build());
+        }
+
+        Customer customer = ensureCustomerExists(user);
+        CustomerDTO customerDTO = CustomerMapper.customerMapCustomerDTO(customer);
+        String token = securityService.createTokenSystem(user, RoleUser.CUSTOMER.toString());
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                .user(hostDTO)
                 .token(token)
+                .user(customerDTO)
                 .build());
+    }
+
+    private Customer ensureCustomerExists(User user) {
+        Customer existing = customerRepository.findByUser(user);
+        if (existing != null) {
+            return existing;
+        }
+        Customer created = Customer.builder()
+                .user(user)
+                .role(RoleUser.CUSTOMER)
+                .build();
+        return customerRepository.save(created);
     }
 
     public AccessTokenGoogleDTO getAccessTokenDTO(String authCode) throws RuntimeException{
