@@ -63,7 +63,6 @@ public class UserServiceImpl implements UserService {
     private SecurityService securityService;
 
 
-
     @Value("${outbound.identity.client-id}")
     private String CLIENT_ID ;
 
@@ -74,7 +73,6 @@ public class UserServiceImpl implements UserService {
     private String REDIRECT_URI ;
 
     private final String GRANT_TYPE = "authorization_code";
-
 
 
     // Check login/register user
