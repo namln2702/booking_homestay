@@ -61,10 +61,7 @@ public class CustomerServiceImpl implements CustomerService {
             hasChanges = true;
         }
 
-        if (request.getLastBooking() != null && !Objects.equals(request.getLastBooking(), customer.getLastBooking())) {
-            customer.setLastBooking(request.getLastBooking());
-            hasChanges = true;
-        }
+        // lastBooking will be maintained by booking workflows; ignore incoming value for now
 
         if (customer.getRole() != RoleUser.CUSTOMER) {
             customer.setRole(RoleUser.CUSTOMER);
@@ -75,6 +72,7 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(200, "Customer information already up to date", profileMapper.toCustomerDTO(customer));
         }
 
+        // createdAt/updatedAt live on BaseEntity and are populated through auditing, never via the request payload
         Customer savedCustomer = customerRepository.save(customer);
         String message = isNew ? "Customer registered successfully" : "Customer information updated successfully";
 

@@ -70,6 +70,7 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(200, "Host information already up to date", profileMapper.toHostDTO(host));
         }
 
+        // BaseEntity auditing handles createdAt/updatedAt so these timestamps never come from client input
         Host savedHost = hostRepository.save(host);
         String message = isNew ? "Host registered successfully" : "Host information updated successfully";
 

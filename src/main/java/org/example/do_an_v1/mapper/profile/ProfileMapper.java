@@ -15,7 +15,12 @@ public class ProfileMapper {
     public CustomerDTO toCustomerDTO(Customer customer) {
         User user = customer.getUser();
 
+        Long userId = user != null ? user.getId() : null;
+        Long customerId = customer.getId() != null ? customer.getId() : userId;
+
         return CustomerDTO.builder()
+                .idCustomer(customerId)
+                .idUser(userId)
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .phone(user.getPhone())
@@ -35,7 +40,12 @@ public class ProfileMapper {
     public HostDTO toHostDTO(Host host) {
         User user = host.getUser();
 
+        Long userId = user != null ? user.getId() : null;
+        Long hostId = host.getId() != null ? host.getId() : userId;
+
         return HostDTO.builder()
+                .idHost(hostId)
+                .idUser(userId)
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .phone(user.getPhone())

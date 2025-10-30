@@ -82,9 +82,11 @@ public class AdminServiceImpl implements AdminService {
             admin.setLevelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), admin.getLevelAdmin()));
         }
         admin.setRole(RoleUser.ADMIN);
+        // BaseEntity timestamps (createdAt/updatedAt) auto-populate here; requests never control them
         admin = adminRepository.save(admin);
 
         String inviteCode = generateInviteCode();
+        // expired_at is derived here so invitation validity stays under server control, never taken from client input
         confirmEmailRepository.save(ConfirmEmail.builder()
                 .email(normalizedEmail)
                 .code(inviteCode)
