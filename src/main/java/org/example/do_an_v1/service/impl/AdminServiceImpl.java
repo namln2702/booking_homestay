@@ -42,7 +42,11 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminInvitationResponse> inviteAdmin(AdminInviteRequest request) throws RuntimeException {
+    public ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException {
+        Admin actingAdmin = adminRepository.findById(actorAdminId).orElse(null);
+        if (Objects.isNull(actingAdmin) || actingAdmin.getLevelAdmin() != LevelAdmin.SUPER_ADMIN) {
+            return new ApiResponse<>(403, "Only super admins may invite new admins", null);
+        }
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         User user = userRepository.findByEmail(normalizedEmail);
@@ -82,9 +86,11 @@ public class AdminServiceImpl implements AdminService {
             admin.setLevelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), admin.getLevelAdmin()));
         }
         admin.setRole(RoleUser.ADMIN);
+        // BaseEntity timestamps (createdAt/updatedAt) auto-populate here; requests never control them
         admin = adminRepository.save(admin);
 
         String inviteCode = generateInviteCode();
+        // expired_at is derived here so invitation validity stays under server control, never taken from client input
         confirmEmailRepository.save(ConfirmEmail.builder()
                 .email(normalizedEmail)
                 .code(inviteCode)

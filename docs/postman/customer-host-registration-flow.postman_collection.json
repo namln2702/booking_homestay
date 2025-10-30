@@ -1,0 +1,500 @@
+{
+  "info": {
+    "_postman_id": "aa1ef0f3-9f2e-46d0-baa3-897784bcbf15",
+    "name": "Customer & Host Registration Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "booking-homestay-codex"
+  },
+  "item": [
+    {
+      "name": "Customer Registration Flow",
+      "item": [
+        {
+          "name": "Step 1 - Create or Login User (Email)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/login-register-with-email?email={{customerEmail}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "login-register-with-email"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{customerEmail}}"
+                }
+              ]
+            },
+            "description": "Initial step that ensures a User row exists and returns the verification payload."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Verification payload returned\", function () {",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('userId');",
+                  "    pm.expect(jsonData.data).to.have.property('code');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('customerUserId', jsonData.data.userId);",
+                  "pm.collectionVariables.set('customerConfirmEmailId', jsonData.data.confirmEmailId);",
+                  "pm.collectionVariables.set('customerVerificationCode', jsonData.data.code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2 - Confirm Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"code\": \"{{customerVerificationCode}}\",\n  \"userId\": {{customerUserId}},\n  \"confirmEmailId\": {{customerConfirmEmailId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/confirm-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "confirm-email"
+              ]
+            },
+            "description": "Confirms the emailed verification code and receives an access token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Access token issued\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property('token');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('customerAuthToken', jsonData.data.token || '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3 - Register Customer Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": {{customerUserId}},\n  \"username\": \"{{customerUsername}}\",\n  \"name\": \"{{customerName}}\",\n  \"phone\": \"{{customerPhone}}\",\n  \"age\": {{customerAge}},\n  \"avatarUrl\": \"{{customerAvatarUrl}}\",\n  \"status\": \"{{customerStatus}}\",\n  \"dateOfBirth\": \"{{customerDob}}\",\n  \"qrCodeUrl\": \"{{customerQrCodeUrl}}\",\n  \"lastBooking\": \"{{customerLastBooking}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "register"
+              ]
+            },
+            "description": "Persists the customer-specific profile fields linked to the verified user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Customer DTO returned\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property('role');",
+                  "    pm.expect(jsonData.data.role).to.eql('CUSTOMER');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 4 - Fetch Customer Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerUserId}}"
+              ]
+            },
+            "description": "Validates that the customer profile exists for the stored user ID."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Customer profile matches user\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property('email', pm.collectionVariables.get('customerEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Host Registration Flow",
+      "item": [
+        {
+          "name": "Step 1 - Create or Login User (Email)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/login-register-with-email?email={{hostEmail}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "login-register-with-email"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{hostEmail}}"
+                }
+              ]
+            },
+            "description": "Initial step that ensures a User row exists and returns the verification payload."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Verification payload returned\", function () {",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('userId');",
+                  "    pm.expect(jsonData.data).to.have.property('code');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('hostUserId', jsonData.data.userId);",
+                  "pm.collectionVariables.set('hostConfirmEmailId', jsonData.data.confirmEmailId);",
+                  "pm.collectionVariables.set('hostVerificationCode', jsonData.data.code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2 - Confirm Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hostEmail}}\",\n  \"code\": \"{{hostVerificationCode}}\",\n  \"userId\": {{hostUserId}},\n  \"confirmEmailId\": {{hostConfirmEmailId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/confirm-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "confirm-email"
+              ]
+            },
+            "description": "Confirms the emailed verification code and receives an access token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set('hostAuthToken', jsonData.data.token || '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3 - Register Host Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": {{hostUserId}},\n  \"username\": \"{{hostUsername}}\",\n  \"name\": \"{{hostName}}\",\n  \"phone\": \"{{hostPhone}}\",\n  \"age\": {{hostAge}},\n  \"avatarUrl\": \"{{hostAvatarUrl}}\",\n  \"statusHost\": \"{{hostStatus}}\",\n  \"businessName\": \"{{hostBusinessName}}\",\n  \"qrCodeUrl\": \"{{hostQrCodeUrl}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hosts/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hosts",
+                "register"
+              ]
+            },
+            "description": "Persists the host-specific profile fields linked to the verified user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Host DTO returned\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property('role');",
+                  "    pm.expect(jsonData.data.role).to.eql('HOST');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 4 - Fetch Host Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hosts/{{hostUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hosts",
+                "{{hostUserId}}"
+              ]
+            },
+            "description": "Validates that the host profile exists for the stored user ID."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Host profile matches user\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property('email', pm.collectionVariables.get('hostEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "customerEmail",
+      "value": "customer.flow@example.com"
+    },
+    {
+      "key": "customerUserId",
+      "value": "0"
+    },
+    {
+      "key": "customerConfirmEmailId",
+      "value": "0"
+    },
+    {
+      "key": "customerVerificationCode",
+      "value": ""
+    },
+    {
+      "key": "customerAuthToken",
+      "value": ""
+    },
+    {
+      "key": "customerUsername",
+      "value": "customer.flow"
+    },
+    {
+      "key": "customerName",
+      "value": "Flow Customer"
+    },
+    {
+      "key": "customerPhone",
+      "value": "+84123450001"
+    },
+    {
+      "key": "customerAge",
+      "value": "26"
+    },
+    {
+      "key": "customerAvatarUrl",
+      "value": "https://example.com/avatar/customer-flow.jpg"
+    },
+    {
+      "key": "customerStatus",
+      "value": "ACTIVE"
+    },
+    {
+      "key": "customerDob",
+      "value": "1998-07-15"
+    },
+    {
+      "key": "customerQrCodeUrl",
+      "value": "https://example.com/qr/customer-flow.png"
+    },
+    {
+      "key": "customerLastBooking",
+      "value": "2024-05-01"
+    },
+    {
+      "key": "hostEmail",
+      "value": "host.flow@example.com"
+    },
+    {
+      "key": "hostUserId",
+      "value": "0"
+    },
+    {
+      "key": "hostConfirmEmailId",
+      "value": "0"
+    },
+    {
+      "key": "hostVerificationCode",
+      "value": ""
+    },
+    {
+      "key": "hostAuthToken",
+      "value": ""
+    },
+    {
+      "key": "hostUsername",
+      "value": "host.flow"
+    },
+    {
+      "key": "hostName",
+      "value": "Flow Host"
+    },
+    {
+      "key": "hostPhone",
+      "value": "+84987650002"
+    },
+    {
+      "key": "hostAge",
+      "value": "34"
+    },
+    {
+      "key": "hostAvatarUrl",
+      "value": "https://example.com/avatar/host-flow.jpg"
+    },
+    {
+      "key": "hostStatus",
+      "value": "PENDING"
+    },
+    {
+      "key": "hostBusinessName",
+      "value": "Flow Homestays"
+    },
+    {
+      "key": "hostQrCodeUrl",
+      "value": "https://example.com/qr/host-flow.png"
+    }
+  ]
+}

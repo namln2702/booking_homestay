@@ -2,14 +2,11 @@ package org.example.do_an_v1.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.do_an_v1.dto.CodeForEmail;
+import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HostService;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.example.do_an_v1.service.support.RequestIdentityResolver;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -17,20 +14,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class HostController {
 
     private final HostService hostService;
+    private final RequestIdentityResolver identityResolver;
 
-    @PostMapping("/login-register-with-email")
-    public ApiResponse<CodeForEmail> registerWithEmail(@RequestParam String email) {
-        return hostService.createVerifyCode(email);
+    /**
+     * Persist or update host-specific details using the unified DTO contract.
+     */
+    @PostMapping
+    public ApiResponse<HostDTO> upsertHost(@RequestBody @Valid HostDTO hostDTO) {
+        Long effectiveUserId = identityResolver.requireUserId(hostDTO.getIdUser());
+        hostDTO.setIdUser(effectiveUserId);
+        return hostService.upsertHostProfile(hostDTO);
     }
 
-    @PostMapping("/confirm-email")
-    public ApiResponse<?> confirmEmail(@RequestBody @Valid CodeForEmail codeForEmail) {
-        return hostService.confirmEmail(codeForEmail);
-    }
-
-    @PostMapping("/login-register-with-google")
-    public ApiResponse<?> registerWithGoogle(@RequestParam("code") String tokenGG) {
-        return hostService.registerEmailWithGoogle(tokenGG);
+    // Fetch the host profile associated with the provided user identifier
+    @GetMapping("/{userId}")
+    public ApiResponse<HostDTO> getHost(@PathVariable Long userId) {
+        Long effectiveUserId = identityResolver.requireUserId(userId);
+        return hostService.getHostByUserId(effectiveUserId);
     }
 }
-
