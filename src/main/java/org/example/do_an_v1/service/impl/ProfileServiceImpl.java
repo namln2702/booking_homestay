@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.request.AdminProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.HostProfileUpdateRequest;
 import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.Host;
@@ -34,13 +37,9 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> updateCustomerProfile(Long userId, CustomerDTO request) {
+    public ApiResponse<CustomerDTO> updateCustomerProfile(Long userId, CustomerProfileUpdateRequest request) {
         if (request == null) {
-            return badRequest("Customer profile payload is required");
-        }
-        ApiResponse<CustomerDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
-        if (mismatchResponse != null) {
-            return mismatchResponse;
+            return new ApiResponse<>(400, "Customer profile payload is required", null);
         }
 
         Customer customer = customerRepository.findById(userId).orElse(null);
@@ -60,16 +59,11 @@ public class ProfileServiceImpl implements ProfileService {
         boolean hasChanges = isNew;
 
         hasChanges |= applyMutableUserFields(user,
-                request.getUsername(),
+                null,
                 request.getName(),
                 request.getPhone(),
                 request.getAge(),
                 request.getAvatarUrl());
-
-        if (request.getStatus() != null && !Objects.equals(request.getStatus(), customer.getStatus())) {
-            customer.setStatus(request.getStatus());
-            hasChanges = true;
-        }
 
         if (request.getDateOfBirth() != null && !Objects.equals(request.getDateOfBirth(), customer.getDateOfBirth())) {
             customer.setDateOfBirth(request.getDateOfBirth());
@@ -99,13 +93,9 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public ApiResponse<HostDTO> updateHostProfile(Long userId, HostDTO request) {
+    public ApiResponse<HostDTO> updateHostProfile(Long userId, HostProfileUpdateRequest request) {
         if (request == null) {
-            return badRequest("Host profile payload is required");
-        }
-        ApiResponse<HostDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
-        if (mismatchResponse != null) {
-            return mismatchResponse;
+            return new ApiResponse<>(400, "Host profile payload is required", null);
         }
 
         Host host = hostRepository.findById(userId).orElse(null);
@@ -125,7 +115,7 @@ public class ProfileServiceImpl implements ProfileService {
         boolean hasChanges = isNew;
 
         hasChanges |= applyMutableUserFields(user,
-                request.getUsername(),
+                null,
                 request.getName(),
                 request.getPhone(),
                 request.getAge(),
@@ -162,13 +152,9 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminDTO> updateAdminProfile(Long userId, AdminDTO request) {
+    public ApiResponse<AdminDTO> updateAdminProfile(Long userId, AdminProfileUpdateRequest request) {
         if (request == null) {
-            return badRequest("Admin profile payload is required");
-        }
-        ApiResponse<AdminDTO> mismatchResponse = validateUserConsistency(userId, request.getIdUser());
-        if (mismatchResponse != null) {
-            return mismatchResponse;
+            return new ApiResponse<>(400, "Admin profile payload is required", null);
         }
 
         Admin admin = adminRepository.findById(userId).orElse(null);
@@ -188,7 +174,7 @@ public class ProfileServiceImpl implements ProfileService {
         boolean hasChanges = isNew;
 
         hasChanges |= applyMutableUserFields(user,
-                request.getUsername(),
+                null,
                 request.getName(),
                 request.getPhone(),
                 request.getAge(),
@@ -254,14 +240,4 @@ public class ProfileServiceImpl implements ProfileService {
         return changed;
     }
 
-    private <T> ApiResponse<T> validateUserConsistency(Long pathUserId, Long payloadUserId) {
-        if (payloadUserId != null && !Objects.equals(pathUserId, payloadUserId)) {
-            return badRequest("Payload userId does not match request path");
-        }
-        return null;
-    }
-
-    private <T> ApiResponse<T> badRequest(String message) {
-        return new ApiResponse<>(400, message, null);
-    }
 }

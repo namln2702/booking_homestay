@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,8 +18,7 @@ public class CustomerController {
     private final RequestIdentityResolver identityResolver;
 
     /**
-     * Persist or update customer-specific details using the unified DTO contract.
-     * Aligns with future JWT adoption since the same DTO is returned.
+     * register a new customer
      */
     @PostMapping
     public ApiResponse<CustomerDTO> upsertCustomer(@RequestBody @Valid CustomerDTO customerDTO) {
@@ -27,9 +27,17 @@ public class CustomerController {
         return customerService.upsertCustomerProfile(customerDTO);
     }
 
-    // Fetch the customer profile associated with the provided user identifier
+    // Fetch the authenticated customer's profile
+    @GetMapping("/me")
+    public ApiResponse<CustomerDTO> getMyCustomerProfile() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerByUserId(effectiveUserId);
+    }
+
+    // Admin-only: fetch the customer profile associated with the provided user identifier
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/{userId}")
-    public ApiResponse<CustomerDTO> getCustomer(@PathVariable Long userId) {
+    public ApiResponse<CustomerDTO> getCustomerForAdmin(@PathVariable Long userId) {
         Long effectiveUserId = identityResolver.requireUserId(userId);
         return customerService.getCustomerByUserId(effectiveUserId);
     }

@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,7 +18,7 @@ public class HostController {
     private final RequestIdentityResolver identityResolver;
 
     /**
-     * Persist or update host-specific details using the unified DTO contract.
+     * register a new host
      */
     @PostMapping
     public ApiResponse<HostDTO> upsertHost(@RequestBody @Valid HostDTO hostDTO) {
@@ -26,9 +27,17 @@ public class HostController {
         return hostService.upsertHostProfile(hostDTO);
     }
 
-    // Fetch the host profile associated with the provided user identifier
+    // Fetch the authenticated host profile
+    @GetMapping("/me")
+    public ApiResponse<HostDTO> getMyHostProfile() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return hostService.getHostByUserId(effectiveUserId);
+    }
+
+    // Admin-only: fetch host profile for a specific user id
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/{userId}")
-    public ApiResponse<HostDTO> getHost(@PathVariable Long userId) {
+    public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
         Long effectiveUserId = identityResolver.requireUserId(userId);
         return hostService.getHostByUserId(effectiveUserId);
     }
