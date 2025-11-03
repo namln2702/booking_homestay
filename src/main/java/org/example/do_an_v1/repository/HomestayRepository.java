@@ -1,6 +1,11 @@
 package org.example.do_an_v1.repository;
 
 import org.example.do_an_v1.entity.Homestay;
+
+import org.example.do_an_v1.entity.Host;
+import org.example.do_an_v1.enums.StatusHomestay;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +16,10 @@ import java.util.List;
 
 @Repository
 public interface HomestayRepository extends JpaRepository<Homestay, Long> {
+
+    boolean existsByTitleAndHost(String title, Host host);
+
+    Page<Homestay> findByStatusHomestay(StatusHomestay statusHomestay, Pageable pageable);
 
 
     @Query("""
@@ -33,7 +42,7 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
             AND hdp.isBooked = true
             AND ppd.day BETWEEN :begin AND :end
       )
-""")
+    """)
     List<Homestay> findHomestay(
             @Param("address") String address,
             @Param("numAdults") Integer numAdults,

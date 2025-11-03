@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.example.do_an_v1.enums.StatusHost;
 
 @Getter
 @Setter
@@ -26,4 +27,6 @@ public class HostProfileUpdateRequest {
 
     @Size(max = 512, message = "QR code URL must be at most 512 characters")
     private String qrCodeUrl;
+
+    private StatusHost statusHost;
 }

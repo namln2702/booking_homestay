@@ -1,139 +1,161 @@
 package org.example.do_an_v1.mapper;
 
-import org.example.do_an_v1.dto.*;
-import org.example.do_an_v1.entity.*;
+import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.HomestaySummaryDTO;
+import org.example.do_an_v1.entity.Address;
+import org.example.do_an_v1.entity.Amenities;
+import org.example.do_an_v1.entity.Facilities;
+import org.example.do_an_v1.entity.Homestay;
+import org.example.do_an_v1.entity.HomestayDailyPrice;
+import org.example.do_an_v1.entity.HomestayImage;
+import org.example.do_an_v1.entity.HomestayRule;
+import org.springframework.stereotype.Component;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+@Component
 public class HomestayMapper {
 
-    // -----------------------------
-    // Homestay → HomestayDVO
-    // -----------------------------
-    public static HomestayDTO toDTO(Homestay h) {
-        if (h == null) return null;
+    public HomestayDTO toDto(Homestay homestay, List<HomestayImage> images) {
+        if (homestay == null) {
+            return null;
+        }
+
+        HomestayDTO.AddressDTO addressDTO = mapAddress(homestay.getAddress());
+
+        List<Long> facilityIds = mapFacilities(homestay.getListFacilities());
+        List<HomestayDTO.AmenityDTO> amenities = mapAmenities(homestay.getListAmenities());
+        List<HomestayDTO.HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
+        List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
+        List<HomestayDTO.HomestayImageDTO> imageDtos = mapImages(images);
 
         return HomestayDTO.builder()
-                .id(h.getId())
-                .title(h.getTitle())
-                .description(h.getDescription())
-                .category(h.getCategory())
-                .rating(h.getRating())
-                .maxGuest(h.getMaxGuest())
-                .minGuest(h.getMinGuest())
-                .numBedrooms(h.getNumBedrooms())
-                .numBeds(h.getNumBeds())
-                .numBathrooms(h.getNumBathrooms())
-                .numKitchen(h.getNumKitchen())
-                .statusHomestay(h.getStatusHomestay())
-                .advancedPayment(h.getAdvancedPayment())
-                .warningCount(h.getWarningCount())
-
-                .hostId(h.getHost() != null ? h.getHost().getId() : null)
-                .hostName(h.getHost() != null ? h.getHost().getBusinessName() : null)
-
-                .addressId(h.getAddress() != null ? h.getAddress().getId() : null)
-                .addressLine(h.getAddress() != null ? h.getAddress().getAddressLine() : null)
-                .latitude(h.getAddress() != null ? h.getAddress().getLatitude() : null)
-                .longitude(h.getAddress() != null ? h.getAddress().getLongitude() : null)
-
-                .imageUrls(h.getListImage() != null
-                        ? h.getListImage().stream().map(ImageMapper::toDTO).collect(Collectors.toList())
-                        : null)
-
-                .facilities(h.getListFacilities() != null
-                        ? h.getListFacilities().stream().map(FacilitiesMapper::toDTO).collect(Collectors.toList())
-                        : null)
-
-                .amenities(h.getListAmenities() != null
-                        ? h.getListAmenities().stream().map(AmenitiesMapper::toDTO).collect(Collectors.toList())
-                        : null)
-
-                .homestayRules(h.getListHomestayRule() != null
-                        ? h.getListHomestayRule().stream().map(HomestayRulesMapper::toDTO).collect(Collectors.toList())
-                        : null)
-
-                .dailyPrices(h.getListHomestayDailyPrice() != null
-                        ? h.getListHomestayDailyPrice().stream().map(DailyPriceMapper::toDVO).collect(Collectors.toList())
-                        : null)
-
+                .id(homestay.getId())
+                .hostId(homestay.getHost() != null ? homestay.getHost().getId() : null)
+                .title(homestay.getTitle())
+                .description(homestay.getDescription())
+                .category(homestay.getCategory())
+                .rating(homestay.getRating())
+                .minGuest(homestay.getMinGuest())
+                .maxGuest(homestay.getMaxGuest())
+                .numBedrooms(homestay.getNumBedrooms())
+                .numBeds(homestay.getNumBeds())
+                .numBathrooms(homestay.getNumBathrooms())
+                .numKitchen(homestay.getNumKitchen())
+                .advancedPayment(homestay.getAdvancedPayment())
+                .warningCount(homestay.getWarningCount())
+                .status(homestay.getStatusHomestay())
+                .address(addressDTO)
+                .facilityIds(facilityIds)
+                .amenities(amenities)
+                .rules(rules)
+                .dailyPrices(dailyPrices)
+                .images(imageDtos)
                 .build();
     }
 
-    // -----------------------------
-    // HomestayDVO → Homestay
-    // -----------------------------
-    public static Homestay toEntity(HomestayDTO dto) {
-        if (dto == null) return null;
-
-        Homestay homestay = new Homestay();
-        homestay.setId(dto.getId());
-        homestay.setTitle(dto.getTitle());
-        homestay.setDescription(dto.getDescription());
-        homestay.setCategory(dto.getCategory());
-        homestay.setRating(dto.getRating());
-        homestay.setMaxGuest(dto.getMaxGuest());
-        homestay.setMinGuest(dto.getMinGuest());
-        homestay.setNumBedrooms(dto.getNumBedrooms());
-        homestay.setNumBeds(dto.getNumBeds());
-        homestay.setNumBathrooms(dto.getNumBathrooms());
-        homestay.setNumKitchen(dto.getNumKitchen());
-        homestay.setStatusHomestay(dto.getStatusHomestay());
-        homestay.setAdvancedPayment(dto.getAdvancedPayment());
-        homestay.setWarningCount(dto.getWarningCount());
-
-        // Host
-        if (dto.getHostId() != null) {
-            Host host = new Host();
-            host.setId(dto.getHostId());
-            host.setBusinessName(dto.getHostName());
-            homestay.setHost(host);
+    public HomestaySummaryDTO toSummary(Homestay homestay) {
+        if (homestay == null) {
+            return null;
         }
 
-        // Address
-        if (dto.getAddressId() != null) {
-            Address address = new Address();
-            address.setId(dto.getAddressId());
-            address.setAddressLine(dto.getAddressLine());
-            address.setLatitude(dto.getLatitude());
-            address.setLongitude(dto.getLongitude());
-            homestay.setAddress(address);
-        }
+        Address address = homestay.getAddress();
+        return HomestaySummaryDTO.builder()
+                .id(homestay.getId())
+                .title(homestay.getTitle())
+                .category(homestay.getCategory())
+                .status(homestay.getStatusHomestay())
+                .hostId(homestay.getHost() != null ? homestay.getHost().getId() : null)
+                .hostName(homestay.getHost() != null && homestay.getHost().getUser() != null
+                        ? homestay.getHost().getUser().getName()
+                        : null)
+                .city(address != null ? address.getCity() : null)
+                .state(address != null ? address.getState() : null)
+                .createdAt(homestay.getCreatedAt())
+                .build();
+    }
 
-        // Image list
-        if (dto.getImageUrls() != null) {
-            homestay.setListImage(dto.getImageUrls().stream()
-                    .map(ImageMapper::toEntity)
-                    .collect(Collectors.toSet()));
+    private HomestayDTO.AddressDTO mapAddress(Address address) {
+        if (address == null) {
+            return null;
         }
+        return HomestayDTO.AddressDTO.builder()
+                .addressLine(address.getAddressLine())
+                .city(address.getCity())
+                .state(address.getState())
+                .latitude(address.getLatitude())
+                .longitude(address.getLongitude())
+                .build();
+    }
 
-        // Facilities list
-        if (dto.getFacilities() != null) {
-            homestay.setListFacilities(dto.getFacilities().stream()
-                    .map(FacilitiesMapper::toEntity)
-                    .collect(Collectors.toSet()));
+    private List<Long> mapFacilities(Set<Facilities> facilities) {
+        if (facilities == null) {
+            return List.of();
         }
+        return facilities.stream()
+                .map(Facilities::getId)
+                .sorted()
+                .collect(Collectors.toList());
+    }
 
-        // Amenities list
-        if (dto.getAmenities() != null) {
-            homestay.setListAmenities(dto.getAmenities().stream()
-                    .map(AmenitiesMapper::toEntity)
-                    .collect(Collectors.toSet()));
+    private List<HomestayDTO.AmenityDTO> mapAmenities(Set<Amenities> amenities) {
+        if (amenities == null) {
+            return List.of();
         }
+        return amenities.stream()
+                .map(amenity -> HomestayDTO.AmenityDTO.builder()
+                        .id(amenity.getId())
+                        .name(amenity.getName())
+                        .description(amenity.getDescription())
+                        .imageUrl(amenity.getImageUrl())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.AmenityDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .collect(Collectors.toList());
+    }
 
-        // Rules list
-        if (dto.getHomestayRules() != null) {
-            homestay.setListHomestayRule(dto.getHomestayRules().stream()
-                    .map(HomestayRulesMapper::toEntity)
-                    .collect(Collectors.toSet()));
+    private List<HomestayDTO.HomestayRuleDTO> mapRules(Set<HomestayRule> rules) {
+        if (rules == null) {
+            return List.of();
         }
+        return rules.stream()
+                .map(rule -> HomestayDTO.HomestayRuleDTO.builder()
+                        .id(rule.getId())
+                        .description(rule.getDescription())
+                        .ruleType(rule.getRuleTypeHomestay())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.HomestayRuleDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .collect(Collectors.toList());
+    }
 
-        // Daily Prices list
-        if (dto.getDailyPrices() != null) {
-            homestay.setListHomestayDailyPrice(dto.getDailyPrices().stream()
-                    .map(DailyPriceMapper::toEntity)
-                    .collect(Collectors.toSet()));
+    private List<HomestayDTO.DailyPriceDTO> mapDailyPrices(Set<HomestayDailyPrice> dailyPrices) {
+        if (dailyPrices == null) {
+            return List.of();
         }
+        return dailyPrices.stream()
+                .map(price -> HomestayDTO.DailyPriceDTO.builder()
+                        .id(price.getId())
+                        .day(price.getPricePerDay() != null ? price.getPricePerDay().getDay() : null)
+                        .price(price.getPrice())
+                        .booked(price.getIsBooked())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.DailyPriceDTO::getDay, Comparator.nullsLast(java.util.Date::compareTo)))
+                .collect(Collectors.toList());
+    }
 
-        return homestay;
+    private List<HomestayDTO.HomestayImageDTO> mapImages(List<HomestayImage> images) {
+        if (images == null) {
+            return List.of();
+        }
+        return images.stream()
+                .map(image -> HomestayDTO.HomestayImageDTO.builder()
+                        .id(image.getId())
+                        .imageUrl(image.getImageUrl())
+                        .primary(image.getIsPrimary())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.HomestayImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .collect(Collectors.toList());
     }
 }

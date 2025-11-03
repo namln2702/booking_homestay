@@ -23,4 +23,7 @@ public class CustomerProfileUpdateRequest {
 
     @Size(max = 255, message = "Date of birth must be at most 255 characters")
     private String dateOfBirth;
+
+    @Size(max = 512, message = "QR code URL must be at most 512 characters")
+    private String qrCodeUrl;
 }

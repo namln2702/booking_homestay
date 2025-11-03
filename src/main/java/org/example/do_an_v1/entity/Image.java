@@ -16,19 +16,19 @@ public class Image extends BaseEntity{
     @Column(name = "image_url")
     private String image_url;
 
-    @Column(name = "is_primary", nullable = false)
+    @Column(name = "is_primary", nullable = true)
     private Boolean isPrimary ;
 
     @ManyToOne
-    @JoinColumn(name = "homestay_id", nullable = false)
+    @JoinColumn(name = "homestay_id", nullable = true)
     private Homestay homestay;
 
     @ManyToOne
-    @JoinColumn(name = "complaint_id", nullable = false)
+    @JoinColumn(name = "complaint_id", nullable = true)
     private Complaint complaint;
 
     @ManyToOne
-    @JoinColumn(name = "review_id", nullable = false)
+    @JoinColumn(name = "review_id", nullable = true)
     private Review review;
 
 }

@@ -25,6 +25,7 @@ public class Address extends BaseEntity {
     @Column(name = "state")
     private String state;
 
+
     @Column(name = "latitude")
     private String latitude;
 

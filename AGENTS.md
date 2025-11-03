@@ -20,3 +20,29 @@ Existing history favors short, imperative commit subjects in lowercase (e.g., `a
 
 ## Configuration & Security Tips
 Secrets and credentials must come from environment variables. Keep `spring.datasource.username=${USER_DB}` and `spring.datasource.password=${PASSWORD_DB}` set via your shell or secrets manager—never hard-code them. For local work, create an untracked `.env` or direnv config and export mail credentials before running `spring-boot:run`. Document new outbound env keys in `application.properties` with empty placeholders and reference them here so contributor setups stay aligned.
+
+---
+
+## Current Progress – Authentication & Profile Overhaul
+
+- Unified profile update endpoints now accept and return DTO payloads (`CustomerDTO`, `HostDTO`, `AdminDTO`) across `CustomerController`, `HostController`, and `ProfileController`, letting us plug in JWT later without touching business logic. Service layers (`CustomerServiceImpl`, `HostServiceImpl`, `ProfileServiceImpl`) map DTOs back to entities and guard derived fields (timestamps, last booking).
+- Introduced `RequestIdentityResolver` to centralise how we determine the acting user. Admins may operate on other accounts via path parameters; all other roles fall back to the JWT claim. This keeps controllers clean and ready for future JWT enforcement.
+- Admin flows now enforce role hierarchy: only `SUPER_ADMIN` can invite new admins, while `ADMIN`/`SUPER_ADMIN` can call privileged endpoints. `AdminServiceImpl` validates `LevelAdmin` directly; `AdminController` uses proper `@PreAuthorize` checks. Profile mappers populate identifiers (`idAdmin`, `idUser`) so responses no longer leak `null` IDs.
+- JWT lifecycle tightened: `UserServiceImpl.checkUser` prioritises admin logins, ensures hosts always have a backing customer profile, and toggles `isOnline`. Tokens consistently reflect the highest active role, ensuring future `@PreAuthorize` annotations behave as expected.
+- Seeding bootstrap for the first super admin: configurable via `bootstrap.super-admin.*` properties. On startup, it creates or updates the user profile (username, avatar, phone, age, isOnline=false), links the admin entity both ways, and only runs when no `SUPER_ADMIN` exists. Properties in `application.properties` now default to empty placeholders for safe environments.
+- Added Postman collection (`docs/postman/admin-registration.postman_collection.json`) to exercise the admin invitation/activation flow with simple scripts that chain activation codes via environment variables.
+
+## Feature Snapshot (Business Behaviour)
+
+- **User Onboarding & Login**
+  - Email OTP (`/users/login-register-with-email`) auto-creates a `User` + `Customer` on first contact. OTP verification issues a role-aware JWT (customer/admin/host) and sets `isOnline = true`; logout stores invalid tokens and flips presence offline.
+  - Google OAuth login mirrors the email flow: create customer on first login, reject if email belongs to an admin.
+- **Profile Management**
+  - `/customers`, `/hosts`, `/profile/*` endpoints upsert profile details via DTOs. Derived fields (`createdAt`, `lastBooking`, etc.) remain server-controlled. Host updates implicitly require an existing customer record.
+- **Admin Lifecycle**
+  - `/admins/invite` requires bearer token with admin authority. Only users whose `Admin.levelAdmin = SUPER_ADMIN` can invite new admins; the endpoint returns the activation code (for QA only).
+  - `/admins/activate` finalises the invitation, sets status to `ACTIVE`, and refreshes user contact info.
+  - Bootstrap runner can seed the first super admin from config so the invite workflow can start.
+- **Token/Authorization Strategy**
+  - JWTs carry `id` and `scope = ROLE_*`. `RequestIdentityResolver` ensures path parameters are respected only for admins; other roles are bound to their own ID.
+  - `checkUser` picks the highest privilege (admin > host > customer) when issuing tokens and guarantees host/customer consistency (host always implies a stored customer).
