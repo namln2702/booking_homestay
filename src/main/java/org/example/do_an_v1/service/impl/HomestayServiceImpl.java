@@ -2,6 +2,7 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.request.HomestayDailyPriceRequest;
 import org.example.do_an_v1.dto.request.HomestayRuleRequest;
@@ -18,6 +19,7 @@ import org.example.do_an_v1.entity.PricePerDay;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.mapper.HomestayMapper;
+import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.AmenitiesRepository;
 import org.example.do_an_v1.repository.AdminRepository;
@@ -27,6 +29,9 @@ import org.example.do_an_v1.repository.HomestayRepository;
 import org.example.do_an_v1.repository.HostRepository;
 import org.example.do_an_v1.repository.PricePerDayRepository;
 import org.example.do_an_v1.service.HomestayService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,6 +97,67 @@ public class HomestayServiceImpl implements HomestayService {
 
         HomestayDTO response = homestayMapper.toDto(savedHomestay, savedImages);
         return new ApiResponse<>(201, "Homestay created successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestaysForAdmin(Long adminUserId,
+                                                                                   StatusHomestay status,
+                                                                                   int page,
+                                                                                   int size) {
+        if (adminUserId == null) {
+            throw new IllegalArgumentException("Admin user id is required");
+        }
+
+        Admin admin = adminRepository.findById(adminUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+
+        if (admin.getStatus() != Status.ACTIVE) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<Homestay> homestayPage = status != null
+                ? homestayRepository.findByStatusHomestay(status, pageable)
+                : homestayRepository.findAll(pageable);
+
+        List<HomestaySummaryDTO> summaries = homestayPage.getContent().stream()
+                .map(homestayMapper::toSummary)
+                .toList();
+
+        PageResponse<List<HomestaySummaryDTO>> pageResponse = PageResponse.<List<HomestaySummaryDTO>>builder()
+                .page(homestayPage.getNumber())
+                .size(homestayPage.getSize())
+                .total(homestayPage.getTotalElements())
+                .items(summaries)
+                .build();
+
+        return new ApiResponse<>(200, "Homestays retrieved successfully", pageResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<HomestayDTO> getHomestayDetailForAdmin(Long adminUserId, Long homestayId) {
+        if (adminUserId == null) {
+            throw new IllegalArgumentException("Admin user id is required");
+        }
+
+        Admin admin = adminRepository.findById(adminUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+
+        if (admin.getStatus() != Status.ACTIVE) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        Homestay homestay = homestayRepository.findById(homestayId)
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
+
+        List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+        HomestayDTO response = homestayMapper.toDto(homestay, images);
+        return new ApiResponse<>(200, "Homestay detail retrieved successfully", response);
     }
 
     @Override

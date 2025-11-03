@@ -1,6 +1,7 @@
 package org.example.do_an_v1.mapper;
 
 import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.entity.Address;
 import org.example.do_an_v1.entity.Amenities;
 import org.example.do_an_v1.entity.Facilities;
@@ -53,6 +54,27 @@ public class HomestayMapper {
                 .rules(rules)
                 .dailyPrices(dailyPrices)
                 .images(imageDtos)
+                .build();
+    }
+
+    public HomestaySummaryDTO toSummary(Homestay homestay) {
+        if (homestay == null) {
+            return null;
+        }
+
+        Address address = homestay.getAddress();
+        return HomestaySummaryDTO.builder()
+                .id(homestay.getId())
+                .title(homestay.getTitle())
+                .category(homestay.getCategory())
+                .status(homestay.getStatusHomestay())
+                .hostId(homestay.getHost() != null ? homestay.getHost().getId() : null)
+                .hostName(homestay.getHost() != null && homestay.getHost().getUser() != null
+                        ? homestay.getHost().getUser().getName()
+                        : null)
+                .city(address != null ? address.getCity() : null)
+                .state(address != null ? address.getState() : null)
+                .createdAt(homestay.getCreatedAt())
                 .build();
     }
 
