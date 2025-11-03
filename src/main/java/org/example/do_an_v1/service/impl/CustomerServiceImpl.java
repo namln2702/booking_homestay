@@ -1,16 +1,25 @@
 package org.example.do_an_v1.service.impl;
 
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.configuration.SessionConfig;
+import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
-import org.example.do_an_v1.entity.Customer;
-import org.example.do_an_v1.entity.User;
+import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
+import org.example.do_an_v1.enums.StatusBill;
+import org.example.do_an_v1.mapper.BillMapper;
+import org.example.do_an_v1.mapper.CustomerBookingInfoMapper;
+import org.example.do_an_v1.mapper.CustomerMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
+import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.CustomerBookingInfoRepository;
 import org.example.do_an_v1.repository.CustomerRepository;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +32,14 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepository customerRepository;
     private final ProfileMapper profileMapper;
     private final UserRegistrationSupport userRegistrationSupport;
+    private final CustomerBookingInfoRepository customerBookingInfoRepository;
+    private final BillRepository billRepository;
+
+    @Autowired
+    private SessionConfig sessionConfig;
+
+
+
 
     @Override
     @Transactional
@@ -100,5 +117,32 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(404, "Customer profile not found", null);
         }
         return new ApiResponse<>(200, "Customer profile retrieved successfully", profileMapper.toCustomerDTO(customer));
+    }
+
+    @Override
+    public ApiResponse<?> booking(BillDTO billDTO) {
+
+        HttpSession httpSession = sessionConfig.httpSession();
+
+        Bill bill = BillMapper.toEntity(billDTO);
+        if(!Objects.isNull(billDTO.getCustomerBookingInfoDTO())){
+            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(billDTO.getCustomerBookingInfoDTO());
+            customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
+            bill.setCustomerBookingInfo(customerBookingInfo);
+        }
+
+        // Save customer into bill
+        Customer customer = CustomerMapper.toEntity(billDTO.getCustomerDTO());
+        customer.setId(Long.parseLong( (String) sessionConfig.httpSession().getAttribute("id")));
+        bill.setCustomer(customer);
+
+
+        Transaction transaction = Transaction.builder()
+                .build();
+        bill.setStatus(StatusBill.PAYMENT_PENDING);
+        Bill billResult = billRepository.save(bill);
+
+
+        return new ApiResponse<>(200, "Save bill success", billResult);
     }
 }

@@ -3,6 +3,7 @@ package org.example.do_an_v1.repository;
 import org.example.do_an_v1.entity.Homestay;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,25 +13,36 @@ import java.util.List;
 public interface HomestayRepository extends JpaRepository<Homestay, Long> {
 
 
-    @Query(value = "select h  from Homestay h " +
-            "inner join h.listPersonHomestay ph " +
-            "inner join ph.person p " +
-            "where h.address = ? and " +
-                "case " +
-                "when p.type = 'Adults' and ph.quantity >= ? then true " +
-                "when p.type = 'Children' and ph.quantity >= ? then true " +
-                "when p.type = 'Baby' and ph.quantity >= ? then true " +
-                "end " +
-            "and 0 = (select count(*) from Homestay h1 " +
-            "inner join h1.listHomestayDailyPrice as hdp " +
-            "inner join hdp.pricePerDay ppd " +
-            "where hdp.isBooked = true and ppd.day >= ? and ppd.day <= ?" +
-            ")"
+    @Query("""
+    SELECT DISTINCT h
+    FROM Homestay h
+        JOIN h.listPersonHomestay ph
+        JOIN ph.person p
+    WHERE h.address = :address
+      AND (
+           (p.type = 'Adults' AND :numAults > 0 AND ph.quantity >= :numAdults)
+        OR (p.type = 'Children' AND :numchilden > 0 AND ph.quantity >= :numChildren)
+        OR (p.type = 'Baby'  AND :numBaby > 0   AND ph.quantity >= :numBaby)
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM Homestay h1
+              JOIN h1.listHomestayDailyPrice hdp
+              JOIN hdp.pricePerDay ppd
+          WHERE h1 = h
+            AND hdp.isBooked = true
+            AND ppd.day BETWEEN :begin AND :end
+      )
+""")
+    List<Homestay> findHomestay(
+            @Param("address") String address,
+            @Param("numAdults") Integer numAdults,
+            @Param("numChildren") Integer numChildren,
+            @Param("numBaby") Integer numBaby,
+            @Param("begin") String begin,
+            @Param("end") String end
+    );
 
-    )
-    List<Homestay> findHomestay(String address, Integer numberAdults, Integer numberChildren,
-                                Integer numberBaby, String begin, String end
-                                );
 
 
 }

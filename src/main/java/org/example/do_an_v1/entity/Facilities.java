@@ -20,7 +20,7 @@ public class Facilities extends BaseEntity{
     private String name;
 
     @Column(name = "category", nullable = false)
-    private Status category ;
+    private String category ;
 
     @ManyToMany
     Set<Homestay>  listHomestay;

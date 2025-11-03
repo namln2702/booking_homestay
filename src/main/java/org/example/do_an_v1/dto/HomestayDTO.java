@@ -10,7 +10,7 @@ import java.util.List;
 @Builder
 @Getter
 @Setter
-public class HomestayDVO {
+public class HomestayDTO {
     private Long id;                     // ID homestay (từ BaseEntity)
     private String title;                // Tiêu đề
     private String description;          // Mô tả

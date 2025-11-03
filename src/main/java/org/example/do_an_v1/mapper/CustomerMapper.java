@@ -2,68 +2,43 @@ package org.example.do_an_v1.mapper;
 
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.entity.Customer;
-import org.example.do_an_v1.entity.User;
-import org.springframework.stereotype.Component;
 
-@Component
 public class CustomerMapper {
 
     /**
-     * Map từ Customer Entity sang CustomerDTO
-     * Con thiếu các Entity liên quan đến Customer
+     * Chuyển từ Entity Customer sang DTO
      */
-    public static CustomerDTO customerMapCustomerDTO(Customer customer) {
-        if (customer == null) return null;
-
-        User user = customer.getUser();
+    public static CustomerDTO toDTO(Customer customer) {
+        if (customer == null) {
+            return null;
+        }
 
         return CustomerDTO.builder()
-                .idCustomer(customer.getId())
-                .idUser(user != null ? user.getId() : null)
-                .status(customer.getStatus())
-                .dateOfBirth(customer.getDateOfBirth())
+                .idCustomer(customer.getUser() != null ? customer.getUser().getId() : null)
+                .name(customer.getUser() != null ? customer.getUser().getName() : null)
+                .email(customer.getUser() != null ? customer.getUser().getEmail() : null)
+                .phone(customer.getUser() != null ? customer.getUser().getPhone() : null)
                 .qrCodeUrl(customer.getQrCodeUrl())
+                .dateOfBirth(customer.getDateOfBirth())
                 .lastBooking(customer.getLastBooking())
-                .role(customer.getRole())
-                .username(user != null ? user.getUsername() : null)
-                .email(user != null ? user.getEmail() : null)
-                .phone(user != null ? user.getPhone() : null)
-                .isOnline(user != null ? user.getIsOnline() : null)
-                .avatarUrl(user != null ? user.getAvatarUrl() : null)
-                .age(user != null ? user.getAge() : null)
-                .name(user != null ? user.getName() : null)
-                .googleId(user != null ? user.getGoogleId() : null)
+                .role(customer.getRole() != null ? customer.getRole() : null)
+                .status(customer.getStatus() != null ? customer.getStatus() : null)
                 .build();
     }
 
     /**
-     * Map từ CustomerDTO sang Customer Entity
+     * Chuyển từ DTO sang Entity Customer (dùng khi tạo mới / cập nhật)
      */
-//    public static Customer customerDTOMapCustomer(CustomerDTO dto) {
-//        if (dto == null) return null;
-//
-//        // Tạo User entity từ dữ liệu DTO
-//        User user = User.builder()
-//                .id(dto.getIdUser())
-//                .username(dto.getUsername())
-//                .email(dto.getEmail())
-//                .phone(dto.getPhone())
-//                .isOnline(dto.getIsOnline())
-//                .avatarUrl(dto.getAvatarUrl())
-//                .age(dto.getAge())
-//                .name(dto.getName())
-//                .googleId(dto.getGoogleId())
-//                .build();
-//
-//        // Tạo Customer entity
-//        return Customer.builder()
-//                .id(dto.getIdCustomer())
-//                .status(dto.getStatus())
-//                .dateOfBirth(dto.getDateOfBirth())
-//                .qrCodeUrl(dto.getQrCodeUrl())
-//                .lastBooking(dto.getLastBooking())
-//                .role(dto.getRole())
-//                .user(user)
-//                .build();
-//    }
+    public static Customer toEntity(CustomerDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+
+        Customer entity = new Customer();
+        entity.setQrCodeUrl(dto.getQrCodeUrl());
+        entity.setDateOfBirth(dto.getDateOfBirth());
+        entity.setLastBooking(dto.getLastBooking());
+        // role và status sẽ được gán trong service (nếu có enum tương ứng)
+        return entity;
+    }
 }

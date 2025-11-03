@@ -9,10 +9,10 @@ public class HomestayMapper {
     // -----------------------------
     // Homestay → HomestayDVO
     // -----------------------------
-    public static HomestayDVO toDVO(Homestay h) {
+    public static HomestayDTO toDTO(Homestay h) {
         if (h == null) return null;
 
-        return HomestayDVO.builder()
+        return HomestayDTO.builder()
                 .id(h.getId())
                 .title(h.getTitle())
                 .description(h.getDescription())
@@ -32,7 +32,7 @@ public class HomestayMapper {
                 .hostName(h.getHost() != null ? h.getHost().getBusinessName() : null)
 
                 .addressId(h.getAddress() != null ? h.getAddress().getId() : null)
-                .addressLine(h.getAddress() != null ? h.getAddress().getAddress_line() : null)
+                .addressLine(h.getAddress() != null ? h.getAddress().getAddressLine() : null)
                 .latitude(h.getAddress() != null ? h.getAddress().getLatitude() : null)
                 .longitude(h.getAddress() != null ? h.getAddress().getLongitude() : null)
 
@@ -62,7 +62,7 @@ public class HomestayMapper {
     // -----------------------------
     // HomestayDVO → Homestay
     // -----------------------------
-    public static Homestay toEntity(HomestayDVO dto) {
+    public static Homestay toEntity(HomestayDTO dto) {
         if (dto == null) return null;
 
         Homestay homestay = new Homestay();
@@ -93,7 +93,7 @@ public class HomestayMapper {
         if (dto.getAddressId() != null) {
             Address address = new Address();
             address.setId(dto.getAddressId());
-            address.setAddress_line(dto.getAddressLine());
+            address.setAddressLine(dto.getAddressLine());
             address.setLatitude(dto.getLatitude());
             address.setLongitude(dto.getLongitude());
             homestay.setAddress(address);
