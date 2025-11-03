@@ -1,6 +1,8 @@
 package org.example.do_an_v1.service.impl;
 
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.fileupload.RequestContext;
 import org.example.do_an_v1.dto.*;
 //import org.example.do_an_v1.dto.SendGoogle;
 import org.example.do_an_v1.entity.*;
@@ -15,10 +17,14 @@ import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.server.Session;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -64,7 +70,6 @@ public class UserServiceImpl implements UserService {
     private SecurityService securityService;
 
 
-
     @Value("${outbound.identity.client-id}")
     private String CLIENT_ID ;
 
@@ -77,8 +82,8 @@ public class UserServiceImpl implements UserService {
     private final String GRANT_TYPE = "authorization_code";
 
 
-
     // Check login/register user
+    @Transactional
     @Override
     public ApiResponse<CodeForEmail> loginRegWithEmail(String email) throws RuntimeException{
 
@@ -88,12 +93,11 @@ public class UserServiceImpl implements UserService {
         // Check xem da ton tai trong DB chua
         if(Objects.isNull(user)) {
 
-
-
             user = userRepository.save(User.builder()
                             .email(email)
                     .build());
             customerRepository.save(Customer.builder()
+                            .status(Status.INACTIVE)
                             .user(user)
                             .role(RoleUser.CUSTOMER)
                     .build());
@@ -102,7 +106,7 @@ public class UserServiceImpl implements UserService {
 
 
         // Check kiem tra co phai Admin khong
-        if(!Objects.nonNull(user.getAdmin())){
+        if(Objects.nonNull(user.getAdmin())){
             return new ApiResponse<>(400, "Email invalid", null);
         }
 
@@ -152,6 +156,7 @@ public class UserServiceImpl implements UserService {
 
     }
 
+    @Transactional
     @Override
     public ApiResponse<?> loginRegEmailWithGoogle(String authCode) throws RuntimeException {
         // Lay accessToken
@@ -191,6 +196,10 @@ public class UserServiceImpl implements UserService {
     public ApiResponse<?> logout() throws RuntimeException{
 
         try {
+
+            HttpSession sessionCurrent = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest().getSession();
+            sessionCurrent.invalidate();
+
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             Jwt jwt = (Jwt) authentication.getPrincipal();
             String tokenId = jwt.getId();
@@ -256,7 +265,7 @@ public class UserServiceImpl implements UserService {
         }
 
         Customer customer = ensureCustomerExists(user);
-        CustomerDTO customerDTO = CustomerMapper.customerMapCustomerDTO(customer);
+        CustomerDTO customerDTO = CustomerMapper.toDTO(customer);
         String token = securityService.createTokenSystem(user, RoleUser.CUSTOMER.toString());
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                 .token(token)

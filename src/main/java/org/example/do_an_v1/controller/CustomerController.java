@@ -2,6 +2,7 @@ package org.example.do_an_v1.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.CustomerService;
@@ -41,4 +42,12 @@ public class CustomerController {
         Long effectiveUserId = identityResolver.requireUserId(userId);
         return customerService.getCustomerByUserId(effectiveUserId);
     }
+
+    @PostMapping("/booking")
+    ApiResponse<?> booking(@RequestBody BillDTO billDTO){
+        return customerService.booking(billDTO);
+    }
+
+
+
 }

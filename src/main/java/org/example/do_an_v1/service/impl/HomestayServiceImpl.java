@@ -221,7 +221,7 @@ public class HomestayServiceImpl implements HomestayService {
     private void applyAddress(Homestay homestay, HomestayCreateRequest request) {
         var addressRequest = request.getAddress();
         Address address = Address.builder()
-                .address_line(addressRequest.getAddressLine())
+                .addressLine(addressRequest.getAddressLine())
                 .city(addressRequest.getCity())
                 .state(addressRequest.getState())
                 .build();

@@ -81,6 +81,9 @@ public class Homestay extends BaseEntity{
     @OneToMany(mappedBy = "homestay" , cascade = CascadeType.ALL)
     Set<HomestayRule> listHomestayRule;
 
+    @OneToMany(mappedBy = "homestay", cascade = CascadeType.ALL)
+    Set<PersonHomestay> listPersonHomestay;
+
     @ManyToMany
     Set<Facilities> listFacilities;
 

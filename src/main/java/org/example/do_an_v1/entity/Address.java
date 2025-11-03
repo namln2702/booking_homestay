@@ -17,7 +17,7 @@ import lombok.*;
 public class Address extends BaseEntity {
 
     @Column(name = "address_line")
-    private String address_line;
+    private String addressLine;
 
     @Column(name = "city")
     private String city;
@@ -25,12 +25,11 @@ public class Address extends BaseEntity {
     @Column(name = "state")
     private String state;
 
-    // Vĩ độ
-    @Column(name = "latitude", length = 50)
+
+    @Column(name = "latitude")
     private String latitude;
 
-    // Kinh độ
-    @Column(name = "longitude", length = 50)
+    @Column(name = "longitude")
     private String longitude;
 
     @OneToOne(mappedBy = "address")

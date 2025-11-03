@@ -8,6 +8,7 @@ import lombok.Setter;
 import org.example.do_an_v1.enums.StatusHomestay;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -24,5 +25,5 @@ public class HomestaySummaryDTO {
     private String hostName;
     private String city;
     private String state;
-    private LocalDate createdAt;
+    private LocalDateTime createdAt;
 }

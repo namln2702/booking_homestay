@@ -21,7 +21,11 @@ public class Facilities extends BaseEntity{
     private String name;// VD: Điều hòa, Máy sấy, Smart TV;
 
     @Column(name = "category", nullable = false)
+<<<<<<< HEAD
     private String category ; // General, Bedroom, Bathroom, Kitchen, Special, View
+=======
+    private String category ;
+>>>>>>> pre_merch
 
     @ManyToMany
     Set<Homestay>  listHomestay;

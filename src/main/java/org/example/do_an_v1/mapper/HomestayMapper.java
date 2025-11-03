@@ -83,7 +83,7 @@ public class HomestayMapper {
             return null;
         }
         return HomestayDTO.AddressDTO.builder()
-                .addressLine(address.getAddress_line())
+                .addressLine(address.getAddressLine())
                 .city(address.getCity())
                 .state(address.getState())
                 .latitude(address.getLatitude())

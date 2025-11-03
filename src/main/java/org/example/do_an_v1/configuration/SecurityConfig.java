@@ -1,9 +1,13 @@
 package org.example.do_an_v1.configuration;
 
 import feign.Logger;
+import org.example.do_an_v1.component.JwtSessionCreationFilter;
+import org.example.do_an_v1.entity.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,6 +21,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
@@ -41,6 +46,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .anyRequest().permitAll() //  Cho phép TẤT CẢ request
                 );
@@ -50,9 +56,9 @@ public class SecurityConfig {
                 .jwt(jwtConfigurer -> jwtConfigurer
                     .decoder(customJwtDecoder) // check token co hop le khong
                     .jwtAuthenticationConverter(jwtAuthenticationConverter())) // convert scope autho
-                .authenticationEntryPoint(new JwtAuthenticationEntryPoint()) // neu khong co token
-        );
-
+                .authenticationEntryPoint(new JwtAuthenticationEntryPoint())// neu khong co token
+                )
+                .addFilterAfter(new JwtSessionCreationFilter(), BearerTokenAuthenticationFilter.class);
 
         return httpSecurity.build();
     }

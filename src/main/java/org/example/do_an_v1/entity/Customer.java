@@ -19,7 +19,7 @@ public class Customer extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status",  nullable = true )
-    private Status status = Status.ACTIVE;
+    private Status status ;
 
     @Column(name = "date_of_birth", nullable = true)
     private String dateOfBirth;
