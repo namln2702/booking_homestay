@@ -14,16 +14,17 @@ import java.util.Set;
 @Setter
 @Getter
 @Table(name = "tbl_amenities")
+// tien ich mien phi
 public class Amenities extends BaseEntity{
 
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "status", nullable = false)
-    private Status description;
+    @Column(name = "description", nullable = false)
+    private String description;
 
     @Column(name = "image_url", nullable = false)
-    private Status imageUrl;
+    private String imageUrl;
 
     @ManyToMany
     Set<Homestay> listHomestay;
