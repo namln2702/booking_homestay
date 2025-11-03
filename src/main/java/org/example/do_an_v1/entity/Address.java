@@ -17,7 +17,7 @@ import lombok.*;
 public class Address extends BaseEntity {
 
     @Column(name = "address_line")
-    private String address_line;
+    private String addressLine;
 
     @Column(name = "city")
     private String city;

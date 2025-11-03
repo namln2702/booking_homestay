@@ -26,5 +26,7 @@ public class HomestayServiceImpl implements HomestayService {
                 findHomeStayDTO.getBegin(),
                 findHomeStayDTO.getEnd()
         );
+
+        return new ApiResponse<>(200, "", null);
     }
 }
