@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.request.HostRegistrationRequest;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HostService;
@@ -21,14 +22,10 @@ public class HostController {
     private final HomestayService homestayService;
     private final RequestIdentityResolver identityResolver;
 
-    /**
-     * register a new host
-     */
     @PostMapping
-    public ApiResponse<HostDTO> upsertHost(@RequestBody @Valid HostDTO hostDTO) {
-        Long effectiveUserId = identityResolver.requireUserId(hostDTO.getIdUser());
-        hostDTO.setIdUser(effectiveUserId);
-        return hostService.upsertHostProfile(hostDTO);
+    public ApiResponse<HostDTO> registerHost(@RequestBody @Valid HostRegistrationRequest request) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return hostService.registerHost(effectiveUserId, request);
     }
 
     // Fetch the authenticated host profile
@@ -46,9 +43,15 @@ public class HostController {
         return hostService.getHostByUserId(effectiveUserId);
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PutMapping("/{userId}/approve")
+    public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
+        Long adminUserId = identityResolver.requireUserId(null);
+        return hostService.approveHost(adminUserId, userId);
+    }
 
     @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @PostMapping("/homestays")
+    @PostMapping("/me/homestays")
     public ApiResponse<HomestayDTO> createHomestayForCurrentHost(
             @RequestBody @Valid HomestayCreateRequest request
     ) {
