@@ -106,9 +106,9 @@ public class UserServiceImpl implements UserService {
 
 
         // Check kiem tra co phai Admin khong
-        if(Objects.nonNull(user.getAdmin())){
-            return new ApiResponse<>(400, "Email invalid", null);
-        }
+//        if(Objects.nonNull(user.getAdmin())){
+//            return new ApiResponse<>(400, "Email invalid", null);
+//        }
 
         String code = secureRandomNumbers();
 
