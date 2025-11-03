@@ -9,6 +9,7 @@ import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.StatusBill;
+import org.example.do_an_v1.enums.StatusTransaction;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.CustomerBookingInfoMapper;
 import org.example.do_an_v1.mapper.CustomerMapper;
@@ -19,10 +20,15 @@ import org.example.do_an_v1.repository.CustomerBookingInfoRepository;
 import org.example.do_an_v1.repository.CustomerRepository;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
+import org.example.do_an_v1.utils.GenNumber;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Objects;
 
 @Service
@@ -138,7 +144,11 @@ public class CustomerServiceImpl implements CustomerService {
 
 
         Transaction transaction = Transaction.builder()
+                .completedAt(LocalDateTime.now().plusMinutes(15))
+                .status(StatusTransaction.PENDING)
                 .build();
+
+        bill.setCode(GenNumber.generate());
         bill.setStatus(StatusBill.PAYMENT_PENDING);
         Bill billResult = billRepository.save(bill);
 
