@@ -19,7 +19,6 @@ public class SessionConfig {
     public HttpSession httpSession() {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
         // Nếu token hợp lệ -> authentication != null && đã xác thực
         if (authentication != null && authentication.isAuthenticated()) {
             return ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest().getSession();

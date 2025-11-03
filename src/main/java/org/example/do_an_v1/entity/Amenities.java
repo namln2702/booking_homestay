@@ -20,7 +20,7 @@ public class Amenities extends BaseEntity{
     private String name;
 
     @Column(name = "status", nullable = false)
-    private Status description;
+    private String description;
 
     @Column(name = "image_url", nullable = false)
     private Status imageUrl;
