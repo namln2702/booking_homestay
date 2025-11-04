@@ -12,14 +12,19 @@ import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
+import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.repository.AdminRepository;
 import org.example.do_an_v1.repository.HostRepository;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -74,6 +79,49 @@ public class HostServiceImpl implements HostService {
 
     @Override
     @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(Long adminUserId, StatusHost status, int page, int size) {
+        Admin admin = requireActiveAdmin(adminUserId);
+        if (admin == null) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<Host> hostPage = status != null
+                ? hostRepository.findByStatusHost(status, pageable)
+                : hostRepository.findAll(pageable);
+
+        List<HostDTO> hosts = hostPage.getContent().stream()
+                .map(profileMapper::toHostDTO)
+                .toList();
+
+        PageResponse<List<HostDTO>> response = PageResponse.<List<HostDTO>>builder()
+                .page(hostPage.getNumber())
+                .size(hostPage.getSize())
+                .total(hostPage.getTotalElements())
+                .items(hosts)
+                .build();
+
+        return new ApiResponse<>(200, "Hosts retrieved successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<HostDTO> getHostDetailForAdmin(Long adminUserId, Long hostUserId) {
+        Admin admin = requireActiveAdmin(adminUserId);
+        if (admin == null) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        Host host = hostRepository.findById(hostUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Host profile not found for user id " + hostUserId));
+
+        return new ApiResponse<>(200, "Host detail retrieved successfully", profileMapper.toHostDTO(host));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ApiResponse<HostDTO> getHostByUserId(Long userId) {
         Host host = hostRepository.findById(userId).orElse(null);
         if (host == null) {
@@ -85,14 +133,8 @@ public class HostServiceImpl implements HostService {
     @Override
     @Transactional
     public ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId) {
-        if (adminUserId == null) {
-            throw new IllegalArgumentException("Admin user id is required");
-        }
-
-        Admin admin = adminRepository.findById(adminUserId)
-                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
-
-        if (!Objects.equals(admin.getStatus(), Status.ACTIVE)) {
+        Admin admin = requireActiveAdmin(adminUserId);
+        if (admin == null) {
             return new ApiResponse<>(403, "Admin account is not active", null);
         }
 
@@ -113,5 +155,17 @@ public class HostServiceImpl implements HostService {
         }
         Host savedHost = hostRepository.save(host);
         return new ApiResponse<>(200, "Host approved successfully", profileMapper.toHostDTO(savedHost));
+    }
+
+    private Admin requireActiveAdmin(Long adminUserId) {
+        if (adminUserId == null) {
+            throw new IllegalArgumentException("Admin user id is required");
+        }
+        Admin admin = adminRepository.findById(adminUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+        if (!Objects.equals(admin.getStatus(), Status.ACTIVE)) {
+            return null;
+        }
+        return admin;
     }
 }

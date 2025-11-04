@@ -21,7 +21,7 @@ public class HomestayImage extends BaseEntity{
     private Boolean isPrimary ;
 
     @ManyToOne
-    @JoinColumn(name = "homestay_id", nullable = false)
+    @JoinColumn(name = "homestay_id", nullable = true)
     private Homestay homestay;
 
 }

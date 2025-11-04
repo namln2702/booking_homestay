@@ -281,6 +281,7 @@ public class UserServiceImpl implements UserService {
         Customer created = Customer.builder()
                 .user(user)
                 .role(RoleUser.CUSTOMER)
+                .status(Status.ACTIVE)
                 .build();
         return customerRepository.save(created);
     }
