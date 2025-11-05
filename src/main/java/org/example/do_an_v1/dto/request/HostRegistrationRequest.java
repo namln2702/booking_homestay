@@ -1,23 +1,35 @@
 package org.example.do_an_v1.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.example.do_an_v1.enums.StatusHost;
 
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
-public class HostRegistrationRequest extends UserRegistrationRequest {
+@AllArgsConstructor
+@Builder
+public class HostRegistrationRequest {
 
-    private StatusHost statusHost;
+    @Size(max = 50, message = "Username must be at most 50 characters")
+    private String username;
 
-    @Size(max = 255, message = "Business name must be at most 255 characters")
+    @Size(max = 100, message = "Name must be at most 100 characters")
+    @NotBlank(message = "Name is required")
+    private String name;
+
+    @Size(max = 20, message = "Phone must be at most 20 characters")
+    @NotBlank(message = "Phone is required")
+    private String phone;
+
+    private Integer age;
+
+    private String avatarUrl;
+
+    @NotBlank(message = "Business name is required")
     private String businessName;
 
-    @Size(max = 512, message = "QR code URL must be at most 512 characters")
     private String qrCodeUrl;
 }

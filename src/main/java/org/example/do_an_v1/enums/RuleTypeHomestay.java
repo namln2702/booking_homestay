@@ -2,8 +2,8 @@ package org.example.do_an_v1.enums;
 
 public enum RuleTypeHomestay {
 
-    ACTIVE(1),
-    INACTIVE(2);
+    ALLOW(1),
+    NOT_ALLOW(2);
 
 
 

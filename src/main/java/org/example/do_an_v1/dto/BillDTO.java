@@ -26,7 +26,7 @@ public class BillDTO {
     private CustomerDTO customerDTO;
 
     // --- Thông tin homestay ---
-    private HomestayDTO homestayDTO;
+    private HomestaySummaryDTO homestayDTO;
 
 
     private CustomerBookingInfoDTO customerBookingInfoDTO;

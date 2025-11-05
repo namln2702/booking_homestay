@@ -1,7 +1,11 @@
 package org.example.do_an_v1.mapper;
 
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.Homestay;
+import org.example.do_an_v1.entity.Host;
+import org.example.do_an_v1.entity.User;
 
 import java.util.stream.Collectors;
 
@@ -32,7 +36,7 @@ public class BillMapper {
                 .customerBookingInfoDTO(CustomerBookingInfoMapper.toDTO(bill.getCustomerBookingInfo()))
 
                 // Thông tin homestay
-                .homestayDTO(HomestayMapper.toDTO(bill.getHomestay()))
+                .homestayDTO(toHomestaySummary(bill.getHomestay()))
 
                 // Danh sách giao dịch
                 .transactions(bill.getListTransaction() != null
@@ -68,5 +72,26 @@ public class BillMapper {
         // bill.setCustomer(customerRepository.findById(dto.getCustomerDTO().getId()).get());
 
         return bill;
+    }
+
+    private static HomestaySummaryDTO toHomestaySummary(Homestay homestay) {
+        if (homestay == null) {
+            return null;
+        }
+
+        Host host = homestay.getHost();
+        User hostUser = host != null ? host.getUser() : null;
+
+        return HomestaySummaryDTO.builder()
+                .id(homestay.getId())
+                .title(homestay.getTitle())
+                .category(homestay.getCategory())
+                .status(homestay.getStatusHomestay())
+                .hostId(host != null ? host.getId() : null)
+                .hostName(hostUser != null ? hostUser.getName() : null)
+                .city(homestay.getAddress() != null ? homestay.getAddress().getCity() : null)
+                .state(homestay.getAddress() != null ? homestay.getAddress().getState() : null)
+                .createdAt(homestay.getCreatedAt())
+                .build();
     }
 }
