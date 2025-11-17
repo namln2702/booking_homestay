@@ -1,6 +1,7 @@
 package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
@@ -346,5 +347,18 @@ public class HomestayServiceImpl implements HomestayService {
         }
 
         return homestayImageRepository.saveAll(images);
+    }
+
+    @Override
+    public ApiResponse<?> findHomestay(FindHomeStayDTO findHomeStayDTO) {
+        List<Homestay> homestays = homestayRepository.findHomestay(
+                findHomeStayDTO.getAddress(),
+                findHomeStayDTO.getNumberChildren(),
+                findHomeStayDTO.getNumberAdults() ,
+                findHomeStayDTO.getNumberBaby(),
+                findHomeStayDTO.getBegin(),
+                findHomeStayDTO.getEnd());
+
+        return new ApiResponse<>(200, "Success", homestays);
     }
 }

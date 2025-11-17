@@ -48,5 +48,11 @@ public class Bill extends BaseEntity{
     @OneToMany(mappedBy = "bill")
     Set<Transaction> listTransaction;
 
+    @OneToMany(mappedBy = "bill")
+    Set<HomestayDailyPrice> listHomestayDailyPrices;
+
+    @OneToMany(mappedBy = "bill")
+    Set<Complaint> listComplaint;
+
 
 }

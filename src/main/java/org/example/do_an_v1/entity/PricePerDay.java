@@ -17,10 +17,11 @@ import java.util.Set;
 @Table(name = "tbl_price_per_days")
 public class PricePerDay extends BaseEntity{
 
-
     @Column(name = "day", nullable = false, unique = true)
     private Date day ;
 
+    @Column(name = "price", nullable = false)
+    private Float price;
 
     @OneToMany(mappedBy = "pricePerDay")
     Set<HomestayDailyPrice> listHomestayDailyPrice;

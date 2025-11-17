@@ -16,11 +16,9 @@ import java.util.Set;
 @Table(name = "tbl_complaints")
 public class Complaint extends BaseEntity{
 
-    @Column(name = "token", nullable = false)
-    private String token;
 
-    @Column(name = "status", nullable = false)
-    private Status statusToken ;
+    @Column(name = "description", nullable = false)
+    private String description;
 
     @ManyToOne
     @JoinColumn(name = "admin_id", nullable = false)
@@ -29,4 +27,7 @@ public class Complaint extends BaseEntity{
     @OneToMany(mappedBy = "complaint")
     Set<Image> listImage;
 
+    @ManyToOne
+    @JoinColumn(name = "bill_id", nullable = false)
+    private Bill bill;
 }

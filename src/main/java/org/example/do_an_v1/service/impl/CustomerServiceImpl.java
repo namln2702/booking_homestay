@@ -1,35 +1,35 @@
 package org.example.do_an_v1.service.impl;
 
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.PaymentDTO;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusTransaction;
+import org.example.do_an_v1.enums.TypeTransaction;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.CustomerBookingInfoMapper;
 import org.example.do_an_v1.mapper.CustomerMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
-import org.example.do_an_v1.repository.BillRepository;
-import org.example.do_an_v1.repository.CustomerBookingInfoRepository;
-import org.example.do_an_v1.repository.CustomerRepository;
+import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
+import org.example.do_an_v1.utils.Date;
 import org.example.do_an_v1.utils.GenNumber;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.Locale;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -39,10 +39,14 @@ public class CustomerServiceImpl implements CustomerService {
     private final ProfileMapper profileMapper;
     private final UserRegistrationSupport userRegistrationSupport;
     private final CustomerBookingInfoRepository customerBookingInfoRepository;
+    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
     private final BillRepository billRepository;
+    private final HomestayRepository homestayRepository;
+    private final SessionConfig sessionConfig;
+    private final ImageRepository imageRepository;
+    private final ComplaintRepository complaintRepository;
 
-    @Autowired
-    private SessionConfig sessionConfig;
+
 
 
 
@@ -126,33 +130,73 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional
     public ApiResponse<?> booking(BillDTO billDTO) {
 
-        HttpSession httpSession = sessionConfig.httpSession();
+        Homestay homestay = homestayRepository.findById(billDTO.getId()).orElseThrow(() -> new RuntimeException("Homestay not exits"));
+        String start = Date.DateToString(billDTO.getCheckIn());
+        String end = Date.DateToString(billDTO.getCheckOut());
 
+
+
+
+        // Check homestay availability
+        if(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), start, end))
+            return new ApiResponse<>(422, "Room has been booked", null );
+
+
+        // Save bill
         Bill bill = BillMapper.toEntity(billDTO);
-        if(!Objects.isNull(billDTO.getCustomerBookingInfoDTO())){
-            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(billDTO.getCustomerBookingInfoDTO());
-            customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
-            bill.setCustomerBookingInfo(customerBookingInfo);
-        }
+        Bill billResult = billRepository.save(bill);
 
         // Save customer into bill
         Customer customer = CustomerMapper.toEntity(billDTO.getCustomerDTO());
         customer.setId(Long.parseLong( (String) sessionConfig.httpSession().getAttribute("id")));
-        bill.setCustomer(customer);
+        billResult.setCustomer(customer);
 
 
+        // Save HomestayDailyPrices into bill
+        Bill finalBillResult = billResult;
+        billDTO.getHomestayDailyPricesDTOS()
+                .forEach(pricePerDayDTO -> {
+                    homestayDailyPricesRepository.save(HomestayDailyPrice.builder()
+                                    .isBooked(true)
+                                    .price(pricePerDayDTO.getPrice())
+                                    .homestay(homestay)
+                                    .bill(finalBillResult)
+                            .build());
+                });
+
+
+        // luu thong tin CustomerBookingInfo neu la nguoi moi
+        if(!Objects.isNull(billDTO.getCustomerBookingInfoDTO())){
+            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(billDTO.getCustomerBookingInfoDTO());
+            customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
+            billResult.setCustomerBookingInfo(customerBookingInfo);
+        }
+
+
+        // Create transaction
         Transaction transaction = Transaction.builder()
                 .completedAt(LocalDateTime.now().plusMinutes(15))
+                .transactionType(TypeTransaction.BOOKING_PAYMENT)
                 .status(StatusTransaction.PENDING)
+                .bill(billResult)
+                .fromUser(customer.getUser())
                 .build();
 
+
+        // Create code
         bill.setCode(GenNumber.generate());
         bill.setStatus(StatusBill.PAYMENT_PENDING);
-        Bill billResult = billRepository.save(bill);
-
+        billResult = billRepository.save(billResult);
 
         return new ApiResponse<>(200, "Save bill success", billResult);
     }
+
+    public ApiResponse<?> payment(PaymentDTO paymentDTO){
+        return null;
+    }
+
+
 }

@@ -16,7 +16,7 @@ public class SessionConfig {
 
     @Bean
     @Scope(value = WebApplicationContext.SCOPE_REQUEST, proxyMode = ScopedProxyMode.TARGET_CLASS)
-    public HttpSession httpSession() {
+    public static HttpSession httpSession() {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Nếu token hợp lệ -> authentication != null && đã xác thực

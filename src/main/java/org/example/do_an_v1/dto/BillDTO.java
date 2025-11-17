@@ -22,12 +22,14 @@ public class BillDTO {
     private LocalDateTime checkOut;       // Ngày check-out
     private LocalDateTime actualCheckin;  // Thời gian check-in thực tế (nếu có)
 
+    // --- Thong tin gia ---
+    private List<HomestayDailyPricesDTO> homestayDailyPricesDTOS;
+
     // --- Thông tin khách hàng ---
     private CustomerDTO customerDTO;
 
     // --- Thông tin homestay ---
     private HomestaySummaryDTO homestayDTO;
-
 
     private CustomerBookingInfoDTO customerBookingInfoDTO;
 
