@@ -8,10 +8,7 @@ import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.PaymentDTO;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
-import org.example.do_an_v1.enums.RoleUser;
-import org.example.do_an_v1.enums.StatusBill;
-import org.example.do_an_v1.enums.StatusTransaction;
-import org.example.do_an_v1.enums.TypeTransaction;
+import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.CustomerBookingInfoMapper;
 import org.example.do_an_v1.mapper.CustomerMapper;
@@ -28,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -42,6 +40,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final HomestayDailyPricesRepository homestayDailyPricesRepository;
     private final BillRepository billRepository;
     private final HomestayRepository homestayRepository;
+    private final PreferenceRepository preferenceRepository;
     private final SessionConfig sessionConfig;
     private final ImageRepository imageRepository;
     private final ComplaintRepository complaintRepository;
@@ -198,5 +197,22 @@ public class CustomerServiceImpl implements CustomerService {
         return null;
     }
 
+    @Override
+    public ApiResponse<?> updateCustomer(CustomerDTO customerDTO) {
 
+        Long userId = customerDTO.getIdCustomer();
+        Customer customer = customerRepository.findById(userId).orElseThrow( () -> new RuntimeException("Customer not exits"));
+        Set<Preference> preferenceList = customer.getListPreferences();
+
+
+        customerDTO.getListPreference().forEach(idPreference ->
+        {
+            Preference preference = preferenceRepository.findById(idPreference).orElseThrow(() -> new RuntimeException("Preference not exits"));
+            preferenceList.add(preference);
+        });
+        customer.setListPreferences(preferenceList);
+        customer.setStatus(Status.ACTIVE);
+        return new ApiResponse<>(200, "Success", customerRepository.save(customer));
+
+    }
 }

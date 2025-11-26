@@ -1,9 +1,14 @@
 package org.example.do_an_v1.dto;
 
+import lombok.Builder;
+import lombok.Getter;
 import org.example.do_an_v1.entity.Image;
 
 import java.util.List;
 
+
+@Getter
+@Builder
 public class ReviewDTO {
 
     private Long id;                   // ID của review (kế thừa từ BaseEntity)

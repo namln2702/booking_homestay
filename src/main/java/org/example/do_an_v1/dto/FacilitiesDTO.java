@@ -1,16 +1,18 @@
 package org.example.do_an_v1.dto;
 
-import jakarta.persistence.Column;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
-import org.example.do_an_v1.enums.Status;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-
-@Builder
 @Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class FacilitiesDTO {
     private Long id;
     private String name;
-
-    private Status category ;
+    private String category; // General, Bedroom, Bathroom, Kitchen, Special, View
 }

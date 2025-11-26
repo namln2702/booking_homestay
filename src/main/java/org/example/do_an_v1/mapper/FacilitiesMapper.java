@@ -10,14 +10,16 @@ public class FacilitiesMapper {
         return FacilitiesDTO.builder()
                 .id(entity.getId())
                 .name(entity.getName())
+                .category(entity.getCategory())
                 .build();
     }
 
     public static Facilities toEntity(FacilitiesDTO dto) {
         if (dto == null) return null;
-        Facilities f = new Facilities();
-        f.setId(dto.getId());
-        f.setName(dto.getName());
-        return f;
+        Facilities facility = Facilities.builder()
+                .name(dto.getName())
+                .category(dto.getCategory())
+                .build();
+        return facility;
     }
 }

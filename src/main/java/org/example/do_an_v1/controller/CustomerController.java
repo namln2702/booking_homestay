@@ -5,9 +5,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.ComplaintService;
 import org.example.do_an_v1.service.CustomerService;
+import org.example.do_an_v1.service.HomestayService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +21,7 @@ public class CustomerController {
 
     private final CustomerService customerService;
     private final RequestIdentityResolver identityResolver;
+    private final HomestayService homestayService;
 
     /**
      * register a new customer
@@ -48,6 +51,16 @@ public class CustomerController {
     @PostMapping("/booking")
     ApiResponse<?> booking(@RequestBody BillDTO billDTO){
         return customerService.booking(billDTO);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PutMapping("/user/review/{reviewId}")
+    public ApiResponse<?> updateReviewHomestay(
+            @PathVariable Long reviewId,
+            @RequestBody @Valid ReviewDTO reviewDTO
+    ){
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return homestayService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
     }
 
 

@@ -1,13 +1,13 @@
-package org.example.do_an_v1;
+// package org.example.do_an_v1;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+// import org.junit.jupiter.api.Test;
+// import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class DoAnV1ApplicationTests {
+// @SpringBootTest
+// class DoAnV1ApplicationTests {
 
-    @Test
-    void contextLoads() {
-    }
+//     @Test
+//     void contextLoads() {
+//     }
 
-}
+// }

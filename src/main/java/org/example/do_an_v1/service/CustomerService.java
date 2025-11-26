@@ -9,6 +9,7 @@ public interface CustomerService {
 
     ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO customerDTO) throws RuntimeException;
     ApiResponse<CustomerDTO> getCustomerByUserId(Long userId);
-
     ApiResponse<?> booking(BillDTO billDTO);
+
+    ApiResponse<?> updateCustomer(CustomerDTO customerDTO);
 }

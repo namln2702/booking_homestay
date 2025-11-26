@@ -15,7 +15,6 @@ public class ComplaintDTO {
     private Long id;                // ID từ BaseEntity
     private String token;           // Mã token khiếu nại
     private String description;
-    private Status statusToken;     // Trạng thái khiếu nại
     private LocalDateTime createdAt;// Thoi gian tao khieu nai
 
     private Long adminId;           // ID admin xử lý (trích từ entity Admin)

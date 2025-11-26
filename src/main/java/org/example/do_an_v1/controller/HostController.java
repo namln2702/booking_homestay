@@ -64,6 +64,15 @@ public class HostController {
         return hostService.approveHost(adminUserId, userId);
     }
 
+
+    //  Cap nhap lai token host
+    // @PreAuthorize("hasAuthority('ROLE_HOST')")
+    // @PostMapping("/me/refresh-token")
+    // public ApiResponse<String> refreshTokenForHost() {
+    //     Long effectiveUserId = identityResolver.requireUserId(null);
+    //     return hostService.refreshTokenForHost(effectiveUserId);
+    // }
+
     @PreAuthorize("hasAuthority('ROLE_HOST')")
     @PostMapping("/me/homestays")
     public ApiResponse<HomestayDTO> createHomestayForCurrentHost(

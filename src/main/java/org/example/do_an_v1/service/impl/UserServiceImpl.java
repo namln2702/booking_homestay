@@ -29,7 +29,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -236,14 +238,19 @@ public class UserServiceImpl implements UserService {
             userRepository.save(user);
         }
 
+        // Thu thập tất cả roles của user
+        List<String> roles = new ArrayList<>();
+
         // uu tien check admin truoc
         Admin admin = adminRepository.findByUser(user);
         if (Objects.nonNull(admin)) {
             if (admin.getStatus() != Status.ACTIVE) {
                 return new ApiResponse<>(423, "Admin account is not active", null);
             }
+            roles.add(RoleUser.ADMIN.toString());
+            
             AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
-            String token = securityService.createTokenSystem(user, RoleUser.ADMIN.toString());
+            String token = securityService.createTokenSystem(user, roles);
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .token(token)
                     .user(adminDTO)
@@ -254,9 +261,13 @@ public class UserServiceImpl implements UserService {
         if (Objects.nonNull(host)) {
             // da la host thi phai la customer, vi vay add them row vao bang customer
             ensureCustomerExists(user);
+            
+            // Host có cả HOST và CUSTOMER roles
+            roles.add(RoleUser.HOST.toString());
+            roles.add(RoleUser.CUSTOMER.toString());
 
             HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
-            String token = securityService.createTokenSystem(user, RoleUser.HOST.toString());
+            String token = securityService.createTokenSystem(user, roles);
 
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .user(hostDTO)
@@ -264,9 +275,12 @@ public class UserServiceImpl implements UserService {
                     .build());
         }
 
+        // Chỉ là customer
         Customer customer = ensureCustomerExists(user);
+        roles.add(RoleUser.CUSTOMER.toString());
+        
         CustomerDTO customerDTO = CustomerMapper.toDTO(customer);
-        String token = securityService.createTokenSystem(user, RoleUser.CUSTOMER.toString());
+        String token = securityService.createTokenSystem(user, roles);
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                 .token(token)
                 .user(customerDTO)

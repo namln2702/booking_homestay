@@ -17,7 +17,9 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 
 
@@ -41,9 +43,21 @@ public class SecurityService {
 
 
     public String createTokenSystem(User u, String role){
+        // Giữ lại method cũ để backward compatibility
+        return createTokenSystem(u, List.of(role));
+    }
 
+    public String createTokenSystem(User u, List<String> roles){
+        if (roles == null || roles.isEmpty()) {
+            throw new IllegalArgumentException("Roles list cannot be null or empty");
+        }
 
         JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS512);
+
+        // Tạo scope string từ danh sách roles: "ROLE_ADMIN ROLE_HOST ROLE_CUSTOMER"
+        String scope = roles.stream()
+                .map(role -> "ROLE_" + role.toUpperCase())
+                .collect(Collectors.joining(" "));
 
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
                 .subject(u.getEmail())
@@ -52,7 +66,7 @@ public class SecurityService {
                 .expirationTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.MINUTES).toEpochMilli()))
                 .jwtID(UUID.randomUUID().toString())
                 .claim("id", u.getId())
-                .claim("scope","ROLE_" + role) // ROLE_ADMIN
+                .claim("scope", scope) // "ROLE_ADMIN ROLE_HOST ROLE_CUSTOMER"
                 .build();
 
         Payload payload = new Payload(jwtClaimsSet.toJSONObject());

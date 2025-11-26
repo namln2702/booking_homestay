@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.entity.Bill;
 import org.example.do_an_v1.entity.Complaint;
 import org.example.do_an_v1.entity.Image;
+import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.BillRepository;
 import org.example.do_an_v1.repository.ComplaintRepository;
@@ -37,6 +38,9 @@ public class ComplaintServiceImpl implements ComplaintService {
         Bill bill = billRepository.findById(complaintDTO.getBillId()).orElseThrow(
                 () -> new RuntimeException("Bill not exits")
         );
+
+        // updateComplaint
+        bill.setStatus(StatusBill.COMPLAINT_PENDING);
 
 
         // Check time for Complaint

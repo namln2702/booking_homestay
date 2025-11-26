@@ -29,6 +29,6 @@ public class HomestayDailyPrice extends BaseEntity{
     private Homestay homestay;
 
     @ManyToOne
-    @JoinColumn(name = "bill_id", nullable = false)
+    @JoinColumn(name = "bill_id", nullable = true)
     private Bill bill;
 }
