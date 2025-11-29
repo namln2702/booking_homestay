@@ -35,7 +35,7 @@ public class CustomerController {
 
     // Fetch the authenticated customer's profile
     @GetMapping("/me")
-    public ApiResponse<CustomerDTO> getMyCustomerProfile() {
+    public ApiResponse<CustomerDTO> getMyCustomer() {
         Long effectiveUserId = identityResolver.requireUserId(null);
         return customerService.getCustomerByUserId(effectiveUserId);
     }
@@ -47,12 +47,23 @@ public class CustomerController {
         Long effectiveUserId = identityResolver.requireUserId(userId);
         return customerService.getCustomerByUserId(effectiveUserId);
     }
-
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PostMapping("/booking")
     ApiResponse<?> booking(@RequestBody BillDTO billDTO){
         return customerService.booking(billDTO);
     }
 
+
+    // create review
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PostMapping("/user/review")
+    public ApiResponse<?> reviewHomestay(@RequestBody @Valid ReviewDTO reviewDTO){
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.reviewHomestay(effectiveUserId, reviewDTO);
+    }
+
+
+    // update review
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PutMapping("/user/review/{reviewId}")
     public ApiResponse<?> updateReviewHomestay(
@@ -60,8 +71,10 @@ public class CustomerController {
             @RequestBody @Valid ReviewDTO reviewDTO
     ){
         Long effectiveUserId = identityResolver.requireUserId(null);
-        return homestayService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
+        return customerService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
     }
+
+
 
 
 }

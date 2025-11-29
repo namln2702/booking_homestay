@@ -2,86 +2,81 @@ package org.example.do_an_v1.enums;
 
 public enum StatusBill {
 
-
     /**
-     * Khách hàng đã đặt nhưng chưa hoàn tất thanh toán.
+     * Khách hàng đã đặt nhưng chưa thanh toán.
      * Đơn sẽ bị hủy nếu quá hạn thanh toán.
      */
     PAYMENT_PENDING(1),
 
     /**
-     * Thanh toán thất bại hoặc khách hàng không thanh toán đúng hạn.
+     * Thanh toán thất bại hoặc khách không thanh toán đúng hạn.
      * Đơn bị hủy, không có giao dịch tiền.
      */
     PAYMENT_FAILED(2),
 
     /**
-     * Khách hàng đã thanh toán thành công.
-     * Tiền được chuyển từ customer → admin.
+     * Khách hàng thanh toán thành công.
+     * Tiền được chuyển từ customer → admin (escrow).
      * Đơn đang chờ đến ngày check-in.
      */
     CHECKIN_PENDING(3),
 
     /**
      * Khách không check-in đúng hạn.
-     * Đơn tự động được coi là hoàn tất,
-     * tiền được chuyển từ admin → host.
+     * Đơn hoàn tất và admin chuyển tiền cho host.
      */
     CHECKIN_EXPIRED(4),
 
     /**
-     * Khách đã check-in thành công.
-     * Đơn đang trong thời gian chờ khiếu nại sau khi ở xong.
+     * Khách đã check-in thành công và hoàn tất lưu trú.
+     * Đơn chuyển sang giai đoạn chờ khiếu nại (7 ngày).
      */
     COMPLAINT_PENDING(5),
 
     /**
-     * Quá thời hạn khiếu nại, không phát sinh tranh chấp.
-     * Đơn được hoàn tất và admin chuyển tiền cho host.
+     * Khiếu nại đang được xử lý bởi Host (2 ngày).
+     * Host có thể:
+     *  - Đồng ý → chuyển sang REFUNDED
+     *  - Từ chối hoặc quá hạn → chuyển sang ADMIN_COMPLAINT_PROCESSING
      */
-    COMPLAINT_EXPIRED(6),
+    HOST_COMPLAINT_PROCESSING(6),
 
     /**
-     * Khiếu nại đang được xử lý bởi host.
-     * Host có thể đồng ý hoặc từ chối yêu cầu khiếu nại của khách.
+     * Khiếu nại được chuyển cho Admin xử lý
+     * (do Host từ chối hoặc quá hạn).
+     * Admin có thể:
+     *  - Đồng ý hoặc quá hạn xử lý → REFUNDED
+     *  - Không đồng ý → REJECTED
      */
-    HOST_COMPLAINT_PROCESSING(7),
-
-    /**
-     * Host đồng ý xử lý khiếu nại.
-     * Khiếu nại được chấp nhận, admin hoàn tiền cho khách hàng.
-     */
-    HOST_COMPLAINT_APPROVED(8),
-
-    /**
-     * Admin từ chối xử lý khiếu nại hoặc xác định khiếu nại không hợp lệ.
-     * Đơn không được hoàn tiền và coi như hoàn tất bình thường.
-     */
-    ADMIN_COMPLAINT_REJECTED(9),
-
-    /**
-     * Khiếu nại bị từ chối (do admin hoặc do hết thời hạn xử lý).
-     * Đơn kết thúc không hoàn tiền cho khách.
-     */
-    REJECTED(10),
+    ADMIN_COMPLAINT_PROCESSING(7),
 
     /**
      * Khiếu nại được xử lý thành công.
-     * Admin hoàn tiền cho customer (tiền đi ngược lại).
+     * Admin hoàn tiền cho Customer (admin → customer).
      */
-    REFUNDED(11),
+    REFUNDED(8),
 
     /**
-     * Đơn hàng hoàn tất thành công.
-     * Không còn khiếu nại, tiền từ admin → host.
+     * Khiếu nại bị từ chối.
+     * Đơn kết thúc mà không có hoàn tiền.
      */
-    SUCCEED(12);
+    REJECTED(9),
+
+    /**
+     * Đơn hoàn tất thành công.
+     * Không còn khiếu nại, admin chuyển tiền cho host.
+     */
+    SUCCEED(10);
 
 
 
-    private int code;
+    private final int code;
 
     StatusBill(int code){
         this.code = code;
+    }
+
+    public int getCode() {
+        return code;
     }
 }

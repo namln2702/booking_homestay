@@ -28,23 +28,23 @@ public class AdminController {
     private final HomestayService homestayService;
     private final RequestIdentityResolver identityResolver;
 
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
-    @GetMapping("/homestays")
-    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> listHomestays(
-            @RequestParam(name = "status", required = false, defaultValue = "PENDING") StatusHomestay status,
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
-    ) {
-        Long actorId = identityResolver.requireUserId(null);
-        return homestayService.getHomestaysForAdmin(actorId, status, page, size);
-    }
-
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
-    @GetMapping("/homestays/{homestayId}")
-    public ApiResponse<HomestayDTO> getHomestayDetail(@PathVariable Long homestayId) {
-        Long actorId = identityResolver.requireUserId(null);
-        return homestayService.getHomestayDetailForAdmin(actorId, homestayId);
-    }
+//    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+//    @GetMapping("/homestays")
+//    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> listHomestays(
+//            @RequestParam(name = "status", required = false, defaultValue = "PENDING") StatusHomestay status,
+//            @RequestParam(name = "page", defaultValue = "0") int page,
+//            @RequestParam(name = "size", defaultValue = "20") int size
+//    ) {
+//        Long actorId = identityResolver.requireUserId(null);
+//        return homestayService.getHomestays(status, page, size);
+//    }
+//
+//    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+//    @GetMapping("/homestays/{homestayId}")
+//    public ApiResponse<HomestayDTO> getHomestayDetail(@PathVariable Long homestayId) {
+//        Long actorId = identityResolver.requireUserId(null);
+//        return homestayService.getHomestayDetailForAdmin(actorId, homestayId);
+//    }
 
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
     @PostMapping("/invite")

@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
+import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HomestayService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
@@ -25,11 +26,12 @@ public class HomestayController {
     }
 
     @GetMapping("/all")
-    public ApiResponse<?> getAllHomestay(
+    public ApiResponse<?> homestays(
+            @RequestParam(name = "status" ) StatusHomestay statusHomestay,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ){
-        return homestayService.getAll(page, size);
+        return homestayService.getHomestays(statusHomestay , page, size);
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER','ROLE_HOST')")
@@ -40,16 +42,11 @@ public class HomestayController {
     }
 
     @GetMapping("/detail")
-    public ApiResponse<?> detailHomestay(@RequestParam(name = "id") Long id){
+    public ApiResponse<?> homestay(@RequestParam(name = "id") Long id){
         return homestayService.detailHomestay(id);
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
-    @PostMapping("/user/review")
-    public ApiResponse<?> reviewHomestay(@RequestBody @Valid ReviewDTO reviewDTO){
-        Long effectiveUserId = identityResolver.requireUserId(null);
-        return homestayService.reviewHomestay(effectiveUserId, reviewDTO);
-    }
+
 
 //    @PutMapping
 //    ApiResponse<?> updateHomestay(@RequestBody HomestayDTO homestayDTO){

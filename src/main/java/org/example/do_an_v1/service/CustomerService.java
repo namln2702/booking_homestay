@@ -2,6 +2,7 @@ package org.example.do_an_v1.service;
 
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 
 public interface CustomerService {
@@ -12,4 +13,8 @@ public interface CustomerService {
     ApiResponse<?> booking(BillDTO billDTO);
 
     ApiResponse<?> updateCustomer(CustomerDTO customerDTO);
+
+    ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
+
+    ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
 }

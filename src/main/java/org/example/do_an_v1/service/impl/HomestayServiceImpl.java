@@ -104,20 +104,20 @@ public class HomestayServiceImpl implements HomestayService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestaysForAdmin(Long adminUserId,
-                                                                                   StatusHomestay status,
-                                                                                   int page,
-                                                                                   int size) {
-        if (adminUserId == null) {
-            throw new IllegalArgumentException("Admin user id is required");
-        }
+    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestays(
+                                                                            StatusHomestay status,
+                                                                            int page,
+                                                                            int size) {
+//        if (adminUserId == null) {
+//            throw new IllegalArgumentException("Admin user id is required");
+//        }
 
-        Admin admin = adminRepository.findById(adminUserId)
-                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+//        Admin admin = adminRepository.findById(adminUserId)
+//                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
 
-        if (admin.getStatus() != Status.ACTIVE) {
-            return new ApiResponse<>(403, "Admin account is not active", null);
-        }
+//        if (admin.getStatus() != Status.ACTIVE) {
+//            return new ApiResponse<>(403, "Admin account is not active", null);
+//        }
 
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
@@ -365,35 +365,35 @@ public class HomestayServiceImpl implements HomestayService {
         return new ApiResponse<>(200, "Success", homestays);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public ApiResponse<?> getAll(int page, int size) {
-        // Validate và chuẩn hóa page, size
-        int safePage = Math.max(page, 0);
-        int safeSize = size > 0 && size <= 100 ? size : 20;
-
-        // Lấy danh sách homestay với status ACTIVE, sort theo createdAt (mới nhất trước)
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by("createdAt").descending());
-        Page<Homestay> homestayPage = homestayRepository.findByStatusHomestay(StatusHomestay.ACTIVE, pageable);
-
-        // Map sang DTO với images
-        List<HomestayDTO> homestayDTOS = homestayPage.getContent().stream()
-                .map(homestay -> {
-                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
-                    return homestayMapper.toDto(homestay, images);
-                })
-                .collect(Collectors.toList());
-
-        // Tạo PageResponse
-        PageResponse<List<HomestayDTO>> pageResponse = PageResponse.<List<HomestayDTO>>builder()
-                .page(homestayPage.getNumber())
-                .size(homestayPage.getSize())
-                .total(homestayPage.getTotalElements())
-                .items(homestayDTOS)
-                .build();
-
-        return new ApiResponse<>(200, "Homestays retrieved successfully", pageResponse);
-    }
+//    @Override
+//    @Transactional(readOnly = true)
+//    public ApiResponse<?> getAll(int page, int size) {
+//        // Validate và chuẩn hóa page, size
+//        int safePage = Math.max(page, 0);
+//        int safeSize = size > 0 && size <= 100 ? size : 20;
+//
+//        // Lấy danh sách homestay với status ACTIVE, sort theo createdAt (mới nhất trước)
+//        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by("createdAt").descending());
+//        Page<Homestay> homestayPage = homestayRepository.findByStatusHomestay(StatusHomestay.ACTIVE, pageable);
+//
+//        // Map sang DTO với images
+//        List<HomestayDTO> homestayDTOS = homestayPage.getContent().stream()
+//                .map(homestay -> {
+//                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+//                    return homestayMapper.toDto(homestay, images);
+//                })
+//                .collect(Collectors.toList());
+//
+//        // Tạo PageResponse
+//        PageResponse<List<HomestayDTO>> pageResponse = PageResponse.<List<HomestayDTO>>builder()
+//                .page(homestayPage.getNumber())
+//                .size(homestayPage.getSize())
+//                .total(homestayPage.getTotalElements())
+//                .items(homestayDTOS)
+//                .build();
+//
+//        return new ApiResponse<>(200, "Homestays retrieved successfully", pageResponse);
+//    }
 
     @Override
     @Transactional(readOnly = true)
@@ -419,7 +419,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .filter(bill -> {
                     StatusBill status = bill.getStatus();
                     return status == StatusBill.SUCCEED 
-                            || status == StatusBill.COMPLAINT_EXPIRED
+//                            || status == StatusBill.COMPLAINT_EXPIRED
                             || status == StatusBill.CHECKIN_EXPIRED
                             || status == StatusBill.COMPLAINT_PENDING
                             || status == StatusBill.CHECKIN_PENDING;
@@ -502,7 +502,7 @@ public class HomestayServiceImpl implements HomestayService {
         StatusBill billStatus = bill.getStatus();
         if (billStatus != StatusBill.COMPLAINT_PENDING 
                 && billStatus != StatusBill.CHECKIN_PENDING
-                && billStatus != StatusBill.COMPLAINT_EXPIRED
+//                && billStatus != StatusBill.COMPLAINT_EXPIRED
                 && billStatus != StatusBill.SUCCEED) {
             return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
         }

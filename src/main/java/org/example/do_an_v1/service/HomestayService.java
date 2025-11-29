@@ -15,10 +15,9 @@ public interface HomestayService {
 
     ApiResponse<HomestayDTO> createHomestay(Long hostUserId, HomestayCreateRequest request);
 
-    ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestaysForAdmin(Long adminUserId,
-                                                                            StatusHomestay status,
-                                                                            int page,
-                                                                            int size);
+    ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestays(StatusHomestay status,
+                                                                     int page,
+                                                                     int size);
 
     ApiResponse<HomestayDTO> getHomestayDetailForAdmin(Long adminUserId, Long homestayId);
 
@@ -26,7 +25,7 @@ public interface HomestayService {
 
     ApiResponse<?> findHomestay(FindHomeStayDTO findHomeStayDTO);
 
-    ApiResponse<?> getAll(int page, int size);
+//    ApiResponse<?> getAll(int page, int size);
     ApiResponse<?> findUserHistoryHomestays(Long userId);
 
     ApiResponse<?> detailHomestay(Long id);
