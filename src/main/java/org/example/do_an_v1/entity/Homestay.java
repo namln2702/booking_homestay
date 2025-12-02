@@ -45,6 +45,7 @@ public class Homestay extends BaseEntity{
     @Column(name = "num_kitchen")
     private Integer numKitchen;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private StatusHomestay statusHomestay;
 
@@ -53,6 +54,9 @@ public class Homestay extends BaseEntity{
 
     @Column(name = "warning_count")
     private Integer warningCount;
+
+    @Column(name = "base_price")
+    private Float basePrice;
 
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "addressId", referencedColumnName = "id")

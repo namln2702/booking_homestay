@@ -27,5 +27,20 @@ public interface FacilitiesService {
      * @return ApiResponse chứa danh sách FacilitiesDTO đã tạo
      */
     ApiResponse<List<FacilitiesDTO>> createFacilitiesBatch(FacilitiesBatchCreateRequest request);
+
+    /**
+     * Cập nhật Facility
+     * @param id ID của Facility cần cập nhật
+     * @param facilitiesDTO DTO chứa thông tin cập nhật
+     * @return ApiResponse chứa FacilitiesDTO đã cập nhật
+     */
+    ApiResponse<FacilitiesDTO> updateFacility(Long id, FacilitiesDTO facilitiesDTO);
+
+    /**
+     * Xóa Facility
+     * @param id ID của Facility cần xóa
+     * @return ApiResponse thông báo kết quả
+     */
+    ApiResponse<?> deleteFacility(Long id);
 }
 

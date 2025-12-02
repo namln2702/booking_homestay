@@ -9,6 +9,7 @@ import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.request.HomestayDailyPriceRequest;
 import org.example.do_an_v1.dto.request.HomestayRuleRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.Status;
@@ -24,7 +25,6 @@ import org.example.do_an_v1.service.HomestayService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +54,7 @@ public class HomestayServiceImpl implements HomestayService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final BillRepository billRepository;
+    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
 
     @Override
     @Transactional
@@ -81,6 +82,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .numBeds(request.getNumBeds())
                 .numBathrooms(request.getNumBathrooms())
                 .numKitchen(request.getNumKitchen())
+                .basePrice(request.getBasePrice() != null ? request.getBasePrice() : 0f)
                 .rating(0f)
                 .advancedPayment(0)
                 .warningCount(0)
@@ -669,5 +671,72 @@ public class HomestayServiceImpl implements HomestayService {
         ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
 
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request) {
+        if (homestayId == null) {
+            throw new IllegalArgumentException("Homestay ID is required");
+        }
+        if (request == null || request.getDailyPrices() == null || request.getDailyPrices().isEmpty()) {
+            throw new IllegalArgumentException("Daily prices list is required");
+        }
+
+        // Lấy homestay
+        Homestay homestay = homestayRepository.findById(homestayId)
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id: " + homestayId));
+
+        // Xử lý từng daily price trong request
+        for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
+            if (priceUpdate.getDay() == null || priceUpdate.getPrice() == null) {
+                continue; // Bỏ qua nếu thiếu thông tin
+            }
+
+            // Tìm hoặc tạo PricePerDay
+            PricePerDay pricePerDay = resolvePricePerDay(priceUpdate.getDay(), priceUpdate.getPrice());
+
+            // Tìm HomestayDailyPrice hiện có cho homestay và pricePerDay này
+            Optional<HomestayDailyPrice> existingDailyPrice = homestay.getListHomestayDailyPrice().stream()
+                    .filter(hdp -> hdp.getPricePerDay() != null && 
+                            hdp.getPricePerDay().getId().equals(pricePerDay.getId()))
+                    .findFirst();
+
+            if (existingDailyPrice.isPresent()) {
+                // Cập nhật giá nếu đã tồn tại
+                HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+                // Chỉ cập nhật nếu chưa được booked
+                if (!Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+                    dailyPrice.setPrice(priceUpdate.getPrice());
+                    homestayDailyPricesRepository.save(dailyPrice);
+                }
+            } else {
+                // Tạo mới HomestayDailyPrice
+                HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
+                        .price(priceUpdate.getPrice())
+                        .isBooked(Boolean.FALSE)
+                        .pricePerDay(pricePerDay)
+                        .homestay(homestay)
+                        .build();
+                homestayDailyPricesRepository.save(newDailyPrice);
+                
+                // Thêm vào set của homestay
+                if (homestay.getListHomestayDailyPrice() == null) {
+                    homestay.setListHomestayDailyPrice(new HashSet<>());
+                }
+                homestay.getListHomestayDailyPrice().add(newDailyPrice);
+            }
+        }
+
+        // Lưu homestay
+        Homestay savedHomestay = homestayRepository.save(homestay);
+
+        // Lấy images
+        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+
+        // Map sang DTO
+        HomestayDTO responseDTO = homestayMapper.toDto(savedHomestay, images);
+
+        return new ApiResponse<>(200, "Homestay prices updated successfully", responseDTO);
     }
 }

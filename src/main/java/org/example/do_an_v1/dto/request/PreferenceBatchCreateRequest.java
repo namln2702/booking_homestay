@@ -7,7 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.example.do_an_v1.dto.FacilitiesDTO;
+import org.example.do_an_v1.dto.PreferenceDTO;
 
 import java.util.List;
 
@@ -15,10 +15,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FacilitiesBatchCreateRequest {
+public class PreferenceBatchCreateRequest {
 
-    @NotEmpty(message = "Facilities list cannot be empty")
-    @Size(max = 50, message = "Cannot create more than 50 facilities at once")
+    @NotEmpty(message = "Preferences list cannot be empty")
+    @Size(max = 50, message = "Cannot create more than 50 preferences at once")
     @Valid
-    private List<FacilitiesDTO> facilities;
+    private List<PreferenceDTO> preferences;
 }
+

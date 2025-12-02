@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
+import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
@@ -13,6 +14,7 @@ import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HomestayService;
+import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +28,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final HomestayService homestayService;
+    private final HostService hostService;
     private final RequestIdentityResolver identityResolver;
 
 //    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
@@ -52,7 +55,12 @@ public class AdminController {
         Long actorId = identityResolver.requireUserId(null);
         return adminService.inviteAdmin(actorId, request);
     }
-
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/{userId}")
+    public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
+        Long adminUserId = identityResolver.requireUserId(null);
+        return hostService.getHostDetailForAdmin(adminUserId, userId);
+    }
     @PostMapping("/activate")
     public ApiResponse<AdminDTO> activateAdmin(@RequestBody @Valid AdminActivationRequest request) {
         return adminService.activateAdmin(request);

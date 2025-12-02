@@ -3,13 +3,11 @@ package org.example.do_an_v1.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BillDTO;
-import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
-import org.example.do_an_v1.service.ComplaintService;
+import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.service.CustomerService;
-import org.example.do_an_v1.service.HomestayService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +19,7 @@ public class CustomerController {
 
     private final CustomerService customerService;
     private final RequestIdentityResolver identityResolver;
-    private final HomestayService homestayService;
+    private final SessionConfig sessionConfig;
 
     /**
      * register a new customer
@@ -74,7 +72,23 @@ public class CustomerController {
         return customerService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
     }
 
+    //update Preference for Customer
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PutMapping("/user/preference")
+    public ApiResponse<?> updatePreferenceCustomer(@RequestBody @Valid CustomerDTO customerDTO){
+        Long userId = Long.parseLong((String) sessionConfig.httpSession().getAttribute("id"));
+        return customerService.updatePreferencesCustomer(userId, customerDTO);
+    }
 
-
+    /**
+     * Thống kê các bill đã đặt của Customer
+     * Yêu cầu quyền CUSTOMER
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/me/bills/all")
+    public ApiResponse<?> getMyBills() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerBills(effectiveUserId);
+    }
 
 }

@@ -14,11 +14,12 @@ import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
 import org.example.do_an_v1.utils.Date;
 import org.example.do_an_v1.utils.GenNumber;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -39,11 +40,8 @@ public class CustomerServiceImpl implements CustomerService {
     private final SessionConfig sessionConfig;
     private final ImageRepository imageRepository;
     private final ComplaintRepository complaintRepository;
-
-
-
-
-
+    private final TransactionRepository transactionRepository;
+    private final PricePerDayRepository pricePerDayRepository;
 
     @Override
     @Transactional
@@ -143,23 +141,81 @@ public class CustomerServiceImpl implements CustomerService {
         Bill bill = BillMapper.toEntity(billDTO);
         Bill billResult = billRepository.save(bill);
 
-        // Save customer into bill
+        // Lưu customer vào bill
         Customer customer = CustomerMapper.toEntity(billDTO.getCustomerDTO());
         customer.setId(Long.parseLong( (String) sessionConfig.httpSession().getAttribute("id")));
         billResult.setCustomer(customer);
 
 
-        // Save HomestayDailyPrices into bill
+        // Khóa các HomestayDailyPrices trong khoảng thời gian check-in đến check-out
+        // Convert LocalDateTime sang Date để query
+        LocalDate checkInLocalDate = billDTO.getCheckIn().toLocalDate();
+        LocalDate checkOutLocalDate = billDTO.getCheckOut().toLocalDate();
+        java.util.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
+        java.util.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
+        
+        // Tìm các HomestayDailyPrice trong khoảng thời gian này
+        List<HomestayDailyPrice> dailyPricesToLock = homestayDailyPricesRepository
+                .findByHomestayAndDateRange(homestay.getId(), startDate, endDate);
+        
+        // Tạo map để dễ dàng kiểm tra daily price đã tồn tại cho từng ngày
+        Map<LocalDate, HomestayDailyPrice> existingDailyPricesMap = new HashMap<>();
+        for (HomestayDailyPrice dailyPrice : dailyPricesToLock) {
+            LocalDate priceDate = dailyPrice.getPricePerDay().getDay().toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+            existingDailyPricesMap.put(priceDate, dailyPrice);
+        }
+        
+        // Lấy giá mặc định từ homestay (basePrice)
+        Float defaultPrice = homestay.getBasePrice() != null ? homestay.getBasePrice() : 0f;
+        
+        // Tạo danh sách daily prices cuối cùng (bao gồm cả những cái đã có và mới tạo)
+        List<HomestayDailyPrice> finalDailyPricesToLock = new ArrayList<>();
+        
+        // Duyệt qua từng ngày từ check-in đến check-out (không bao gồm check-out)
+        LocalDate currentDate = checkInLocalDate;
+        while (currentDate.isBefore(checkOutLocalDate)) {
+            HomestayDailyPrice dailyPrice = existingDailyPricesMap.get(currentDate);
+            
+            if (dailyPrice == null) {
+                // Chưa có daily price cho ngày này, tạo mới
+                java.util.Date currentDateUtil = java.sql.Date.valueOf(currentDate);
+                
+                // Tìm hoặc tạo PricePerDay cho ngày này
+                PricePerDay pricePerDay = pricePerDayRepository.findByDay(currentDateUtil)
+                        .orElseGet(() -> {
+                            PricePerDay newPricePerDay = PricePerDay.builder()
+                                    .day(currentDateUtil)
+                                    .price(defaultPrice)
+                                    .build();
+                            return pricePerDayRepository.save(newPricePerDay);
+                        });
+                
+                // Tạo HomestayDailyPrice mới
+                dailyPrice = HomestayDailyPrice.builder()
+                        .price(pricePerDay.getPrice() != null ? pricePerDay.getPrice() : defaultPrice)
+                        .isBooked(Boolean.FALSE)
+                        .pricePerDay(pricePerDay)
+                        .homestay(homestay)
+                        .build();
+                dailyPrice = homestayDailyPricesRepository.save(dailyPrice);
+            }
+            
+            finalDailyPricesToLock.add(dailyPrice);
+            currentDate = currentDate.plusDays(1);
+        }
+
+        // Khóa các daily prices (set isBooked = true và gán bill)
         Bill finalBillResult = billResult;
-        billDTO.getHomestayDailyPricesDTOS()
-                .forEach(pricePerDayDTO -> {
-                    homestayDailyPricesRepository.save(HomestayDailyPrice.builder()
-                                    .isBooked(true)
-                                    .price(pricePerDayDTO.getPrice())
-                                    .homestay(homestay)
-                                    .bill(finalBillResult)
-                            .build());
-                });
+        for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
+            if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+                throw new RuntimeException("Some dates are already booked");
+            }
+            dailyPrice.setIsBooked(true);
+            dailyPrice.setBill(finalBillResult);
+            homestayDailyPricesRepository.save(dailyPrice);
+        }
 
 
         // luu thong tin CustomerBookingInfo neu la nguoi moi
@@ -170,6 +226,17 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
 
+        // Lấy admin user (giả sử có một admin mặc định hoặc lấy từ config)
+        // Tạm thời để null, sẽ cần xử lý sau
+        User adminUser = userRepository.findAll().stream()
+                .filter(u -> u.getAdmin() != null)
+                .findFirst()
+                .orElse(null);
+
+        if (adminUser == null) {
+            throw new RuntimeException("No admin user found for transaction");
+        }
+
         // Create transaction
         Transaction transaction = Transaction.builder()
                 .completedAt(LocalDateTime.now().plusMinutes(15))
@@ -177,7 +244,15 @@ public class CustomerServiceImpl implements CustomerService {
                 .status(StatusTransaction.PENDING)
                 .bill(billResult)
                 .fromUser(customer.getUser())
+                .toUser(adminUser)
+                .amount(java.math.BigDecimal.valueOf(
+                        finalDailyPricesToLock.stream()
+                                .mapToDouble(HomestayDailyPrice::getPrice)
+                                .sum()
+                ))
                 .build();
+        
+        transactionRepository.save(transaction);
 
 
         // Create code
@@ -193,22 +268,49 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public ApiResponse<?> updateCustomer(CustomerDTO customerDTO) {
+    @Transactional
+    public ApiResponse<CustomerDTO> updatePreferencesCustomer(Long userId, CustomerDTO customerDTO) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+        if (customerDTO == null) {
+            throw new IllegalArgumentException("Customer DTO is required");
+        }
+        if (customerDTO.getListPreference() == null || customerDTO.getListPreference().isEmpty()) {
+            throw new IllegalArgumentException("List of preferences is required");
+        }
 
-        Long userId = customerDTO.getIdCustomer();
-        Customer customer = customerRepository.findById(userId).orElseThrow( () -> new RuntimeException("Customer not exits"));
-        Set<Preference> preferenceList = customer.getListPreferences();
+        // Lấy User theo userId
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id: " + userId));
 
+        // Tìm Customer theo User
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            throw new RuntimeException("Customer profile not found for this user");
+        }
 
-        customerDTO.getListPreference().forEach(idPreference ->
-        {
-            Preference preference = preferenceRepository.findById(idPreference).orElseThrow(() -> new RuntimeException("Preference not exits"));
-            preferenceList.add(preference);
-        });
-        customer.setListPreferences(preferenceList);
-        customer.setStatus(Status.ACTIVE);
-        return new ApiResponse<>(200, "Success", customerRepository.save(customer));
+        // Tạo Set mới chứa các preferences từ request
+        Set<Preference> newPreferences = new HashSet<>();
+        for (Long preferenceId : customerDTO.getListPreference()) {
+            if (preferenceId == null) {
+                continue; // Bỏ qua null values
+            }
+            Preference preference = preferenceRepository.findById(preferenceId)
+                    .orElseThrow(() -> new RuntimeException("Preference not found with id: " + preferenceId));
+            newPreferences.add(preference);
+        }
 
+        // Cập nhật preferences cho customer (thay thế toàn bộ)
+        customer.setListPreferences(newPreferences);
+        
+        // Lưu customer
+        Customer savedCustomer = customerRepository.save(customer);
+        
+        // Map sang DTO để trả về
+        CustomerDTO responseDTO = profileMapper.toCustomerDTO(savedCustomer);
+        
+        return new ApiResponse<>(200, "Customer preferences updated successfully", responseDTO);
     }
 
 
@@ -424,4 +526,68 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
     }
 
+    @Transactional
+    public ApiResponse<?> confirmCheckin(org.example.do_an_v1.dto.request.CheckinRequest request) {
+        if (request == null || request.getBillId() == null) {
+            throw new IllegalArgumentException("Bill ID is required");
+        }
+
+        Bill bill = billRepository.findById(request.getBillId())
+                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+
+        // Validate: Mã code phải khớp với code của bill
+        if (request.getCode() == null || !request.getCode().equals(bill.getCode())) {
+            throw new IllegalArgumentException("Invalid check-in code");
+        }
+
+        // Validate: Bill phải ở trạng thái CHECKIN_PENDING
+        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+            throw new IllegalStateException("Bill must be in CHECKIN_PENDING status to confirm checkin. Current status: " + bill.getStatus());
+        }
+
+        // Cập nhật trạng thái bill thành COMPLAINT_PENDING
+        bill.setStatus(StatusBill.COMPLAINT_PENDING);
+        bill.setActualCheckinTime(LocalDateTime.now());
+        billRepository.save(bill);
+
+        return new ApiResponse<>(200, "Check-in confirmed successfully. Bill status changed to COMPLAINT_PENDING", null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getCustomerBills(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        // Lấy user và customer
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        // Lấy tất cả bills của customer, chỉ lấy những bills đã được thanh toán hoặc hoàn tất
+        List<Bill> bills = billRepository.findByCustomer(customer);
+        
+        // Filter chỉ lấy các bills đã hoàn tất hoặc đã check-in (có thể review được)
+        List<Bill> completedBills = bills.stream()
+//                .filter(bill -> {
+//                    StatusBill status = bill.getStatus();
+//                    return status == StatusBill.SUCCEED
+//                            || status == StatusBill.CHECKIN_EXPIRED
+//                            || status == StatusBill.COMPLAINT_PENDING
+//                            || status == StatusBill.CHECKIN_PENDING;
+//                })
+                .collect(Collectors.toList());
+
+        // Map sang BillDTO
+        List<BillDTO> billDTOS = completedBills.stream()
+                .map(BillMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Customer bills retrieved successfully", billDTOS);
+    }
 }

@@ -47,6 +47,7 @@ public class HomestayMapper {
                 .numKitchen(homestay.getNumKitchen())
                 .advancedPayment(homestay.getAdvancedPayment())
                 .warningCount(homestay.getWarningCount())
+                .basePrice(homestay.getBasePrice())
                 .status(homestay.getStatusHomestay())
                 .address(addressDTO)
                 .facilityIds(facilityIds)

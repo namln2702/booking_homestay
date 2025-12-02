@@ -32,6 +32,7 @@ public class HomestayDTO {
     private Integer numKitchen;
     private Integer advancedPayment;
     private Integer warningCount;
+    private Float basePrice;
     private StatusHomestay status;
 
     private AddressDTO address;

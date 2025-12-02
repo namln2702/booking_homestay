@@ -1,7 +1,6 @@
 package org.example.do_an_v1.repository;
 
 import org.example.do_an_v1.entity.Homestay;
-
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.springframework.data.domain.Page;
@@ -18,6 +17,11 @@ import java.util.List;
 public interface HomestayRepository extends JpaRepository<Homestay, Long> {
 
     boolean existsByTitleAndHost(String title, Host host);
+
+    /**
+     * Lấy tất cả homestay của một host
+     */
+    List<Homestay> findByHost(Host host);
 
     Page<Homestay> findByStatusHomestay(StatusHomestay statusHomestay, Pageable pageable);
 

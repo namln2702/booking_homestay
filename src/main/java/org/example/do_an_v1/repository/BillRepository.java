@@ -3,6 +3,7 @@ package org.example.do_an_v1.repository;
 import org.example.do_an_v1.entity.Bill;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.Homestay;
+import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.enums.StatusBill;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -27,4 +28,9 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
      * Kiểm tra customer đã booking homestay này chưa
      */
     Optional<Bill> findByHomestayAndCustomer(Homestay homestay, Customer customer);
+
+    /**
+     * Tất cả bills của các homestay thuộc về một host
+     */
+    List<Bill> findByHomestay_Host(Host host);
 }

@@ -1,11 +1,14 @@
 package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Host;
+import org.example.do_an_v1.entity.Homestay;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
@@ -13,7 +16,12 @@ import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
+import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.enums.StatusBill;
+import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.repository.AdminRepository;
+import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.HomestayRepository;
 import org.example.do_an_v1.repository.HostRepository;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
@@ -23,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.List;
 
@@ -34,6 +43,8 @@ public class HostServiceImpl implements HostService {
     private final AdminRepository adminRepository;
     private final ProfileMapper profileMapper;
     private final UserRegistrationSupport userRegistrationSupport;
+    private final BillRepository billRepository;
+    private final HomestayRepository homestayRepository;
 
     @Override
     @Transactional
@@ -167,5 +178,133 @@ public class HostServiceImpl implements HostService {
             return null;
         }
         return admin;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getHomestaysForHost(Long hostUserId) {
+        if (hostUserId == null) {
+            throw new IllegalArgumentException("Host user id is required");
+        }
+
+        User user = userRegistrationSupport.getUserOrThrow(hostUserId);
+        Host host = hostRepository.findByUser(user);
+        if (host == null) {
+            return new ApiResponse<>(404, "Host profile not found for this user", null);
+        }
+
+        List<Homestay> homestays = homestayRepository.findByHost(host);
+
+        List<HomestaySummaryDTO> summaries = homestays.stream()
+                .map(h -> HomestaySummaryDTO.builder()
+                        .id(h.getId())
+                        .title(h.getTitle())
+                        .category(h.getCategory())
+                        .status(h.getStatusHomestay())
+                        .hostId(host.getId())
+                        .hostName(user.getName())
+                        .city(h.getAddress() != null ? h.getAddress().getCity() : null)
+                        .state(h.getAddress() != null ? h.getAddress().getState() : null)
+                        .createdAt(h.getCreatedAt())
+                        .build())
+                .toList();
+
+        return new ApiResponse<>(200, "Homestays for host retrieved successfully", summaries);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getBillsForHostHomestays(Long hostUserId) {
+        if (hostUserId == null) {
+            throw new IllegalArgumentException("Host user id is required");
+        }
+
+        User user = userRegistrationSupport.getUserOrThrow(hostUserId);
+        Host host = hostRepository.findByUser(user);
+        if (host == null) {
+            return new ApiResponse<>(404, "Host profile not found for this user", null);
+        }
+
+        List<Bill> bills = billRepository.findByHomestay_Host(host);
+
+        // Lọc các bill đã/đang được sử dụng (logic tương tự history customer)
+        List<Bill> filtered = bills.stream()
+                .filter(bill -> {
+                    StatusBill status = bill.getStatus();
+                    return status == StatusBill.SUCCEED
+//                            || status == StatusBill.COMPLAINT_EXPIRED
+                            || status == StatusBill.CHECKIN_EXPIRED
+                            || status == StatusBill.COMPLAINT_PENDING
+                            || status == StatusBill.CHECKIN_PENDING;
+                })
+                .toList();
+
+        List<BillDTO> billDTOS = filtered.stream()
+                .map(BillMapper::toDTO)
+                .toList();
+
+        return new ApiResponse<>(200, "Bills for host homestays retrieved successfully", billDTOS);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> confirmCheckin(Long hostUserId, org.example.do_an_v1.dto.request.CheckinRequest request) {
+        if (hostUserId == null) {
+            throw new IllegalArgumentException("Host user ID is required");
+        }
+        if (request == null || request.getBillId() == null) {
+            throw new IllegalArgumentException("Bill ID is required");
+        }
+
+        Bill bill = billRepository.findById(request.getBillId())
+                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+
+        // Validate: Bill phải có homestay
+        if (bill.getHomestay() == null) {
+            throw new IllegalStateException("Bill must have a homestay associated");
+        }
+
+        // Validate: Host phải sở hữu homestay này
+        Long homestayHostId = bill.getHomestay().getHost().getId();
+        if (!Objects.equals(homestayHostId, hostUserId)) {
+            throw new IllegalStateException("Host can only check-in customers for their own homestays");
+        }
+
+        // Validate: Bill phải ở trạng thái CHECKIN_PENDING
+        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+            throw new IllegalStateException("Bill must be in CHECKIN_PENDING status to confirm checkin. Current status: " + bill.getStatus());
+        }
+
+        // Cập nhật trạng thái bill thành COMPLAINT_PENDING
+        bill.setStatus(StatusBill.COMPLAINT_PENDING);
+        bill.setActualCheckinTime(LocalDateTime.now());
+        billRepository.save(bill);
+
+        return new ApiResponse<>(200, "Check-in confirmed successfully. Bill status changed to COMPLAINT_PENDING", null);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> confirmCheckout(org.example.do_an_v1.dto.request.CheckoutRequest request) {
+        if (request == null || request.getBillId() == null) {
+            throw new IllegalArgumentException("Bill ID is required");
+        }
+
+        Bill bill = billRepository.findById(request.getBillId())
+                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+
+        // Validate: Bill phải ở trạng thái COMPLAINT_PENDING
+        if (bill.getStatus() != StatusBill.COMPLAINT_PENDING) {
+            throw new IllegalStateException("Bill must be in COMPLAINT_PENDING status to confirm checkout. Current status: " + bill.getStatus());
+        }
+
+        // Validate: Host phải sở hữu homestay này
+        // (Có thể thêm validation này nếu cần)
+
+        // Cập nhật trạng thái bill thành SUCCEED
+        bill.setStatus(StatusBill.SUCCEED);
+        billRepository.save(bill);
+
+        return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED", null);
     }
 }

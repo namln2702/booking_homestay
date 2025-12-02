@@ -3,14 +3,13 @@ package org.example.do_an_v1.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.HostDTO;
-import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.request.CheckinRequest;
+import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
-import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HostService;
-import org.example.do_an_v1.service.HomestayService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +22,6 @@ import java.util.List;
 public class HostController {
 
     private final HostService hostService;
-    private final HomestayService homestayService;
     private final RequestIdentityResolver identityResolver;
 
     @PostMapping
@@ -49,19 +47,56 @@ public class HostController {
         return hostService.getHostByUserId(effectiveUserId);
     }
 
-    // Admin-only: fetch host profile for a specific user id
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @GetMapping("/{userId}")
-    public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
-        Long adminUserId = identityResolver.requireUserId(null);
-        return hostService.getHostDetailForAdmin(adminUserId, userId);
+    /**
+     * Thống kê danh sách homestay thuộc về host hiện tại
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/me/homestays")
+    public ApiResponse<?> getMyHomestays() {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getHomestaysForHost(hostUserId);
     }
+
+    /**
+     * Liệt kê các bill đã đặt (thành công/đang sử dụng) cho các homestay của host hiện tại
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/me/bills")
+    public ApiResponse<?> getMyHomestayBills() {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getBillsForHostHomestays(hostUserId);
+    }
+
+    // Admin-only: fetch host profile for a specific user id
+
 
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @PutMapping("/{userId}/approve")
     public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
         Long adminUserId = identityResolver.requireUserId(null);
         return hostService.approveHost(adminUserId, userId);
+    }
+
+    /**
+     * Xác nhận check-in thành công
+     * Yêu cầu quyền HOST
+     * Host chỉ có thể check-in cho các bill thuộc về homestay của mình
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/checkin")
+    public ApiResponse<?> confirmCheckin(@RequestBody @Valid CheckinRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.confirmCheckin(hostUserId, request);
+    }
+
+    /**
+     * Xác nhận trả phòng thành công
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/checkout")
+    public ApiResponse<?> confirmCheckout(@RequestBody @Valid CheckoutRequest request) {
+        return hostService.confirmCheckout(request);
     }
 
 
@@ -73,13 +108,13 @@ public class HostController {
     //     return hostService.refreshTokenForHost(effectiveUserId);
     // }
 
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @PostMapping("/me/homestays")
-    public ApiResponse<HomestayDTO> createHomestayForCurrentHost(
-            @RequestBody @Valid HomestayCreateRequest request
-    ) {
-        Long effectiveUserId = identityResolver.requireUserId(null);
-        System.out.println("HostController.createHomestayForCurrentHost: " + effectiveUserId );
-        return homestayService.createHomestay(effectiveUserId, request);
-    }
+//    @PreAuthorize("hasAuthority('ROLE_HOST')")
+//    @PostMapping("/me/homestays")
+//    public ApiResponse<HomestayDTO> createHomestayForCurrentHost(
+//            @RequestBody @Valid HomestayCreateRequest request
+//    ) {
+//        Long effectiveUserId = identityResolver.requireUserId(null);
+//        System.out.println("HostController.createHomestayForCurrentHost: " + effectiveUserId );
+//        return homestayService.createHomestay(effectiveUserId, request);
+//    }
 }

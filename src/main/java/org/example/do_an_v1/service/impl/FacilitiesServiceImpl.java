@@ -3,8 +3,8 @@ package org.example.do_an_v1.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.FacilitiesDTO;
 import org.example.do_an_v1.dto.request.FacilitiesBatchCreateRequest;
-import org.example.do_an_v1.dto.request.FacilitiesCreateRequest;
 import org.example.do_an_v1.entity.Facilities;
+import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.FacilitiesMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.FacilitiesRepository;
@@ -61,23 +61,23 @@ public class FacilitiesServiceImpl implements FacilitiesService {
 
         // Validate từng facility trong list
         for (int i = 0; i < request.getFacilities().size(); i++) {
-            FacilitiesCreateRequest facilityRequest = request.getFacilities().get(i);
-            if (facilityRequest == null) {
+            FacilitiesDTO facilityDTO = request.getFacilities().get(i);
+            if (facilityDTO == null) {
                 throw new IllegalArgumentException("Facility at index " + i + " is null");
             }
-            if (facilityRequest.getName() == null || facilityRequest.getName().trim().isEmpty()) {
+            if (facilityDTO.getName() == null || facilityDTO.getName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Facility name is required at index " + i);
             }
-            if (facilityRequest.getCategory() == null || facilityRequest.getCategory().trim().isEmpty()) {
+            if (facilityDTO.getCategory() == null || facilityDTO.getCategory().trim().isEmpty()) {
                 throw new IllegalArgumentException("Facility category is required at index " + i);
             }
         }
 
         // Tạo danh sách Facilities entities
         List<Facilities> facilitiesToSave = request.getFacilities().stream()
-                .map(facilityRequest -> Facilities.builder()
-                        .name(facilityRequest.getName().trim())
-                        .category(facilityRequest.getCategory().trim())
+                .map(facilityDTO -> Facilities.builder()
+                        .name(facilityDTO.getName().trim())
+                        .category(facilityDTO.getCategory().trim())
                         .build())
                 .collect(Collectors.toList());
 
@@ -90,6 +90,56 @@ public class FacilitiesServiceImpl implements FacilitiesService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(201, "Facilities created successfully", facilitiesDTOS);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<FacilitiesDTO> updateFacility(Long id, FacilitiesDTO facilitiesDTO) {
+        if (id == null) {
+            throw new IllegalArgumentException("Facility id is required");
+        }
+        if (facilitiesDTO == null) {
+            throw new IllegalArgumentException("Facility DTO is required");
+        }
+
+        Facilities facility = facilitiesRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Facility not found with id: " + id));
+
+        // Cập nhật name nếu có
+        if (facilitiesDTO.getName() != null && !facilitiesDTO.getName().trim().isEmpty()) {
+            facility.setName(facilitiesDTO.getName().trim());
+        }
+
+        // Cập nhật category nếu có
+        if (facilitiesDTO.getCategory() != null && !facilitiesDTO.getCategory().trim().isEmpty()) {
+            facility.setCategory(facilitiesDTO.getCategory().trim());
+        }
+
+        Facilities savedFacility = facilitiesRepository.save(facility);
+        FacilitiesDTO responseDTO = FacilitiesMapper.toDTO(savedFacility);
+
+        return new ApiResponse<>(200, "Facility updated successfully", responseDTO);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> deleteFacility(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Facility id is required");
+        }
+
+        Facilities facility = facilitiesRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Facility not found with id: " + id));
+
+        // Kiểm tra xem facility có đang được sử dụng bởi homestay nào không
+        if (facility.getListHomestay() != null && !facility.getListHomestay().isEmpty()) {
+            throw new IllegalStateException("Cannot delete facility. It is currently associated with " + 
+                    facility.getListHomestay().size() + " homestay(s)");
+        }
+
+        facilitiesRepository.delete(facility);
+
+        return new ApiResponse<>(200, "Facility deleted successfully", null);
     }
 }
 

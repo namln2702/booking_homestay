@@ -5,6 +5,7 @@ import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -33,4 +34,6 @@ public interface HomestayService {
     ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
 
     ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
+
+    ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request);
 }

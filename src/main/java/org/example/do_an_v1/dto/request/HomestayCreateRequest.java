@@ -23,6 +23,7 @@ public class HomestayCreateRequest {
     private Integer numBeds;
     private Integer numBathrooms;
     private Integer numKitchen;
+    private Float basePrice;
 
     private AddressRequest address;
     private List<Long> facilitiesIds;         // chọn từ hệ thống

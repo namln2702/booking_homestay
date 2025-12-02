@@ -1,10 +1,14 @@
 package org.example.do_an_v1.configuration;
 
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.models.ExternalDocumentation;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +16,13 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 @Configuration
+@OpenAPIDefinition(info = @io.swagger.v3.oas.annotations.info.Info(title = "API Documentation", version = "v1"))
+@SecurityScheme(
+        name = "BearerToken",
+        type = SecuritySchemeType.HTTP,
+        scheme = "bearer",
+        bearerFormat = "JWT"
+)
 public class OpenApiConfig {
 
     @Bean
@@ -32,6 +43,9 @@ public class OpenApiConfig {
                 ))
                 .externalDocs(new ExternalDocumentation()
                         .description("Project Guidelines")
-                        .url("docs/bussiness_requirements/ba.md"));
+                        .url("docs/bussiness_requirements/ba.md"))
+
+                // 🔥 Quan trọng: Phải dùng chính xác tên "BearerToken"
+                .addSecurityItem(new SecurityRequirement().addList("BearerToken"));
     }
 }

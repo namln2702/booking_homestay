@@ -19,4 +19,18 @@ public interface HostService {
     ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId);
 
     ApiResponse<HostDTO> getHostByUserId(Long userId);
+
+    /**
+     * Thống kê danh sách homestay theo host (dùng userId của host)
+     */
+    ApiResponse<?> getHomestaysForHost(Long hostUserId);
+
+    /**
+     * Liệt kê các bill đã đặt (thành công) của các homestay thuộc host
+     */
+    ApiResponse<?> getBillsForHostHomestays(Long hostUserId);
+
+    ApiResponse<?> confirmCheckin(Long hostUserId, org.example.do_an_v1.dto.request.CheckinRequest request);
+
+    ApiResponse<?> confirmCheckout(org.example.do_an_v1.dto.request.CheckoutRequest request);
 }

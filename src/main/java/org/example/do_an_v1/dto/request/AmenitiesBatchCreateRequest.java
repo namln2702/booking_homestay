@@ -7,7 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.example.do_an_v1.dto.FacilitiesDTO;
+import org.example.do_an_v1.dto.AmenitiesDTO;
 
 import java.util.List;
 
@@ -15,10 +15,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FacilitiesBatchCreateRequest {
+public class AmenitiesBatchCreateRequest {
 
-    @NotEmpty(message = "Facilities list cannot be empty")
-    @Size(max = 50, message = "Cannot create more than 50 facilities at once")
+    @NotEmpty(message = "Amenities list cannot be empty")
+    @Size(max = 50, message = "Cannot create more than 50 amenities at once")
     @Valid
-    private List<FacilitiesDTO> facilities;
+    private List<AmenitiesDTO> amenities;
 }
+

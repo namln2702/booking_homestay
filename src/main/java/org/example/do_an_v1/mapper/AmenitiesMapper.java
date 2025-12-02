@@ -10,14 +10,17 @@ public class AmenitiesMapper {
         return AmenitiesDTO.builder()
                 .id(entity.getId())
                 .name(entity.getName())
+                .description(entity.getDescription())
+                .imageUrl(entity.getImageUrl())
                 .build();
     }
 
     public static Amenities toEntity(AmenitiesDTO dto) {
         if (dto == null) return null;
-        Amenities a = new Amenities();
-        a.setId(dto.getId());
-        a.setName(dto.getName());
-        return a;
+        return Amenities.builder()
+                .name(dto.getName())
+                .description(dto.getDescription())
+                .imageUrl(dto.getImageUrl())
+                .build();
     }
 }

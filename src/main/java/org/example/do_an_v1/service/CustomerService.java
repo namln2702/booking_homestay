@@ -12,9 +12,14 @@ public interface CustomerService {
     ApiResponse<CustomerDTO> getCustomerByUserId(Long userId);
     ApiResponse<?> booking(BillDTO billDTO);
 
-    ApiResponse<?> updateCustomer(CustomerDTO customerDTO);
+    ApiResponse<CustomerDTO> updatePreferencesCustomer(Long userId, CustomerDTO customerDTO);
 
     ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
 
     ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
+
+    /**
+     * Thống kê các bill đã đặt của Customer
+     */
+    ApiResponse<?> getCustomerBills(Long userId);
 }

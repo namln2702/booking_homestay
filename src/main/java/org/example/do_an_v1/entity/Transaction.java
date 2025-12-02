@@ -37,7 +37,7 @@ public class Transaction extends BaseEntity{
     User fromUser;
 
     @ManyToOne
-    @JoinColumn(name = "to_user", nullable = false)
+    @JoinColumn(name = "to_user", nullable = true)
     User toUser;
 
     @ManyToOne
