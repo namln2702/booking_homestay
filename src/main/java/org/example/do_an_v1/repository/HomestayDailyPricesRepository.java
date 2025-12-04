@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDailyPrice, Long> {
 
@@ -15,12 +16,13 @@ public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDai
                 SELECT 1
                 FROM HomestayDailyPrice hdp
                 JOIN hdp.pricePerDay ppd
-                WHERE ppd.day BETWEEN :start AND :end
+                WHERE ppd.day >= :startDate
+                  AND ppd.day < :endDate
                   AND hdp.isBooked = FALSE
                   AND hdp.homestay.id = :idHomestay
         ) THEN TRUE ELSE FALSE END
 """)
-    Boolean checkHomestayAvailability(Long idHomestay, String start, String end);
+    Boolean checkHomestayAvailability(Long idHomestay, Date startDate, Date endDate);
 
     /**
      * Tìm các HomestayDailyPrice theo homestay và khoảng thời gian
@@ -52,6 +54,21 @@ public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDai
     List<HomestayDailyPrice> findByHomestayAndPricePerDay(
             @Param("homestayId") Long homestayId,
             @Param("pricePerDayId") Long pricePerDayId
+    );
+
+    /**
+     * Tìm HomestayDailyPrice theo homestay và ngày cụ thể
+     */
+    @Query("""
+        SELECT hdp
+        FROM HomestayDailyPrice hdp
+        JOIN hdp.pricePerDay ppd
+        WHERE hdp.homestay.id = :homestayId
+          AND ppd.day = :date
+""")
+    Optional<HomestayDailyPrice> findByHomestayAndDate(
+            @Param("homestayId") Long homestayId,
+            @Param("date") Date date
     );
 
 }

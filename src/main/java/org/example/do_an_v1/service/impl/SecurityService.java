@@ -42,12 +42,12 @@ public class SecurityService {
     private InvalidateTokenRepository invalidateTokenRepository;
 
 
-    public String createTokenSystem(User u, String role){
+    public String createTokenSystem(User u, String role) throws JOSEException {
         // Giữ lại method cũ để backward compatibility
         return createTokenSystem(u, List.of(role));
     }
 
-    public String createTokenSystem(User u, List<String> roles){
+    public String createTokenSystem(User u, List<String> roles) throws JOSEException {
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("Roles list cannot be null or empty");
         }
@@ -78,7 +78,7 @@ public class SecurityService {
             return jwsObject.serialize();
         }catch (JOSEException e){
             log.error("Cannot create token ", e);
-            throw new RuntimeException(e.getMessage());
+            throw new JOSEException("Cannot create token: " + e.getMessage());
         }
 
     }
@@ -94,7 +94,7 @@ public class SecurityService {
         String tokenId = signedJWT.getJWTClaimsSet().getJWTID();
 
         if(invalidateTokenRepository.existsById(tokenId)){
-            throw new RuntimeException("Token invalidate");
+            throw new JOSEException("Token invalidate");
         }
 
         // Check expiryTime
@@ -104,11 +104,11 @@ public class SecurityService {
         var verified = signedJWT.verify(verifier);
 
         if (!(verified && expiryTime.after(new Date()))) {
-            throw new RuntimeException("Token error or expired");
+            throw new JOSEException("Token error or expired");
         }
 
         if (invalidateTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID())) {
-            throw new RuntimeException("Token has been deleted ");
+            throw new JOSEException("Token has been deleted");
         }
 
     }

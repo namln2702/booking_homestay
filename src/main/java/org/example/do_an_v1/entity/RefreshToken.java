@@ -17,6 +17,7 @@ public class RefreshToken extends BaseEntity{
     @Column(name = "token", nullable = false)
     private String token;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private Status statusToken ;
 

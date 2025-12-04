@@ -17,7 +17,8 @@ public class HomestayRule extends BaseEntity{
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "rule_type", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rule_type" )
     private RuleTypeHomestay ruleTypeHomestay ;
 
     @ManyToOne

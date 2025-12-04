@@ -40,6 +40,11 @@ public class BillMapper {
                 // Thông tin homestay
                 .homestayDTO(toHomestaySummary(bill.getHomestay()))
 
+                // Thông tin địa chỉ homestay
+                .addressDTO(bill.getHomestay() != null && bill.getHomestay().getAddress() != null
+                        ? AddressMapper.toDTO(bill.getHomestay().getAddress())
+                        : null)
+
                 // Danh sách giá theo ngày
                 .homestayDailyPricesDTOS(bill.getListHomestayDailyPrices() != null
                         ? bill.getListHomestayDailyPrices().stream()

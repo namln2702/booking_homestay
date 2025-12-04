@@ -2,7 +2,7 @@ package org.example.do_an_v1.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.BookingDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -25,7 +25,7 @@ public class CustomerController {
      * register a new customer
      */
     @PostMapping
-    public ApiResponse<CustomerDTO> upsertCustomer(@RequestBody @Valid CustomerDTO customerDTO) {
+    public ApiResponse<CustomerDTO> upsertProfileCustomer(@RequestBody @Valid CustomerDTO customerDTO) {
         Long effectiveUserId = identityResolver.requireUserId(customerDTO.getIdUser());
         customerDTO.setIdUser(effectiveUserId);
         return customerService.upsertCustomerProfile(customerDTO);
@@ -47,8 +47,9 @@ public class CustomerController {
     }
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PostMapping("/booking")
-    ApiResponse<?> booking(@RequestBody BillDTO billDTO){
-        return customerService.booking(billDTO);
+    ApiResponse<?> booking(@RequestBody @Valid BookingDTO bookingDTO){
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.booking(effectiveUserId, bookingDTO);
     }
 
 
@@ -76,7 +77,7 @@ public class CustomerController {
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PutMapping("/user/preference")
     public ApiResponse<?> updatePreferenceCustomer(@RequestBody @Valid CustomerDTO customerDTO){
-        Long userId = Long.parseLong((String) sessionConfig.httpSession().getAttribute("id"));
+        Long userId = (Long) sessionConfig.httpSession().getAttribute("id");
         return customerService.updatePreferencesCustomer(userId, customerDTO);
     }
 

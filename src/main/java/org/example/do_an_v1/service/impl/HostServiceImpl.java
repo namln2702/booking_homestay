@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.request.CheckinRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Admin;
@@ -248,7 +249,7 @@ public class HostServiceImpl implements HostService {
 
     @Override
     @Transactional
-    public ApiResponse<?> confirmCheckin(Long hostUserId, org.example.do_an_v1.dto.request.CheckinRequest request) {
+    public ApiResponse<?> confirmCheckin(Long hostUserId, CheckinRequest request) {
         if (hostUserId == null) {
             throw new IllegalArgumentException("Host user ID is required");
         }

@@ -1,0 +1,15 @@
+{
+  "homestayId": 1,
+  "checkIn": "2024-12-25T14:00:00",
+  "checkOut": "2024-12-28T11:00:00",
+  "actualCheckin": null,
+  "homestayDailyPriceIds": [1, 2, 3],
+  "customerBookingInfoDTO": {
+    "id": null,
+    "name": "Trần Thị B",
+    "email": "booking@example.com",
+    "phoneNumber": "0987654321",
+    "specialRequires": "Cần giường phụ cho trẻ em"
+  }
+}
+

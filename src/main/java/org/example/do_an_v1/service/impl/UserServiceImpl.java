@@ -1,5 +1,6 @@
 package org.example.do_an_v1.service.impl;
 
+import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.fileupload.RequestContext;
@@ -107,10 +108,10 @@ public class UserServiceImpl implements UserService {
         }
 
 
-        // Check kiem tra co phai Admin khong
-//        if(Objects.nonNull(user.getAdmin())){
-//            return new ApiResponse<>(400, "Email invalid", null);
-//        }
+//      Check kiem tra co phai Admin khong
+        if(Objects.nonNull(user.getAdmin())){
+            return new ApiResponse<>(400, "Email invalid", null);
+        }
 
         String code = secureRandomNumbers();
 
@@ -162,7 +163,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public ApiResponse<?> loginRegEmailWithGoogle(String authCode) throws RuntimeException {
         // Lay accessToken
-        AccessTokenGoogleDTO responseGetAccToken = getAccessTokenDTO(authCode);
+        ApiResponse<AccessTokenGoogleDTO> tokenResponse = getAccessTokenDTO(authCode);
+        if (tokenResponse.getStatus() != 200) {
+            return new ApiResponse<>(tokenResponse.getStatus(), tokenResponse.getMessage(), null);
+        }
+        AccessTokenGoogleDTO responseGetAccToken = tokenResponse.getData();
         InfoUserFromGoogleDTO infoUserFromGoogleDTO = googleInfoRepository.getInfoUserFromGoogleDTO("Bearer " + responseGetAccToken.getAccessToken());
 
         if(Objects.isNull(infoUserFromGoogleDTO)){
@@ -250,7 +255,13 @@ public class UserServiceImpl implements UserService {
             roles.add(RoleUser.ADMIN.toString());
             
             AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
-            String token = securityService.createTokenSystem(user, roles);
+            String token;
+            try {
+                token = securityService.createTokenSystem(user, roles);
+            } catch (JOSEException e) {
+                log.error("Cannot create token for admin", e);
+                return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
+            }
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .token(token)
                     .user(adminDTO)
@@ -267,7 +278,13 @@ public class UserServiceImpl implements UserService {
             roles.add(RoleUser.CUSTOMER.toString());
 
             HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
-            String token = securityService.createTokenSystem(user, roles);
+            String token;
+            try {
+                token = securityService.createTokenSystem(user, roles);
+            } catch (JOSEException e) {
+                log.error("Cannot create token for host", e);
+                return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
+            }
 
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .user(hostDTO)
@@ -280,7 +297,13 @@ public class UserServiceImpl implements UserService {
         roles.add(RoleUser.CUSTOMER.toString());
         
         CustomerDTO customerDTO = CustomerMapper.toDTO(customer);
-        String token = securityService.createTokenSystem(user, roles);
+        String token;
+        try {
+            token = securityService.createTokenSystem(user, roles);
+        } catch (JOSEException e) {
+            log.error("Cannot create token for customer", e);
+            return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
+        }
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                 .token(token)
                 .user(customerDTO)
@@ -300,7 +323,7 @@ public class UserServiceImpl implements UserService {
         return customerRepository.save(created);
     }
 
-    public AccessTokenGoogleDTO getAccessTokenDTO(String authCode) throws RuntimeException{
+    public ApiResponse<AccessTokenGoogleDTO> getAccessTokenDTO(String authCode) {
         AccessTokenGoogleDTO responseGetAccToken = googleRepository.getAccessToken(SendGoogle.builder()
                 .code(authCode)
                 .clientId(CLIENT_ID)
@@ -311,10 +334,10 @@ public class UserServiceImpl implements UserService {
         log.info("TOKEN RESPONSE {}", responseGetAccToken);
 
         if(Objects.isNull(responseGetAccToken) || responseGetAccToken.getAccessToken().isEmpty() || responseGetAccToken.getAccessToken().isBlank()){
-            throw new RuntimeException("Email khong hop le");
+            return new ApiResponse<>(400, "Email khong hop le", null);
         }
 
-        return responseGetAccToken;
+        return new ApiResponse<>(200, "Get access token successfully", responseGetAccToken);
     }
     // Create code
     public String secureRandomNumbers() {

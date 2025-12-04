@@ -11,7 +11,7 @@ import lombok.Setter;
 /**
  * DTO cho giá homestay theo ngày
  * 
- * Dùng trong BillDTO khi booking để chỉ định giá cho từng ngày
+ * Dùng trong BookingDTO khi booking để chỉ định giá cho từng ngày
  */
 @Getter
 @Setter

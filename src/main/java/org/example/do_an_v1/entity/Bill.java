@@ -27,6 +27,8 @@ public class Bill extends BaseEntity{
     @Column(name = "check_out", nullable = false)
     private LocalDateTime checkOut ;
 
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private StatusBill status;
 

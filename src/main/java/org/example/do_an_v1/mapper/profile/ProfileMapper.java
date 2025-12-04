@@ -9,6 +9,9 @@ import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.User;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Component
 public class ProfileMapper {
 
@@ -18,22 +21,32 @@ public class ProfileMapper {
         Long userId = user != null ? user.getId() : null;
         Long customerId = customer.getId() != null ? customer.getId() : userId;
 
+        // Map listPreference từ Set<Preference> sang List<Long>
+        List<Long> listPreference = null;
+        if (customer.getListPreferences() != null && !customer.getListPreferences().isEmpty()) {
+            listPreference = customer.getListPreferences().stream()
+                    .map(preference -> preference != null ? preference.getId() : null)
+                    .filter(id -> id != null)
+                    .collect(Collectors.toList());
+        }
+
         return CustomerDTO.builder()
                 .idCustomer(customerId)
                 .idUser(userId)
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .name(user.getName())
-                .age(user.getAge())
-                .avatarUrl(user.getAvatarUrl())
-                .isOnline(user.getIsOnline())
-                .googleId(user.getGoogleId())
+                .username(user != null ? user.getUsername() : null)
+                .email(user != null ? user.getEmail() : null)
+                .phone(user != null ? user.getPhone() : null)
+                .name(user != null ? user.getName() : null)
+                .age(user != null ? user.getAge() : null)
+                .avatarUrl(user != null ? user.getAvatarUrl() : null)
+                .isOnline(user != null ? user.getIsOnline() : null)
+                .googleId(user != null ? user.getGoogleId() : null)
                 .role(customer.getRole())
                 .status(customer.getStatus())
                 .dateOfBirth(customer.getDateOfBirth())
                 .qrCodeUrl(customer.getQrCodeUrl())
                 .lastBooking(customer.getLastBooking())
+                .listPreference(listPreference)
                 .build();
     }
 

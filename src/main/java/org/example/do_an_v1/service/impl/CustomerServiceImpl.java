@@ -11,8 +11,9 @@ import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.CustomerService;
+import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
-import org.example.do_an_v1.utils.Date;
+//import org.example.do_an_v1.utils.Date;
 import org.example.do_an_v1.utils.GenNumber;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +43,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final ComplaintRepository complaintRepository;
     private final TransactionRepository transactionRepository;
     private final PricePerDayRepository pricePerDayRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -123,94 +125,147 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    public ApiResponse<?> booking(BillDTO billDTO) {
+    public ApiResponse<?> booking(Long userId, BookingDTO bookingDTO) {
 
-        Homestay homestay = homestayRepository.findById(billDTO.getId()).orElseThrow(() -> new RuntimeException("Homestay not exits"));
-        String start = Date.DateToString(billDTO.getCheckIn());
-        String end = Date.DateToString(billDTO.getCheckOut());
-
-
-
-
-        // Check homestay availability
-        if(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), start, end))
-            return new ApiResponse<>(422, "Room has been booked", null );
-
-
-        // Save bill
-        Bill bill = BillMapper.toEntity(billDTO);
-        Bill billResult = billRepository.save(bill);
-
-        // Lưu customer vào bill
-        Customer customer = CustomerMapper.toEntity(billDTO.getCustomerDTO());
-        customer.setId(Long.parseLong( (String) sessionConfig.httpSession().getAttribute("id")));
-        billResult.setCustomer(customer);
-
-
-        // Khóa các HomestayDailyPrices trong khoảng thời gian check-in đến check-out
-        // Convert LocalDateTime sang Date để query
-        LocalDate checkInLocalDate = billDTO.getCheckIn().toLocalDate();
-        LocalDate checkOutLocalDate = billDTO.getCheckOut().toLocalDate();
-        java.util.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
-        java.util.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
-        
-        // Tìm các HomestayDailyPrice trong khoảng thời gian này
-        List<HomestayDailyPrice> dailyPricesToLock = homestayDailyPricesRepository
-                .findByHomestayAndDateRange(homestay.getId(), startDate, endDate);
-        
-        // Tạo map để dễ dàng kiểm tra daily price đã tồn tại cho từng ngày
-        Map<LocalDate, HomestayDailyPrice> existingDailyPricesMap = new HashMap<>();
-        for (HomestayDailyPrice dailyPrice : dailyPricesToLock) {
-            LocalDate priceDate = dailyPrice.getPricePerDay().getDay().toInstant()
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate();
-            existingDailyPricesMap.put(priceDate, dailyPrice);
+        Homestay homestay = homestayRepository.findById(bookingDTO.getHomestayId()).orElse(null);
+        if (homestay == null) {
+            return new ApiResponse<>(404, "Homestay not exists", null);
         }
         
-        // Lấy giá mặc định từ homestay (basePrice)
-        Float defaultPrice = homestay.getBasePrice() != null ? homestay.getBasePrice() : 0f;
+        // Convert Date sang LocalDate để xử lý
+        Date checkInDate = bookingDTO.getCheckIn();
+        Date checkOutDate = bookingDTO.getCheckOut();
         
-        // Tạo danh sách daily prices cuối cùng (bao gồm cả những cái đã có và mới tạo)
+        // Convert Date sang LocalDate
+        LocalDate checkInLocalDate = checkInDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        LocalDate checkOutLocalDate = checkOutDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        
+        // Convert sang java.sql.Date để query
+        java.sql.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
+        java.sql.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
+        
+        // Convert Date sang LocalDateTime cho Bill entity
+        LocalDateTime checkInDateTime = checkInDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+        LocalDateTime checkOutDateTime = checkOutDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+
+        // Check homestay availability
+        if(Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate)))
+            return new ApiResponse<>(422, "Room has been booked", null );
+
+        // Lấy User từ userId
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(404, "User not found with id: " + userId, null);
+        }
+
+        // Lấy Customer từ User
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for user id: " + userId, null);
+        }
+
+        // Save bill - tạo Bill entity từ BookingDTO
+        Bill bill = new Bill();
+        bill.setCheckIn(checkInDateTime);
+        bill.setCheckOut(checkOutDateTime);
+        bill.setActualCheckinTime(null); // actualCheckin sẽ được set khi check-in thực tế
+        bill.setHomestay(homestay);
+        bill.setCustomer(customer);
+        bill.setCode(GenNumber.generate());
+        bill.setStatus(StatusBill.PAYMENT_PENDING);
+
+        Bill billResult = billRepository.save(bill);
+
+
+        // Lấy danh sách HomestayDailyPrice để khóa
         List<HomestayDailyPrice> finalDailyPricesToLock = new ArrayList<>();
         
-        // Duyệt qua từng ngày từ check-in đến check-out (không bao gồm check-out)
-        LocalDate currentDate = checkInLocalDate;
-        while (currentDate.isBefore(checkOutLocalDate)) {
-            HomestayDailyPrice dailyPrice = existingDailyPricesMap.get(currentDate);
+        // Nếu có danh sách ID được truyền vào, sử dụng chúng
+        if (bookingDTO.getHomestayDailyPriceIds() != null && !bookingDTO.getHomestayDailyPriceIds().isEmpty()) {
+            // Lấy các HomestayDailyPrice theo danh sách ID
+            for (Long dailyPriceId : bookingDTO.getHomestayDailyPriceIds()) {
+                if (dailyPriceId == null) {
+                    continue;
+                }
+                
+                HomestayDailyPrice dailyPrice = homestayDailyPricesRepository.findById(dailyPriceId).orElse(null);
+                if (dailyPrice == null) {
+                    return new ApiResponse<>(404, "HomestayDailyPrice not found with id: " + dailyPriceId, null);
+                }
+                
+                // Validate: HomestayDailyPrice phải thuộc về homestay đang booking
+                if (!dailyPrice.getHomestay().getId().equals(homestay.getId())) {
+                    return new ApiResponse<>(400, "HomestayDailyPrice with id " + dailyPriceId + " does not belong to homestay " + homestay.getId(), null);
+                }
+                
+                finalDailyPricesToLock.add(dailyPrice);
+            }
+        } else {
+            // Nếu không có danh sách ID, tự động tìm theo khoảng thời gian check-in đến check-out
+            // Sử dụng lại startDate và endDate đã tạo ở trên
+            // Tìm các HomestayDailyPrice trong khoảng thời gian này
+            List<HomestayDailyPrice> dailyPricesToLock = homestayDailyPricesRepository
+                    .findByHomestayAndDateRange(homestay.getId(), startDate, endDate);
             
-            if (dailyPrice == null) {
-                // Chưa có daily price cho ngày này, tạo mới
-                java.util.Date currentDateUtil = java.sql.Date.valueOf(currentDate);
-                
-                // Tìm hoặc tạo PricePerDay cho ngày này
-                PricePerDay pricePerDay = pricePerDayRepository.findByDay(currentDateUtil)
-                        .orElseGet(() -> {
-                            PricePerDay newPricePerDay = PricePerDay.builder()
-                                    .day(currentDateUtil)
-                                    .price(defaultPrice)
-                                    .build();
-                            return pricePerDayRepository.save(newPricePerDay);
-                        });
-                
-                // Tạo HomestayDailyPrice mới
-                dailyPrice = HomestayDailyPrice.builder()
-                        .price(pricePerDay.getPrice() != null ? pricePerDay.getPrice() : defaultPrice)
-                        .isBooked(Boolean.FALSE)
-                        .pricePerDay(pricePerDay)
-                        .homestay(homestay)
-                        .build();
-                dailyPrice = homestayDailyPricesRepository.save(dailyPrice);
+            // Tạo map để dễ dàng kiểm tra daily price đã tồn tại cho từng ngày
+            Map<LocalDate, HomestayDailyPrice> existingDailyPricesMap = new HashMap<>();
+            for (HomestayDailyPrice dailyPrice : dailyPricesToLock) {
+                LocalDate priceDate = dailyPrice.getPricePerDay().getDay().toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate();
+                existingDailyPricesMap.put(priceDate, dailyPrice);
             }
             
-            finalDailyPricesToLock.add(dailyPrice);
-            currentDate = currentDate.plusDays(1);
+            // Lấy giá mặc định từ homestay (basePrice)
+            Float defaultPrice = homestay.getBasePrice() != null ? homestay.getBasePrice() : 0f;
+            
+            // Duyệt qua từng ngày từ check-in đến check-out (không bao gồm check-out)
+            LocalDate currentDate = checkInLocalDate;
+            while (currentDate.isBefore(checkOutLocalDate)) {
+                HomestayDailyPrice dailyPrice = existingDailyPricesMap.get(currentDate);
+                
+                if (dailyPrice == null) {
+                    // Chưa có daily price cho ngày này, tạo mới
+                    java.util.Date currentDateUtil = java.sql.Date.valueOf(currentDate);
+                    
+                    // Tìm hoặc tạo PricePerDay cho ngày này
+                    PricePerDay pricePerDay = pricePerDayRepository.findByDay(currentDateUtil)
+                            .orElseGet(() -> {
+                                PricePerDay newPricePerDay = PricePerDay.builder()
+                                        .day(currentDateUtil)
+                                        .price(defaultPrice)
+                                        .build();
+                                return pricePerDayRepository.save(newPricePerDay);
+                            });
+                    
+                    // Tạo HomestayDailyPrice mới
+                    dailyPrice = HomestayDailyPrice.builder()
+                            .price(pricePerDay.getPrice() != null ? pricePerDay.getPrice() : defaultPrice)
+                            .isBooked(Boolean.FALSE)
+                            .pricePerDay(pricePerDay)
+                            .homestay(homestay)
+                            .build();
+                    dailyPrice = homestayDailyPricesRepository.save(dailyPrice);
+                }
+                
+                finalDailyPricesToLock.add(dailyPrice);
+                currentDate = currentDate.plusDays(1);
+            }
         }
 
         // Khóa các daily prices (set isBooked = true và gán bill)
         Bill finalBillResult = billResult;
         for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
             if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-                throw new RuntimeException("Some dates are already booked");
+                return new ApiResponse<>(409, "Some dates are already booked", null);
             }
             dailyPrice.setIsBooked(true);
             dailyPrice.setBill(finalBillResult);
@@ -219,8 +274,8 @@ public class CustomerServiceImpl implements CustomerService {
 
 
         // luu thong tin CustomerBookingInfo neu la nguoi moi
-        if(!Objects.isNull(billDTO.getCustomerBookingInfoDTO())){
-            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(billDTO.getCustomerBookingInfoDTO());
+        if(!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())){
+            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingDTO.getCustomerBookingInfoDTO());
             customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
             billResult.setCustomerBookingInfo(customerBookingInfo);
         }
@@ -234,7 +289,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .orElse(null);
 
         if (adminUser == null) {
-            throw new RuntimeException("No admin user found for transaction");
+            return new ApiResponse<>(500, "No admin user found for transaction", null);
         }
 
         // Create transaction
@@ -256,11 +311,50 @@ public class CustomerServiceImpl implements CustomerService {
 
 
         // Create code
-        bill.setCode(GenNumber.generate());
-        bill.setStatus(StatusBill.PAYMENT_PENDING);
+//        bill.setCode(GenNumber.generate());
+//        bill.setStatus(StatusBill.PAYMENT_PENDING);
         billResult = billRepository.save(billResult);
 
-        return new ApiResponse<>(200, "Save bill success", billResult);
+        // Reload bill với đầy đủ thông tin để map sang DTO
+        Bill billWithDetails = billRepository.findById(billResult.getId()).orElse(null);
+        if (billWithDetails == null) {
+            return new ApiResponse<>(500, "Bill not found after save", null);
+        }
+
+        // Convert sang BillDTO để trả về
+        BillDTO billDTO = BillMapper.toDTO(billWithDetails);
+
+        // Gửi email mã code
+        String emailToSend;
+        if (billWithDetails.getCustomerBookingInfo() != null && 
+            billWithDetails.getCustomerBookingInfo().getEmail() != null) {
+            // Nếu có customerBookingInfo, gửi đến email của customerBookingInfo
+            emailToSend = billWithDetails.getCustomerBookingInfo().getEmail();
+        } else {
+            // Nếu không có, gửi đến email của customer
+            emailToSend = customer.getUser().getEmail();
+        }
+
+        // Gửi email mã code booking
+        if (emailToSend != null && !emailToSend.trim().isEmpty()) {
+            String emailContent = String.format(
+                "Mã đặt phòng của bạn: %s\n\n" +
+                "Thông tin đặt phòng:\n" +
+                "- Homestay: %s\n" +
+                "- Check-in: %s\n" +
+                "- Check-out: %s\n" +
+                "- Mã đơn: %s\n\n" +
+                "Vui lòng sử dụng mã này để check-in.",
+                billWithDetails.getCode(),
+                homestay.getTitle(),
+                billWithDetails.getCheckIn(),
+                billWithDetails.getCheckOut(),
+                billWithDetails.getCode()
+            );
+            emailService.sendSimpleEmail(emailToSend, emailContent);
+        }
+
+        return new ApiResponse<>(200, "Save bill success", billDTO);
     }
 
     public ApiResponse<?> payment(PaymentDTO paymentDTO){
@@ -287,7 +381,7 @@ public class CustomerServiceImpl implements CustomerService {
         // Tìm Customer theo User
         Customer customer = customerRepository.findByUser(user);
         if (customer == null) {
-            throw new RuntimeException("Customer profile not found for this user");
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
         }
 
         // Tạo Set mới chứa các preferences từ request
@@ -296,13 +390,16 @@ public class CustomerServiceImpl implements CustomerService {
             if (preferenceId == null) {
                 continue; // Bỏ qua null values
             }
-            Preference preference = preferenceRepository.findById(preferenceId)
-                    .orElseThrow(() -> new RuntimeException("Preference not found with id: " + preferenceId));
+            Preference preference = preferenceRepository.findById(preferenceId).orElse(null);
+            if (preference == null) {
+                return new ApiResponse<>(404, "Preference not found with id: " + preferenceId, null);
+            }
             newPreferences.add(preference);
         }
 
         // Cập nhật preferences cho customer (thay thế toàn bộ)
         customer.setListPreferences(newPreferences);
+        customer.setStatus(Status.ACTIVE);
         
         // Lưu customer
         Customer savedCustomer = customerRepository.save(customer);
@@ -532,8 +629,10 @@ public class CustomerServiceImpl implements CustomerService {
             throw new IllegalArgumentException("Bill ID is required");
         }
 
-        Bill bill = billRepository.findById(request.getBillId())
-                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+        Bill bill = billRepository.findById(request.getBillId()).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
+        }
 
         // Validate: Mã code phải khớp với code của bill
         if (request.getCode() == null || !request.getCode().equals(bill.getCode())) {

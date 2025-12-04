@@ -1,0 +1,13 @@
+{
+  "homestayId": 1,
+  "checkIn": "2024-12-25T14:00:00",
+  "checkOut": "2024-12-28T11:00:00",
+  "homestayDailyPriceIds": [1, 2, 3],
+  "customerBookingInfoDTO": {
+    "name": "Nguyễn Văn A",
+    "email": "nguyenvana@example.com",
+    "phoneNumber": "0123456789",
+    "specialRequires": "Cần thêm giường cho 2 trẻ em"
+  }
+}
+

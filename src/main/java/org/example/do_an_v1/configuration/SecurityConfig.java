@@ -53,10 +53,10 @@ public class SecurityConfig {
 //                .oauth2ResourceServer(oauth2 -> oauth2.disable());
 
         httpSecurity.oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwtConfigurer -> jwtConfigurer
-                    .decoder(customJwtDecoder) // check token co hop le khong
-                    .jwtAuthenticationConverter(jwtAuthenticationConverter())) // convert scope autho
-                .authenticationEntryPoint(new JwtAuthenticationEntryPoint())// neu khong co token
+                        .jwt(jwtConfigurer -> jwtConfigurer
+                                .decoder(customJwtDecoder) // check token co hop le khong
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter())) // convert scope autho
+                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())// neu khong co token
                 )
                 .addFilterAfter(new JwtSessionCreationFilter(), BearerTokenAuthenticationFilter.class);
 
@@ -77,4 +77,18 @@ public class SecurityConfig {
         return jwtAuthenticationConverter;
     }
 
+    //
+    @Bean
+    public UrlBasedCorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.addAllowedOrigin("http://localhost:5173"); // domain frontend
+        config.addAllowedOrigin("http://127.0.0.1:5173");
+        config.addAllowedHeader("*");
+        config.addAllowedMethod("*");
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
 }

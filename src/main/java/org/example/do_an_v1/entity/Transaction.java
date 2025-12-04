@@ -22,6 +22,7 @@ public class Transaction extends BaseEntity{
     private BigDecimal amount;
 
     // Phan loai transaction
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", length = 20)
     private TypeTransaction transactionType;
 
@@ -29,6 +30,7 @@ public class Transaction extends BaseEntity{
     private LocalDateTime completedAt;
 
     // Trang thai cua transaction
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private StatusTransaction status;
 

@@ -51,6 +51,9 @@ public class BillDTO {
     // --- Thông tin homestay ---
     private HomestaySummaryDTO homestayDTO;
 
+    // --- Thông tin địa chỉ homestay ---
+    private AddressDTO addressDTO;
+
     // --- Thông tin người đặt (Booking contact info - nếu khác với customer) ---
     @Valid
     private CustomerBookingInfoDTO customerBookingInfoDTO;
