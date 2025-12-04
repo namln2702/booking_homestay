@@ -51,9 +51,6 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "user")
     private Set<Token> tokens;
 
-    @ManyToMany
-    private Set<Preference> preferences;
-
     @OneToMany(mappedBy = "fromUser")
     Set<Transaction> listTransactionForFromUser;
 

@@ -36,7 +36,7 @@ public class HomestayDTO {
     private StatusHomestay status;
 
     private AddressDTO address;
-    private List<Long> facilityIds;
+    private List<FacilityDTO> facilities;
     private List<AmenityDTO> amenities;
     private List<HomestayRuleDTO> rules;
     private List<DailyPriceDTO> dailyPrices;
@@ -88,6 +88,17 @@ public class HomestayDTO {
         private Date day;
         private Float price;
         private Boolean booked;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class FacilityDTO {
+        private Long id;
+        private String name;
+        private String category;
     }
 
     @Getter

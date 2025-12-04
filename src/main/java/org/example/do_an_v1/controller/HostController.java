@@ -70,12 +70,7 @@ public class HostController {
     // Admin-only: fetch host profile for a specific user id
 
 
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @PutMapping("/{userId}/approve")
-    public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
-        Long adminUserId = identityResolver.requireUserId(null);
-        return hostService.approveHost(adminUserId, userId);
-    }
+
 
     /**
      * Xác nhận check-in thành công

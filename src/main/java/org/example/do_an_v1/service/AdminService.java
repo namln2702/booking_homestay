@@ -1,5 +1,6 @@
 package org.example.do_an_v1.service;
 
+import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
@@ -11,4 +12,6 @@ public interface AdminService {
     ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException;
 
     ApiResponse<AdminDTO> activateAdmin(AdminActivationRequest request) throws RuntimeException;
+
+    ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId);
 }

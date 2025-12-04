@@ -110,10 +110,10 @@ public class HomestayServiceImpl implements HomestayService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> getHomestays(
-                                                                            StatusHomestay status,
-                                                                            int page,
-                                                                            int size) {
+    public ApiResponse<PageResponse<List<HomestayDTO>>> getHomestays(
+                                                                     StatusHomestay status,
+                                                                     int page,
+                                                                     int size) {
 //        if (adminUserId == null) {
 //            throw new IllegalArgumentException("Admin user id is required");
 //        }
@@ -133,15 +133,19 @@ public class HomestayServiceImpl implements HomestayService {
                 ? homestayRepository.findByStatusHomestay(status, pageable)
                 : homestayRepository.findAll(pageable);
 
-        List<HomestaySummaryDTO> summaries = homestayPage.getContent().stream()
-                .map(homestayMapper::toSummary)
+        // Map từng homestay sang HomestayDTO với images
+        List<HomestayDTO> homestayDTOs = homestayPage.getContent().stream()
+                .map(homestay -> {
+                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    return homestayMapper.toDto(homestay, images);
+                })
                 .toList();
 
-        PageResponse<List<HomestaySummaryDTO>> pageResponse = PageResponse.<List<HomestaySummaryDTO>>builder()
+        PageResponse<List<HomestayDTO>> pageResponse = PageResponse.<List<HomestayDTO>>builder()
                 .page(homestayPage.getNumber())
                 .size(homestayPage.getSize())
                 .total(homestayPage.getTotalElements())
-                .items(summaries)
+                .items(homestayDTOs)
                 .build();
 
         return new ApiResponse<>(200, "Homestays retrieved successfully", pageResponse);

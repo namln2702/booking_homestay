@@ -73,4 +73,11 @@ public class AdminController {
         Long actorId = identityResolver.requireUserId(null);
         return homestayService.approveHomestay(actorId, homestayId);
     }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PutMapping("/{userId}/approve")
+    public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
+        Long adminUserId = identityResolver.requireUserId(null);
+        return adminService.approveHost(adminUserId, userId);
+    }
 }

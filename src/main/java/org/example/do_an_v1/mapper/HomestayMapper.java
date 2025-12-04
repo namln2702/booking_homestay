@@ -26,7 +26,7 @@ public class HomestayMapper {
 
         HomestayDTO.AddressDTO addressDTO = mapAddress(homestay.getAddress());
 
-        List<Long> facilityIds = mapFacilities(homestay.getListFacilities());
+        List<HomestayDTO.FacilityDTO> facilities = mapFacilities(homestay.getListFacilities());
         List<HomestayDTO.AmenityDTO> amenities = mapAmenities(homestay.getListAmenities());
         List<HomestayDTO.HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
         List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
@@ -50,7 +50,7 @@ public class HomestayMapper {
                 .basePrice(homestay.getBasePrice())
                 .status(homestay.getStatusHomestay())
                 .address(addressDTO)
-                .facilityIds(facilityIds)
+                .facilities(facilities)
                 .amenities(amenities)
                 .rules(rules)
                 .dailyPrices(dailyPrices)
@@ -92,13 +92,17 @@ public class HomestayMapper {
                 .build();
     }
 
-    private List<Long> mapFacilities(Set<Facilities> facilities) {
+    private List<HomestayDTO.FacilityDTO> mapFacilities(Set<Facilities> facilities) {
         if (facilities == null) {
             return List.of();
         }
         return facilities.stream()
-                .map(Facilities::getId)
-                .sorted()
+                .map(facility -> HomestayDTO.FacilityDTO.builder()
+                        .id(facility.getId())
+                        .name(facility.getName())
+                        .category(facility.getCategory())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.FacilityDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 

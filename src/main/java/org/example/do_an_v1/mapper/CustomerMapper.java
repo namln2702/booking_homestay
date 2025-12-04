@@ -3,6 +3,9 @@ package org.example.do_an_v1.mapper;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.entity.Customer;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class CustomerMapper {
 
     /**
@@ -13,8 +16,18 @@ public class CustomerMapper {
             return null;
         }
 
+        // Map listPreference từ Set<Preference> sang List<Long>
+        List<Long> listPreference = null;
+        if (customer.getListPreferences() != null && !customer.getListPreferences().isEmpty()) {
+            listPreference = customer.getListPreferences().stream()
+                    .map(preference -> preference != null ? preference.getId() : null)
+                    .filter(id -> id != null)
+                    .collect(Collectors.toList());
+        }
+
         return CustomerDTO.builder()
                 .idCustomer(customer.getUser() != null ? customer.getUser().getId() : null)
+                .idUser(customer.getUser() != null ? customer.getUser().getId() : null)
                 .name(customer.getUser() != null ? customer.getUser().getName() : null)
                 .email(customer.getUser() != null ? customer.getUser().getEmail() : null)
                 .phone(customer.getUser() != null ? customer.getUser().getPhone() : null)
@@ -23,6 +36,7 @@ public class CustomerMapper {
                 .lastBooking(customer.getLastBooking())
                 .role(customer.getRole() != null ? customer.getRole() : null)
                 .status(customer.getStatus() != null ? customer.getStatus() : null)
+                .listPreference(listPreference)
                 .build();
     }
 

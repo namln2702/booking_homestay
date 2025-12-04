@@ -2,20 +2,24 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.entity.ConfirmEmail;
 import org.example.do_an_v1.entity.Admin;
+import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.LevelAdmin;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.repository.AdminRepository;
 import org.example.do_an_v1.repository.ConfirmEmailRepository;
+import org.example.do_an_v1.repository.HostRepository;
 import org.example.do_an_v1.repository.UserRepository;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.EmailService;
@@ -36,6 +40,7 @@ public class AdminServiceImpl implements AdminService {
 
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
+    private final HostRepository hostRepository;
     private final ConfirmEmailRepository confirmEmailRepository;
     private final EmailService emailService;
     private final ProfileMapper profileMapper;
@@ -154,5 +159,44 @@ public class AdminServiceImpl implements AdminService {
 
     private String buildInvitationMessage(String code) {
         return "You have been invited to join the admin team. Use this one-time activation code within 24 hours: " + code;
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId) {
+        Admin admin = requireActiveAdmin(adminUserId);
+        if (admin == null) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        Host host = hostRepository.findById(hostUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Host profile not found for user id " + hostUserId));
+
+        if (host.getStatusHost() == StatusHost.ACTIVE) {
+            return new ApiResponse<>(409, "Host has already been approved", profileMapper.toHostDTO(host));
+        }
+
+        if (host.getStatusHost() != StatusHost.PENDING) {
+            return new ApiResponse<>(409, "Host status must be pending before approval", profileMapper.toHostDTO(host));
+        }
+
+        host.setStatusHost(StatusHost.ACTIVE);
+        if (host.getRole() != RoleUser.HOST) {
+            host.setRole(RoleUser.HOST);
+        }
+        Host savedHost = hostRepository.save(host);
+        return new ApiResponse<>(200, "Host approved successfully", profileMapper.toHostDTO(savedHost));
+    }
+
+    private Admin requireActiveAdmin(Long adminUserId) {
+        if (adminUserId == null) {
+            throw new IllegalArgumentException("Admin user id is required");
+        }
+        Admin admin = adminRepository.findById(adminUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+        if (!Objects.equals(admin.getStatus(), Status.ACTIVE)) {
+            return null;
+        }
+        return admin;
     }
 }
