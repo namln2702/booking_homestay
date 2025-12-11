@@ -97,3 +97,5 @@ ALTER TABLE tbl_homestays ADD CONSTRAINT tbl_homestays_status_check
 - **Database schema**: Cần migration để chuyển từ `smallint` sang `varchar` cho các cột enum
 - **JPQL queries**: Hoạt động tốt, không cần thay đổi
 
+
+

@@ -8,19 +8,19 @@ import org.springframework.context.annotation.Configuration;
 @Getter
 public class VNPayConfig {
 
-//    @Value("${vnpay.tmn-code}")
+    @Value("${vnpay.tmn-code}")
     private String tmnCode;
 
-//    @Value("${vnpay.secret-key}")
+    @Value("${vnpay.secret-key}")
     private String secretKey;
 
-//    @Value("${vnpay.url}")
+    @Value("${vnpay.url}")
     private String url;
 
-//    @Value("${vnpay.return-url}")
+    @Value("${vnpay.return-url}")
     private String returnUrl;
 
-//    @Value("${vnpay.ipn-url}")
+    @Value("${vnpay.ipn-url}")
     private String ipnUrl;
 
     @Value("${vnpay.version}")

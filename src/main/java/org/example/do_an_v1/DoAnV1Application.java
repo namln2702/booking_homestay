@@ -9,7 +9,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 @EnableFeignClients
 @EnableJpaAuditing
 
-public class DoAnV1Application {
+public class
+
+
+
+DoAnV1Application {
 
     public static void main(String[] args) {
         SpringApplication.run(DoAnV1Application.class, args);

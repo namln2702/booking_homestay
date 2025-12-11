@@ -24,6 +24,8 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static java.time.temporal.ChronoUnit.DAYS;
+
 @Service
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
@@ -179,86 +181,60 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setActualCheckinTime(null); // actualCheckin sẽ được set khi check-in thực tế
         bill.setHomestay(homestay);
         bill.setCustomer(customer);
-        bill.setCode(GenNumber.generate());
-        bill.setStatus(StatusBill.PAYMENT_PENDING);
+        bill.setCode(GenNumber.secureRandomNumbers());
+        bill.setStatus(StatusBill.DEPOSIT_PENDING);
 
         Bill billResult = billRepository.save(bill);
 
-
+        // Validation đã được xử lý ở Controller layer bằng @Valid
         // Lấy danh sách HomestayDailyPrice để khóa
         List<HomestayDailyPrice> finalDailyPricesToLock = new ArrayList<>();
         
-        // Nếu có danh sách ID được truyền vào, sử dụng chúng
-        if (bookingDTO.getHomestayDailyPriceIds() != null && !bookingDTO.getHomestayDailyPriceIds().isEmpty()) {
-            // Lấy các HomestayDailyPrice theo danh sách ID
-            for (Long dailyPriceId : bookingDTO.getHomestayDailyPriceIds()) {
-                if (dailyPriceId == null) {
-                    continue;
-                }
-                
-                HomestayDailyPrice dailyPrice = homestayDailyPricesRepository.findById(dailyPriceId).orElse(null);
-                if (dailyPrice == null) {
-                    return new ApiResponse<>(404, "HomestayDailyPrice not found with id: " + dailyPriceId, null);
-                }
-                
-                // Validate: HomestayDailyPrice phải thuộc về homestay đang booking
-                if (!dailyPrice.getHomestay().getId().equals(homestay.getId())) {
-                    return new ApiResponse<>(400, "HomestayDailyPrice with id " + dailyPriceId + " does not belong to homestay " + homestay.getId(), null);
-                }
-                
-                finalDailyPricesToLock.add(dailyPrice);
+        // Xử lý từng pricePerDay trong danh sách
+        // Validation đã được xử lý ở Controller layer bằng @Valid
+        for (org.example.do_an_v1.dto.request.PricePerDayRequest pricePerDayRequest : bookingDTO.getPricePerDays()) {
+            Date day = pricePerDayRequest.getDay();
+            Float price = pricePerDayRequest.getPrice();
+
+            // Check xem ngày đó đã được tạo trong bảng pricePerDay chưa
+            PricePerDay pricePerDay = pricePerDayRepository.findByDay(day)
+                    .orElse(null);
+
+            if (pricePerDay == null) {
+                // Chưa có thì tạo mới PricePerDay với ngày và giá
+                pricePerDay = PricePerDay.builder()
+                        .day(day)
+                        .price(price)
+                        .build();
+                pricePerDay = pricePerDayRepository.save(pricePerDay);
+            } else {
+                // Đã có thì lấy ra (có thể cập nhật giá nếu cần)
+                // Nếu giá khác nhau, có thể cập nhật hoặc giữ nguyên giá cũ
+                // Ở đây ta giữ nguyên giá đã có trong database
             }
-        } else {
-            // Nếu không có danh sách ID, tự động tìm theo khoảng thời gian check-in đến check-out
-            // Sử dụng lại startDate và endDate đã tạo ở trên
-            // Tìm các HomestayDailyPrice trong khoảng thời gian này
-            List<HomestayDailyPrice> dailyPricesToLock = homestayDailyPricesRepository
-                    .findByHomestayAndDateRange(homestay.getId(), startDate, endDate);
-            
-            // Tạo map để dễ dàng kiểm tra daily price đã tồn tại cho từng ngày
-            Map<LocalDate, HomestayDailyPrice> existingDailyPricesMap = new HashMap<>();
-            for (HomestayDailyPrice dailyPrice : dailyPricesToLock) {
-                LocalDate priceDate = dailyPrice.getPricePerDay().getDay().toInstant()
-                        .atZone(ZoneId.systemDefault())
-                        .toLocalDate();
-                existingDailyPricesMap.put(priceDate, dailyPrice);
-            }
-            
-            // Lấy giá mặc định từ homestay (basePrice)
-            Float defaultPrice = homestay.getBasePrice() != null ? homestay.getBasePrice() : 0f;
-            
-            // Duyệt qua từng ngày từ check-in đến check-out (không bao gồm check-out)
-            LocalDate currentDate = checkInLocalDate;
-            while (currentDate.isBefore(checkOutLocalDate)) {
-                HomestayDailyPrice dailyPrice = existingDailyPricesMap.get(currentDate);
-                
-                if (dailyPrice == null) {
-                    // Chưa có daily price cho ngày này, tạo mới
-                    java.util.Date currentDateUtil = java.sql.Date.valueOf(currentDate);
-                    
-                    // Tìm hoặc tạo PricePerDay cho ngày này
-                    PricePerDay pricePerDay = pricePerDayRepository.findByDay(currentDateUtil)
-                            .orElseGet(() -> {
-                                PricePerDay newPricePerDay = PricePerDay.builder()
-                                        .day(currentDateUtil)
-                                        .price(defaultPrice)
-                                        .build();
-                                return pricePerDayRepository.save(newPricePerDay);
-                            });
-                    
-                    // Tạo HomestayDailyPrice mới
-                    dailyPrice = HomestayDailyPrice.builder()
-                            .price(pricePerDay.getPrice() != null ? pricePerDay.getPrice() : defaultPrice)
-                            .isBooked(Boolean.FALSE)
-                            .pricePerDay(pricePerDay)
-                            .homestay(homestay)
-                            .build();
-                    dailyPrice = homestayDailyPricesRepository.save(dailyPrice);
+
+            // Tìm hoặc tạo HomestayDailyPrice cho homestay và pricePerDay này
+            HomestayDailyPrice homestayDailyPrice = homestayDailyPricesRepository
+                    .findOneByHomestayAndPricePerDay(homestay, pricePerDay)
+                    .orElse(null);
+
+            if (homestayDailyPrice == null) {
+                // Chưa có thì tạo mới HomestayDailyPrice
+                homestayDailyPrice = HomestayDailyPrice.builder()
+                        .price(pricePerDay.getPrice())
+                        .isBooked(Boolean.FALSE)
+                        .pricePerDay(pricePerDay)
+                        .homestay(homestay)
+                        .build();
+                homestayDailyPrice = homestayDailyPricesRepository.save(homestayDailyPrice);
+            } else {
+                // Đã có thì kiểm tra xem đã được booked chưa
+                if (Boolean.TRUE.equals(homestayDailyPrice.getIsBooked())) {
+                    return new ApiResponse<>(409, "Date " + day + " is already booked", null);
                 }
-                
-                finalDailyPricesToLock.add(dailyPrice);
-                currentDate = currentDate.plusDays(1);
             }
+
+            finalDailyPricesToLock.add(homestayDailyPrice);
         }
 
         // Khóa các daily prices (set isBooked = true và gán bill)
@@ -292,7 +268,20 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(500, "No admin user found for transaction", null);
         }
 
-        // Create transaction
+
+        // Tính tổng giá trị bill (100%)
+        double totalAmount = finalDailyPricesToLock.stream()
+                .mapToDouble(HomestayDailyPrice::getPrice)
+                .sum();
+        
+        // Lưu tổng giá trị vào bill
+        billResult.setTotalAmount(java.math.BigDecimal.valueOf(totalAmount));
+        
+        // Tính 30% cho thanh toán cọc
+        double depositAmount = totalAmount * 0.3;
+        
+        Set<Transaction> transactions = new HashSet<>();
+        // Create transaction cho thanh toán cọc (30%)
         Transaction transaction = Transaction.builder()
                 .completedAt(LocalDateTime.now().plusMinutes(15))
                 .transactionType(TypeTransaction.BOOKING_PAYMENT)
@@ -300,19 +289,16 @@ public class CustomerServiceImpl implements CustomerService {
                 .bill(billResult)
                 .fromUser(customer.getUser())
                 .toUser(adminUser)
-                .amount(java.math.BigDecimal.valueOf(
-                        finalDailyPricesToLock.stream()
-                                .mapToDouble(HomestayDailyPrice::getPrice)
-                                .sum()
-                ))
+                .amount(java.math.BigDecimal.valueOf(depositAmount))
                 .build();
         
-        transactionRepository.save(transaction);
+        transactions.add(transactionRepository.save(transaction));
 
 
         // Create code
 //        bill.setCode(GenNumber.generate());
 //        bill.setStatus(StatusBill.PAYMENT_PENDING);
+        billResult.setListTransaction(transactions);
         billResult = billRepository.save(billResult);
 
         // Reload bill với đầy đủ thông tin để map sang DTO
@@ -688,5 +674,87 @@ public class CustomerServiceImpl implements CustomerService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Customer bills retrieved successfully", billDTOS);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> cancelBill(Long userId, Long billId) {
+        // Tìm bill
+        Bill bill = billRepository.findById(billId).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
+        }
+
+        // Validate: Bill phải thuộc về customer này
+        Customer customer = customerRepository.findByUser(userRepository.findById(userId).orElse(null));
+        if (customer == null || !Objects.equals(bill.getCustomer().getId(), customer.getId())) {
+            return new ApiResponse<>(403, "You can only cancel your own bills", null);
+        }
+
+        // Validate: Bill phải ở trạng thái DEPOSIT_PENDING hoặc DEPOSIT_PAID hoặc CHECKIN_PENDING
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING 
+                && bill.getStatus() != StatusBill.DEPOSIT_PAID 
+                && bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+            return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
+        }
+
+        // Kiểm tra thời gian hủy: nếu hủy trước 2 ngày so với check-in thì được hoàn tiền
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime checkIn = bill.getCheckIn();
+        long daysUntilCheckIn = DAYS.between(now, checkIn);
+        boolean canRefund = daysUntilCheckIn >= 2;
+
+        // Unlock homestay_daily_prices
+        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
+                .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
+                .toList();
+
+        for (HomestayDailyPrice dailyPrice : dailyPrices) {
+            dailyPrice.setIsBooked(false);
+            dailyPrice.setBill(null);
+            homestayDailyPricesRepository.save(dailyPrice);
+        }
+
+        // Nếu được hoàn tiền, tạo transaction REFUND
+        if (canRefund) {
+            // Tìm transaction thanh toán cọc đã thành công
+            Transaction depositTransaction = transactionRepository.findByBillId(bill.getId()).stream()
+                    .filter(t -> t.getTransactionType() == TypeTransaction.BOOKING_PAYMENT 
+                            && t.getStatus() == StatusTransaction.SUCCESS)
+                    .findFirst()
+                    .orElse(null);
+
+            if (depositTransaction != null) {
+                // Lấy admin user
+                User adminUser = userRepository.findAll().stream()
+                        .filter(u -> u.getAdmin() != null)
+                        .findFirst()
+                        .orElse(null);
+
+                if (adminUser != null) {
+                    // Tạo transaction REFUND với status PENDING (chờ admin xử lý)
+                    Transaction refundTransaction = Transaction.builder()
+                            .amount(depositTransaction.getAmount()) // Hoàn lại số tiền đã thanh toán
+                            .transactionType(TypeTransaction.REFUND)
+                            .status(StatusTransaction.PENDING) // Chờ admin xử lý
+                            .bill(bill)
+                            .fromUser(adminUser)
+                            .toUser(customer.getUser())
+                            .completedAt(null) // Chưa hoàn tất, chờ admin xác nhận
+                            .build();
+                    transactionRepository.save(refundTransaction);
+                }
+            }
+        }
+
+        // Cập nhật status bill thành PAYMENT_FAILED (hoặc có thể tạo status mới CANCELLED)
+        bill.setStatus(StatusBill.PAYMENT_FAILED);
+        billRepository.save(bill);
+
+        String message = canRefund 
+                ? "Bill cancelled successfully. Refund will be processed." 
+                : "Bill cancelled successfully. No refund as cancellation is less than 2 days before check-in.";
+
+        return new ApiResponse<>(200, message, null);
     }
 }

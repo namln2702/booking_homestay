@@ -22,4 +22,11 @@ public interface CustomerService {
      * Thống kê các bill đã đặt của Customer
      */
     ApiResponse<?> getCustomerBills(Long userId);
+
+    /**
+     * Customer hủy bill
+     * Nếu hủy trước 2 ngày so với check-in thì được hoàn tiền
+     * Nếu muộn hơn thì không được hoàn tiền
+     */
+    ApiResponse<?> cancelBill(Long userId, Long billId);
 }

@@ -3,22 +3,18 @@ package org.example.do_an_v1.service.impl;
 import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.fileupload.RequestContext;
 import org.example.do_an_v1.dto.*;
 //import org.example.do_an_v1.dto.SendGoogle;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
-import org.example.do_an_v1.mapper.AdminMapper;
-import org.example.do_an_v1.mapper.CustomerMapper;
-import org.example.do_an_v1.mapper.HostMapper;
+import org.example.do_an_v1.mapper.UserMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.servlet.server.Session;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -71,6 +67,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private SecurityService securityService;
+
+    @Autowired
+    private UserMapper userMapper;
 
 
     @Value("${outbound.identity.client-id}")
@@ -254,7 +253,6 @@ public class UserServiceImpl implements UserService {
             }
             roles.add(RoleUser.ADMIN.toString());
             
-            AdminDTO adminDTO = AdminMapper.adminMapAdminDTO(admin);
             String token;
             try {
                 token = securityService.createTokenSystem(user, roles);
@@ -262,22 +260,23 @@ public class UserServiceImpl implements UserService {
                 log.error("Cannot create token for admin", e);
                 return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
             }
+            
+            UserDTO userDTO = userMapper.toUserDTO(user, roles, admin.getStatus());
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .token(token)
-                    .user(adminDTO)
+                    .user(userDTO)
                     .build());
         }
 
         Host host = hostRepository.findByUser(user);
         if (Objects.nonNull(host)) {
             // da la host thi phai la customer, vi vay add them row vao bang customer
-            ensureCustomerExists(user);
+            Customer customer = ensureCustomerExists(user);
             
             // Host có cả HOST và CUSTOMER roles
             roles.add(RoleUser.HOST.toString());
             roles.add(RoleUser.CUSTOMER.toString());
 
-            HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
             String token;
             try {
                 token = securityService.createTokenSystem(user, roles);
@@ -286,8 +285,11 @@ public class UserServiceImpl implements UserService {
                 return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
             }
 
+            // Lấy status từ customer (vì host không có Status enum, chỉ có StatusHost)
+            Status status = customer != null ? customer.getStatus() : null;
+            UserDTO userDTO = userMapper.toUserDTO(user, roles, status);
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                    .user(hostDTO)
+                    .user(userDTO)
                     .token(token)
                     .build());
         }
@@ -296,7 +298,6 @@ public class UserServiceImpl implements UserService {
         Customer customer = ensureCustomerExists(user);
         roles.add(RoleUser.CUSTOMER.toString());
         
-        CustomerDTO customerDTO = CustomerMapper.toDTO(customer);
         String token;
         try {
             token = securityService.createTokenSystem(user, roles);
@@ -304,9 +305,12 @@ public class UserServiceImpl implements UserService {
             log.error("Cannot create token for customer", e);
             return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
         }
+        
+        Status status = customer != null ? customer.getStatus() : null;
+        UserDTO userDTO = userMapper.toUserDTO(user, roles, status);
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                 .token(token)
-                .user(customerDTO)
+                .user(userDTO)
                 .build());
     }
 
@@ -318,7 +322,7 @@ public class UserServiceImpl implements UserService {
         Customer created = Customer.builder()
                 .user(user)
                 .role(RoleUser.CUSTOMER)
-                .status(Status.ACTIVE)
+//                .status(Status.ACTIVE)
                 .build();
         return customerRepository.save(created);
     }
@@ -341,10 +345,6 @@ public class UserServiceImpl implements UserService {
     }
     // Create code
     public String secureRandomNumbers() {
-
-        CustomerDTO customerDTO = CustomerDTO.builder()
-                .build();
-
         SecureRandom secureRandom = new SecureRandom();
 
         String result = IntStream.range(0,6)

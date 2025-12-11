@@ -40,9 +40,9 @@ public class PaymentServiceImpl implements PaymentService {
         Bill bill = billRepository.findById(request.getBillId())
                 .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
 
-        // Validate: Bill phải ở trạng thái PAYMENT_PENDING
-        if (bill.getStatus() != StatusBill.PAYMENT_PENDING) {
-            throw new IllegalStateException("Bill must be in PAYMENT_PENDING status. Current status: " + bill.getStatus());
+        // Validate: Bill phải ở trạng thái DEPOSIT_PENDING
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING) {
+            throw new IllegalStateException("Bill must be in DEPOSIT_PENDING status. Current status: " + bill.getStatus());
         }
 
         // Tìm transaction

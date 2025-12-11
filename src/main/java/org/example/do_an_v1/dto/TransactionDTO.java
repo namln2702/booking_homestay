@@ -30,4 +30,7 @@ public class TransactionDTO {
     // Thông tin liên kết Bill
     private Long billId;
     private String billCode; // nếu Bill có trường code
+
+    // Thông tin chứng minh (cho refund)
+    private String proofImageUrl; // URL hình ảnh chứng minh giao dịch
 }

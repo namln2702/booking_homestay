@@ -4,13 +4,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
-import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
+import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
-import org.example.do_an_v1.dto.response.PageResponse;
-import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HomestayService;
@@ -79,5 +78,28 @@ public class AdminController {
     public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
         Long adminUserId = identityResolver.requireUserId(null);
         return adminService.approveHost(adminUserId, userId);
+    }
+
+    /**
+     * Lấy danh sách các transaction REFUND đang chờ xử lý
+     * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/refunds/pending")
+    public ApiResponse<List<TransactionDTO>> getPendingRefunds() {
+        Long adminUserId = identityResolver.requireUserId(null);
+        return adminService.getPendingRefunds(adminUserId);
+    }
+
+    /**
+     * Admin xác nhận hoàn tiền thành công
+     * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
+     * @param request Thông tin xác nhận (transactionId và proofImageUrl)
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PostMapping("/refunds/confirm")
+    public ApiResponse<?> confirmRefund(@RequestBody @Valid ConfirmRefundRequest request) {
+        Long adminUserId = identityResolver.requireUserId(null);
+        return adminService.confirmRefund(adminUserId, request);
     }
 }

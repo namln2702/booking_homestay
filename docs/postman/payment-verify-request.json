@@ -1,0 +1,12 @@
+{
+  "vnp_TxnRef": "12345678",
+  "vnp_ResponseCode": "00",
+  "vnp_TransactionStatus": "00",
+  "vnp_Amount": "1700000",
+  "vnp_SecureHash": "abc123def456...",
+  "vnp_TransactionNo": "12345678",
+  "vnp_BankCode": "NCB",
+  "vnp_PayDate": "20241206103111",
+  "vnp_OrderInfo": "Thanh toan don hang 123456"
+}
+

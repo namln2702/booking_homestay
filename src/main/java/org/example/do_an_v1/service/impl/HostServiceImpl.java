@@ -5,15 +5,22 @@ import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.CheckinRequest;
+import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.Homestay;
+import org.example.do_an_v1.entity.HomestayDailyPrice;
+import org.example.do_an_v1.entity.PricePerDay;
+import org.example.do_an_v1.entity.Transaction;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusHost;
+import org.example.do_an_v1.enums.StatusTransaction;
+import org.example.do_an_v1.enums.TypeTransaction;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
@@ -22,8 +29,12 @@ import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.repository.AdminRepository;
 import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.HomestayRepository;
 import org.example.do_an_v1.repository.HostRepository;
+import org.example.do_an_v1.repository.PricePerDayRepository;
+import org.example.do_an_v1.repository.TransactionRepository;
+import org.example.do_an_v1.repository.UserRepository;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
 import org.springframework.data.domain.Page;
@@ -33,8 +44,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
+import java.util.Date;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -46,6 +59,10 @@ public class HostServiceImpl implements HostService {
     private final UserRegistrationSupport userRegistrationSupport;
     private final BillRepository billRepository;
     private final HomestayRepository homestayRepository;
+    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
+    private final PricePerDayRepository pricePerDayRepository;
+    private final TransactionRepository transactionRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -276,17 +293,56 @@ public class HostServiceImpl implements HostService {
             throw new IllegalStateException("Bill must be in CHECKIN_PENDING status to confirm checkin. Current status: " + bill.getStatus());
         }
 
-        // Cập nhật trạng thái bill thành COMPLAINT_PENDING
-        bill.setStatus(StatusBill.COMPLAINT_PENDING);
+        // Tính 70% còn lại cần thanh toán
+        if (bill.getTotalAmount() == null) {
+            throw new IllegalStateException("Bill total amount is not set");
+        }
+
+        // Tính tổng số tiền đã thanh toán (30% cọc)
+        double paidAmount = transactionRepository.findByBillId(bill.getId()).stream()
+                .filter(t -> t.getTransactionType() == TypeTransaction.BOOKING_PAYMENT 
+                        && t.getStatus() == StatusTransaction.SUCCESS)
+                .mapToDouble(t -> t.getAmount().doubleValue())
+                .sum();
+
+        // Tính 70% còn lại
+        double remainingAmount = bill.getTotalAmount().doubleValue() - paidAmount;
+
+        // Tạo transaction mới cho phần còn lại (70%)
+        if (remainingAmount > 0) {
+            // Lấy admin user
+            User adminUser = adminRepository.findAll().stream()
+                    .map(Admin::getUser)
+                    .findFirst()
+                    .orElse(null);
+
+            if (adminUser == null) {
+                throw new IllegalStateException("No admin user found for transaction");
+            }
+
+            Transaction remainingPaymentTransaction = Transaction.builder()
+                    .completedAt(LocalDateTime.now().plusMinutes(15))
+                    .transactionType(TypeTransaction.BOOKING_PAYMENT)
+                    .status(StatusTransaction.PENDING)
+                    .bill(bill)
+                    .fromUser(bill.getCustomer().getUser())
+                    .toUser(adminUser)
+                    .amount(java.math.BigDecimal.valueOf(remainingAmount))
+                    .build();
+            transactionRepository.save(remainingPaymentTransaction);
+        }
+
+        // Cập nhật trạng thái bill thành REMAINING_PAYMENT_PENDING (cần thanh toán phần còn lại)
+        bill.setStatus(StatusBill.REMAINING_PAYMENT_PENDING);
         bill.setActualCheckinTime(LocalDateTime.now());
         billRepository.save(bill);
 
-        return new ApiResponse<>(200, "Check-in confirmed successfully. Bill status changed to COMPLAINT_PENDING", null);
+        return new ApiResponse<>(200, "Check-in confirmed successfully. Please pay the remaining 70% of the bill.", null);
     }
 
     @Override
     @Transactional
-    public ApiResponse<?> confirmCheckout(org.example.do_an_v1.dto.request.CheckoutRequest request) {
+    public ApiResponse<?> confirmCheckout(CheckoutRequest request) {
         if (request == null || request.getBillId() == null) {
             throw new IllegalArgumentException("Bill ID is required");
         }
@@ -307,5 +363,262 @@ public class HostServiceImpl implements HostService {
         billRepository.save(bill);
 
         return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED", null);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> enableHomestayDays(Long hostUserId, UpdateHomestayPriceRequest request) {
+        try {
+            // Validate homestay thuộc về host
+            Homestay homestay = homestayRepository.findById(request.getHomestayId()).orElse(null);
+            if (homestay == null) {
+                return new ApiResponse<>(404, "Homestay not found with id: " + request.getHomestayId(), null);
+            }
+
+            // Kiểm tra homestay thuộc về host
+            if (homestay.getHost() == null || homestay.getHost().getUser() == null 
+                    || !homestay.getHost().getUser().getId().equals(hostUserId)) {
+                return new ApiResponse<>(403, "You don't have permission to manage this homestay", null);
+            }
+
+            // Xử lý từng ngày trong danh sách
+            for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
+                Date day = priceUpdate.getDay();
+                Float price = priceUpdate.getPrice();
+
+                // Tìm hoặc tạo PricePerDay
+                PricePerDay pricePerDay = pricePerDayRepository.findByDay(day).orElse(null);
+                if (pricePerDay == null) {
+                    pricePerDay = PricePerDay.builder()
+                            .day(day)
+                            .price(price)
+                            .build();
+                    pricePerDay = pricePerDayRepository.save(pricePerDay);
+                } else {
+                    // Cập nhật giá nếu khác
+                    if (!pricePerDay.getPrice().equals(price)) {
+                        pricePerDay.setPrice(price);
+                        pricePerDayRepository.save(pricePerDay);
+                    }
+                }
+
+                // Tìm HomestayDailyPrice đã tồn tại
+                Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
+                        .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
+
+                if (existingDailyPrice.isPresent()) {
+                    // Đã tồn tại: set isBooked = false (bật lại)
+                    HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+                    dailyPrice.setIsBooked(false);
+                    dailyPrice.setPrice(price);
+                    // Xóa bill nếu có (unlock)
+                    dailyPrice.setBill(null);
+                    homestayDailyPricesRepository.save(dailyPrice);
+                } else {
+                    // Chưa tồn tại: tạo mới với isBooked = false
+                    HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
+                            .homestay(homestay)
+                            .pricePerDay(pricePerDay)
+                            .price(price)
+                            .isBooked(false)
+                            .bill(null)
+                            .build();
+                    homestayDailyPricesRepository.save(newDailyPrice);
+                }
+            }
+
+            return new ApiResponse<>(200, "Homestay days enabled successfully", null);
+
+        } catch (Exception e) {
+            return new ApiResponse<>(500, "Error enabling homestay days: " + e.getMessage(), null);
+        }
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> disableHomestayDays(Long hostUserId, UpdateHomestayPriceRequest request) {
+        try {
+            // Validate homestay thuộc về host
+            Homestay homestay = homestayRepository.findById(request.getHomestayId()).orElse(null);
+            if (homestay == null) {
+                return new ApiResponse<>(404, "Homestay not found with id: " + request.getHomestayId(), null);
+            }
+
+            // Kiểm tra homestay thuộc về host
+            if (homestay.getHost() == null || homestay.getHost().getUser() == null 
+                    || !homestay.getHost().getUser().getId().equals(hostUserId)) {
+                return new ApiResponse<>(403, "You don't have permission to manage this homestay", null);
+            }
+
+            // Xử lý từng ngày trong danh sách
+            for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
+                Date day = priceUpdate.getDay();
+
+                // Tìm PricePerDay
+                PricePerDay pricePerDay = pricePerDayRepository.findByDay(day).orElse(null);
+                if (pricePerDay == null) {
+                    // Không có PricePerDay thì không có gì để tắt
+                    continue;
+                }
+
+                // Tìm HomestayDailyPrice đã tồn tại
+                Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
+                        .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
+
+                if (existingDailyPrice.isPresent()) {
+                    HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+                    
+                    // Nếu đã được book (có bill) thì set isBooked = true (không cho book thêm)
+                    // Nếu chưa được book thì xóa luôn
+                    if (dailyPrice.getBill() != null || Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+                        // Đã được book: set isBooked = true để không cho book thêm
+                        dailyPrice.setIsBooked(true);
+                        homestayDailyPricesRepository.save(dailyPrice);
+                    } else {
+                        // Chưa được book: xóa luôn
+                        homestayDailyPricesRepository.delete(dailyPrice);
+                    }
+                }
+                // Nếu không tồn tại thì không làm gì (đã tắt rồi)
+            }
+
+            return new ApiResponse<>(200, "Homestay days disabled successfully", null);
+
+        } catch (Exception e) {
+            return new ApiResponse<>(500, "Error disabling homestay days: " + e.getMessage(), null);
+        }
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> updateHomestayPrices(Long hostUserId, UpdateHomestayPriceRequest request) {
+        try {
+            // Validate request
+            if (request == null || request.getDailyPrices() == null || request.getDailyPrices().isEmpty()) {
+                return new ApiResponse<>(400, "Daily prices list is required", null);
+            }
+
+            // Validate homestay thuộc về host
+            Homestay homestay = homestayRepository.findById(request.getHomestayId()).orElse(null);
+            if (homestay == null) {
+                return new ApiResponse<>(404, "Homestay not found with id: " + request.getHomestayId(), null);
+            }
+
+            // Kiểm tra homestay thuộc về host
+            if (homestay.getHost() == null || homestay.getHost().getUser() == null 
+                    || !homestay.getHost().getUser().getId().equals(hostUserId)) {
+                return new ApiResponse<>(403, "You don't have permission to manage this homestay", null);
+            }
+
+            // Xử lý từng daily price trong request
+            for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
+                if (priceUpdate.getDay() == null || priceUpdate.getPrice() == null) {
+                    continue; // Bỏ qua nếu thiếu thông tin
+                }
+
+                Date day = priceUpdate.getDay();
+                Float price = priceUpdate.getPrice();
+
+                // Tìm hoặc tạo PricePerDay
+                PricePerDay pricePerDay = pricePerDayRepository.findByDay(day).orElse(null);
+                if (pricePerDay == null) {
+                    pricePerDay = PricePerDay.builder()
+                            .day(day)
+                            .price(price)
+                            .build();
+                    pricePerDay = pricePerDayRepository.save(pricePerDay);
+                } else {
+                    // Cập nhật giá nếu khác
+                    if (!pricePerDay.getPrice().equals(price)) {
+                        pricePerDay.setPrice(price);
+                        pricePerDayRepository.save(pricePerDay);
+                    }
+                }
+
+                // Tìm HomestayDailyPrice hiện có cho homestay và pricePerDay này
+                Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
+                        .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
+
+                if (existingDailyPrice.isPresent()) {
+                    // Cập nhật giá nếu đã tồn tại (chỉ cập nhật nếu chưa được booked)
+                    HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+                    if (!Boolean.TRUE.equals(dailyPrice.getIsBooked()) && dailyPrice.getBill() == null) {
+                        dailyPrice.setPrice(price);
+                        homestayDailyPricesRepository.save(dailyPrice);
+                    }
+                } else {
+                    // Tạo mới HomestayDailyPrice
+                    HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
+                            .price(price)
+                            .isBooked(false)
+                            .pricePerDay(pricePerDay)
+                            .homestay(homestay)
+                            .bill(null)
+                            .build();
+                    homestayDailyPricesRepository.save(newDailyPrice);
+                }
+            }
+
+            return new ApiResponse<>(200, "Homestay prices updated successfully", null);
+
+        } catch (Exception e) {
+            return new ApiResponse<>(500, "Error updating homestay prices: " + e.getMessage(), null);
+        }
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> cancelBill(Long hostUserId, Long billId) {
+        // Tìm bill
+        Bill bill = billRepository.findById(billId).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
+        }
+
+        // Validate: Bill phải thuộc về homestay của host này
+        User hostUser = userRepository.findById(hostUserId).orElse(null);
+        if (hostUser == null) {
+            return new ApiResponse<>(404, "User not found", null);
+        }
+        Host host = hostRepository.findByUser(hostUser);
+        if (host == null) {
+            return new ApiResponse<>(404, "Host not found", null);
+        }
+
+        if (bill.getHomestay() == null || !Objects.equals(bill.getHomestay().getHost().getId(), host.getId())) {
+            return new ApiResponse<>(403, "You can only cancel bills for your own homestays", null);
+        }
+
+        // Validate: Bill phải ở trạng thái CHECKIN_PENDING (đã thanh toán cọc nhưng chưa check-in)
+        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+            return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
+        }
+
+        // Kiểm tra thời gian: phải sau 3h từ thời gian check-in
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime checkIn = bill.getCheckIn();
+
+        // Kiểm tra xem đã qua 3h từ thời gian check-in chưa
+        LocalDateTime threeHoursAfterCheckIn = checkIn.plusHours(3);
+        if (now.isBefore(threeHoursAfterCheckIn)) {
+            return new ApiResponse<>(400, "Cannot cancel bill. Must wait 3 hours after check-in time", null);
+        }
+
+        // Unlock homestay_daily_prices
+        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
+                .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
+                .toList();
+
+        for (HomestayDailyPrice dailyPrice : dailyPrices) {
+            dailyPrice.setIsBooked(false);
+            dailyPrice.setBill(null);
+            homestayDailyPricesRepository.save(dailyPrice);
+        }
+
+        // Cập nhật status bill thành PAYMENT_FAILED (không hoàn tiền)
+        bill.setStatus(StatusBill.PAYMENT_FAILED);
+        billRepository.save(bill);
+
+        return new ApiResponse<>(200, "Bill cancelled successfully. No refund will be processed.", null);
     }
 }

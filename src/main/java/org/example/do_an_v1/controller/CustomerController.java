@@ -92,4 +92,16 @@ public class CustomerController {
         return customerService.getCustomerBills(effectiveUserId);
     }
 
+    /**
+     * Customer hủy bill
+     * Nếu hủy trước 2 ngày so với check-in thì được hoàn tiền
+     * Nếu muộn hơn thì không được hoàn tiền
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PostMapping("/bills/{billId}/cancel")
+    public ApiResponse<?> cancelBill(@PathVariable Long billId) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.cancelBill(effectiveUserId, billId);
+    }
+
 }

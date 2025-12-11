@@ -1,18 +1,31 @@
 package org.example.do_an_v1.utils;
 
-import java.util.Random;
+import java.security.SecureRandom;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class GenNumber {
-    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    private static final int LENGTH = 6;
-    private static final Random RANDOM = new Random();
+    public static String secureRandomNumbers() {
+        SecureRandom secureRandom = new SecureRandom();
 
-    public static String generate() {
-        StringBuilder sb = new StringBuilder(LENGTH);
-        for (int i = 0; i < LENGTH; i++) {
-            int index = RANDOM.nextInt(CHARACTERS.length());
-            sb.append(CHARACTERS.charAt(index));
-        }
-        return sb.toString();
+        String result = IntStream.range(0,6)
+                .map(i -> secureRandom.nextInt(10))
+                .mapToObj(String:: valueOf)
+                .collect(Collectors.joining());
+
+        return result;
+    }
+
+    /**
+     * Tạo số ngẫu nhiên 8 chữ số cho VNPay orderId (vnp_TxnRef)
+     * VNPay yêu cầu vnp_TxnRef chỉ chứa số, không có ký tự đặc biệt
+     */
+    public static String generateVNPayOrderId() {
+        SecureRandom secureRandom = new SecureRandom();
+        String result = IntStream.range(0, 8)
+                .map(i -> secureRandom.nextInt(10))
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining());
+        return result;
     }
 }

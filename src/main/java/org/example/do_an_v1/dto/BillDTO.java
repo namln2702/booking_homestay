@@ -29,7 +29,7 @@ public class BillDTO {
 
     private Long id;                      // ID hóa đơn (khi response) hoặc ID homestay (khi request booking)
     private String code;                  // Mã đơn (unique code)
-    private StatusBill status;            // Trạng thái hóa đơn (PAYMENT_PENDING, SUCCEED, ...)
+    private StatusBill status;            // Trạng thái hóa đơn (DEPOSIT_PENDING, CHECKIN_PENDING, SUCCEED, ...)
     private LocalDateTime createdAt;      // Thời gian tạo đơn
     private LocalDateTime updatedAt;      // Cập nhật gần nhất
     

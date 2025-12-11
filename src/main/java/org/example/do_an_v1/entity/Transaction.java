@@ -46,4 +46,10 @@ public class Transaction extends BaseEntity{
     @JoinColumn(name = "bill", nullable = false)
     Bill bill;
 
+    @Column(name = "order_id", unique = true)
+    private String orderId;  // VNPay orderId (vnp_TxnRef) để tra cứu khi callback
+
+    @Column(name = "proof_image_url")
+    private String proofImageUrl;  // URL hình ảnh chứng minh giao dịch (cho refund)
+
 }

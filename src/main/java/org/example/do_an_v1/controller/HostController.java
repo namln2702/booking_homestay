@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.CheckinRequest;
 import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -40,7 +41,7 @@ public class HostController {
         Long adminUserId = identityResolver.requireUserId(null);
         return hostService.getHostsForAdmin(adminUserId, status, page, size);
     }
-
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
     @GetMapping("/me")
     public ApiResponse<HostDTO> getMyHostProfile() {
         Long effectiveUserId = identityResolver.requireUserId(null);
@@ -51,7 +52,7 @@ public class HostController {
      * Thống kê danh sách homestay thuộc về host hiện tại
      */
     @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @GetMapping("/me/homestays")
+    @GetMapping("/homestays")
     public ApiResponse<?> getMyHomestays() {
         Long hostUserId = identityResolver.requireUserId(null);
         return hostService.getHomestaysForHost(hostUserId);
@@ -61,7 +62,7 @@ public class HostController {
      * Liệt kê các bill đã đặt (thành công/đang sử dụng) cho các homestay của host hiện tại
      */
     @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @GetMapping("/me/bills")
+    @GetMapping("/bills")
     public ApiResponse<?> getMyHomestayBills() {
         Long hostUserId = identityResolver.requireUserId(null);
         return hostService.getBillsForHostHomestays(hostUserId);
@@ -94,6 +95,55 @@ public class HostController {
         return hostService.confirmCheckout(request);
     }
 
+    /**
+     * Bật ngày hoạt động của homestay
+     * Nếu homestayDailyPrice đã tồn tại thì set isBooked = false
+     * Nếu chưa có thì tạo mới với isBooked = false
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/homestays/enable-days")
+    public ApiResponse<?> enableHomestayDays(@RequestBody @Valid UpdateHomestayPriceRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.enableHomestayDays(hostUserId, request);
+    }
+
+    /**
+     * Tắt ngày hoạt động của homestay
+     * Nếu homestayDailyPrice đã tồn tại và chưa được book thì xóa
+     * Nếu đã được book thì set isBooked = true (không cho book thêm)
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/homestays/disable-days")
+    public ApiResponse<?> disableHomestayDays(@RequestBody @Valid UpdateHomestayPriceRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.disableHomestayDays(hostUserId, request);
+    }
+
+    /**
+     * Cập nhật giá homestay theo price_per_day
+     * Chỉ cập nhật giá cho các ngày chưa được book
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PutMapping("/homestays/prices")
+    public ApiResponse<?> updateHomestayPrices(@RequestBody @Valid UpdateHomestayPriceRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.updateHomestayPrices(hostUserId, request);
+    }
+
+    /**
+     * Host hủy bill
+     * Chỉ được hủy nếu đến thời gian check-in mà customer không đến được
+     * Sau 3h từ thời gian check-in, host có thể hủy và không cần hoàn tiền
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/bills/{billId}/cancel")
+    public ApiResponse<?> cancelBill(@PathVariable Long billId) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return hostService.cancelBill(effectiveUserId, billId);
+    }
 
     //  Cap nhap lai token host
     // @PreAuthorize("hasAuthority('ROLE_HOST')")

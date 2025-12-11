@@ -57,6 +57,20 @@ public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDai
     );
 
     /**
+     * Tìm một HomestayDailyPrice theo homestay và pricePerDay (trả về Optional)
+     */
+    @Query("""
+        SELECT hdp
+        FROM HomestayDailyPrice hdp
+        WHERE hdp.homestay = :homestay
+          AND hdp.pricePerDay = :pricePerDay
+""")
+    Optional<HomestayDailyPrice> findOneByHomestayAndPricePerDay(
+            @Param("homestay") org.example.do_an_v1.entity.Homestay homestay,
+            @Param("pricePerDay") org.example.do_an_v1.entity.PricePerDay pricePerDay
+    );
+
+    /**
      * Tìm HomestayDailyPrice theo homestay và ngày cụ thể
      */
     @Query("""

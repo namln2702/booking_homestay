@@ -35,6 +35,9 @@ public class Bill extends BaseEntity{
     @Column(name = "actual_checkin_time")
     private LocalDateTime actualCheckinTime;
 
+    @Column(name = "total_amount", precision = 12, scale = 2)
+    private java.math.BigDecimal totalAmount; // Tổng giá trị bill (100%)
+
     @ManyToOne
     @JoinColumn(name = "homestay_id")
     Homestay homestay;

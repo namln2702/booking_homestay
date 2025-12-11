@@ -6,6 +6,4 @@ import org.example.do_an_v1.payload.ApiResponse;
 public interface ComplaintService {
 
     ApiResponse<?> userComplaint(ComplaintDTO complaintDTO);
-
-
 }

@@ -6,6 +6,8 @@ import lombok.experimental.SuperBuilder;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
 
+import java.util.List;
+
 
 @SuperBuilder
 @Getter
@@ -20,12 +22,16 @@ public class UserDTO {
     private String phone;
 
     private String name;
+
     private Integer age;
 
     private Boolean isOnline;
 
+    private Status status;
+
     private String avatarUrl;
 
     private String googleId;
+    private List<String> role;
 
 }

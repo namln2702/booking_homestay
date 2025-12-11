@@ -3,10 +3,26 @@ package org.example.do_an_v1.enums;
 public enum StatusBill {
 
     /**
-     * Khách hàng đã đặt nhưng chưa thanh toán.
+     * Khách hàng đã đặt nhưng chưa thanh toán cọc.
      * Đơn sẽ bị hủy nếu quá hạn thanh toán.
      */
-    PAYMENT_PENDING(1),
+    DEPOSIT_PENDING(0),
+
+    /**
+     * Khách đã thanh toán cọc thành công.
+     * Đơn đang chờ đến ngày check-in.
+     */
+    DEPOSIT_PAID(11),
+
+    /**
+     * Khi khách đến homestay và cần nhập mã check-in (checkinCode).
+     */
+    CHECKIN_VERIFY(12),
+
+    /**
+     * Khách cần thanh toán nốt phần còn lại của đơn hàng.
+     */
+    REMAINING_PAYMENT_PENDING(13),
 
     /**
      * Thanh toán thất bại hoặc khách không thanh toán đúng hạn.
@@ -15,9 +31,8 @@ public enum StatusBill {
     PAYMENT_FAILED(2),
 
     /**
-     * Khách hàng thanh toán thành công.
-     * Tiền được chuyển từ customer → admin (escrow).
-     * Đơn đang chờ đến ngày check-in.
+     * Khách hàng đã thanh toán đầy đủ (cọc + phần còn lại).
+     * Đơn đang chờ đến ngày check-in hoặc hoàn tất check-in.
      */
     CHECKIN_PENDING(3),
 
@@ -28,8 +43,9 @@ public enum StatusBill {
     CHECKIN_EXPIRED(4),
 
     /**
-     * Khách đã check-in thành công và hoàn tất lưu trú.
-     * Đơn chuyển sang giai đoạn chờ khiếu nại (7 ngày).
+     * Khách đã check-out.
+     * Đơn bước vào giai đoạn chờ khiếu nại trong (N + 1) ngày,
+     * với N là số ngày lưu trú thực tế của khách hàng.
      */
     COMPLAINT_PENDING(5),
 
@@ -42,10 +58,9 @@ public enum StatusBill {
     HOST_COMPLAINT_PROCESSING(6),
 
     /**
-     * Khiếu nại được chuyển cho Admin xử lý
-     * (do Host từ chối hoặc quá hạn).
+     * Khiếu nại được chuyển cho Admin xử lý (1 ngày).
      * Admin có thể:
-     *  - Đồng ý hoặc quá hạn xử lý → REFUNDED
+     *  - Đồng ý → REFUNDED
      *  - Không đồng ý → REJECTED
      */
     ADMIN_COMPLAINT_PROCESSING(7),
@@ -58,7 +73,7 @@ public enum StatusBill {
 
     /**
      * Khiếu nại bị từ chối.
-     * Đơn kết thúc mà không có hoàn tiền.
+     * Đơn kết thúc mà không hoàn tiền.
      */
     REJECTED(9),
 
@@ -67,8 +82,6 @@ public enum StatusBill {
      * Không còn khiếu nại, admin chuyển tiền cho host.
      */
     SUCCEED(10);
-
-
 
     private final int code;
 

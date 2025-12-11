@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
-import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.HomestayService;
@@ -52,17 +51,5 @@ public class HomestayController {
         return homestayService.createHomestay(effectiveUserId, request);
     }
 
-    /**
-     * Cập nhật giá homestay theo price_per_day
-     * Yêu cầu quyền HOST
-     */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @PutMapping("/prices")
-    public ApiResponse<HomestayDTO> updateHomestayPrices(
-            @RequestParam(name = "homestayId") Long homestayId,
-            @RequestBody @Valid UpdateHomestayPriceRequest request) {
-        // Validate host owns this homestay
-        return homestayService.updateHomestayPrices(homestayId, request);
-    }
 
 }

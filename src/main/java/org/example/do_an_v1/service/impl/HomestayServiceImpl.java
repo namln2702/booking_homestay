@@ -100,7 +100,7 @@ public class HomestayServiceImpl implements HomestayService {
         Homestay savedHomestay = homestayRepository.save(homestay);
 
         // Tự động tạo 30 ngày giá từ ngày tạo homestay với giá basePrice
-        generateDefaultDailyPrices(savedHomestay);
+//        generateDefaultDailyPrices(savedHomestay);
 
         List<HomestayImage> savedImages = persistImages(savedHomestay, request.getImageUrls());
 
@@ -774,64 +774,64 @@ public class HomestayServiceImpl implements HomestayService {
      * Tự động tạo 30 ngày giá từ ngày tạo homestay với giá basePrice
      * @param homestay Homestay đã được lưu vào database
      */
-    private void generateDefaultDailyPrices(Homestay homestay) {
-        if (homestay == null || homestay.getBasePrice() == null) {
-            return;
-        }
-
-        Float basePrice = homestay.getBasePrice();
-        if (basePrice <= 0) {
-            return; // Không tạo giá nếu basePrice <= 0
-        }
-
-        // Lấy ngày tạo homestay (nếu chưa có thì dùng ngày hiện tại)
-        LocalDate startDate;
-        if (homestay.getCreatedAt() != null) {
-            startDate = homestay.getCreatedAt().toLocalDate();
-        } else {
-            startDate = LocalDate.now();
-        }
-
-        List<HomestayDailyPrice> dailyPricesToCreate = new ArrayList<>();
-
-        // Tạo 30 ngày giá từ ngày tạo homestay
-        for (int i = 0; i < 30; i++) {
-            LocalDate currentDate = startDate.plusDays(i);
-            java.util.Date dateUtil = java.sql.Date.valueOf(currentDate);
-
-            // Kiểm tra xem đã có HomestayDailyPrice cho ngày này chưa
-            Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
-                    .findByHomestayAndDate(homestay.getId(), dateUtil);
-
-            if (existingDailyPrice.isPresent()) {
-                // Đã có giá cho ngày này, bỏ qua
-                continue;
-            }
-
-            // Tìm hoặc tạo PricePerDay cho ngày này
-            PricePerDay pricePerDay = pricePerDayRepository.findByDay(dateUtil)
-                    .orElseGet(() -> {
-                        PricePerDay newPricePerDay = PricePerDay.builder()
-                                .day(dateUtil)
-                                .price(basePrice)
-                                .build();
-                        return pricePerDayRepository.save(newPricePerDay);
-                    });
-
-            // Tạo HomestayDailyPrice mới
-            HomestayDailyPrice dailyPrice = HomestayDailyPrice.builder()
-                    .price(basePrice)
-                    .isBooked(Boolean.FALSE)
-                    .pricePerDay(pricePerDay)
-                    .homestay(homestay)
-                    .build();
-
-            dailyPricesToCreate.add(dailyPrice);
-        }
-
-        // Lưu tất cả daily prices vào database
-        if (!dailyPricesToCreate.isEmpty()) {
-            homestayDailyPricesRepository.saveAll(dailyPricesToCreate);
-        }
-    }
+//    private void generateDefaultDailyPrices(Homestay homestay) {
+//        if (homestay == null || homestay.getBasePrice() == null) {
+//            return;
+//        }
+//
+//        Float basePrice = homestay.getBasePrice();
+//        if (basePrice <= 0) {
+//            return; // Không tạo giá nếu basePrice <= 0
+//        }
+//
+//        // Lấy ngày tạo homestay (nếu chưa có thì dùng ngày hiện tại)
+//        LocalDate startDate;
+//        if (homestay.getCreatedAt() != null) {
+//            startDate = homestay.getCreatedAt().toLocalDate();
+//        } else {
+//            startDate = LocalDate.now();
+//        }
+//
+//        List<HomestayDailyPrice> dailyPricesToCreate = new ArrayList<>();
+//
+//        // Tạo 30 ngày giá từ ngày tạo homestay
+//        for (int i = 0; i < 30; i++) {
+//            LocalDate currentDate = startDate.plusDays(i);
+//            java.util.Date dateUtil = java.sql.Date.valueOf(currentDate);
+//
+//            // Kiểm tra xem đã có HomestayDailyPrice cho ngày này chưa
+//            Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
+//                    .findByHomestayAndDate(homestay.getId(), dateUtil);
+//
+//            if (existingDailyPrice.isPresent()) {
+//                // Đã có giá cho ngày này, bỏ qua
+//                continue;
+//            }
+//
+//            // Tìm hoặc tạo PricePerDay cho ngày này
+//            PricePerDay pricePerDay = pricePerDayRepository.findByDay(dateUtil)
+//                    .orElseGet(() -> {
+//                        PricePerDay newPricePerDay = PricePerDay.builder()
+//                                .day(dateUtil)
+//                                .price(basePrice)
+//                                .build();
+//                        return pricePerDayRepository.save(newPricePerDay);
+//                    });
+//
+//            // Tạo HomestayDailyPrice mới
+//            HomestayDailyPrice dailyPrice = HomestayDailyPrice.builder()
+//                    .price(basePrice)
+//                    .isBooked(Boolean.FALSE)
+//                    .pricePerDay(pricePerDay)
+//                    .homestay(homestay)
+//                    .build();
+//
+//            dailyPricesToCreate.add(dailyPrice);
+//        }
+//
+//        // Lưu tất cả daily prices vào database
+//        if (!dailyPricesToCreate.isEmpty()) {
+//            homestayDailyPricesRepository.saveAll(dailyPricesToCreate);
+//        }
+//    }
 }

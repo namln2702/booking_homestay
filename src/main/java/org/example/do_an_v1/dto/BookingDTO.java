@@ -1,10 +1,11 @@
 package org.example.do_an_v1.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.example.do_an_v1.dto.request.PricePerDayRequest;
 
-import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 
@@ -29,8 +30,11 @@ public class BookingDTO {
     @NotNull(message = "Check-out date is required")
     private Date checkOut;       // Ngày check-out
 
-    // --- Danh sách ID của HomestayDailyPrice ---
-    private List<Long> homestayDailyPriceIds;
+    // --- Danh sách PricePerDay (ngày và giá) ---
+    @NotNull(message = "PricePerDays list is required")
+    @NotEmpty(message = "PricePerDays list cannot be empty")
+    @Valid
+    private List<PricePerDayRequest> pricePerDays;
 
     // --- Thông tin người đặt (Booking contact info - nếu khác với customer) ---
     @Valid
