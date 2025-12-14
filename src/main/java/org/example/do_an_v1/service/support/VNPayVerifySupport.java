@@ -31,13 +31,13 @@ public class VNPayVerifySupport {
      * Verify payment từ VNPay
      * CHỈ làm việc verify signature và validate amount
      * KHÔNG xử lý nghiệp vụ (update status, unlock homestay, send email)
-     * 
+     *
      * @param request VNPayReturnRequest từ FE
      * @return VNPayVerifyResult chứa kết quả verify
      * @throws IllegalArgumentException nếu request không hợp lệ hoặc transaction không tồn tại
      */
     public VNPayVerifyResult verifyPayment(VNPayReturnRequest request) {
-        log.info("Verifying payment: orderId={}, responseCode={}", 
+        log.info("Verifying payment: orderId={}, responseCode={}",
                 request.getVnp_TxnRef(), request.getVnp_ResponseCode());
 
         // Tra cứu transaction bằng orderId
@@ -74,7 +74,7 @@ public class VNPayVerifySupport {
 
         // Verify signature
         boolean signatureValid = verifySignature(params, request.getVnp_TxnRef());
-        
+
         // Validate amount
         boolean amountValid = false;
         String amountError = null;
@@ -83,12 +83,12 @@ public class VNPayVerifySupport {
             amountValid = true;
         } else {
             amountError = validationError;
-            log.warn("Amount validation failed for orderId: {}. Error: {}", 
+            log.warn("Amount validation failed for orderId: {}. Error: {}",
                     request.getVnp_TxnRef(), amountError);
         }
 
         // Kiểm tra payment có thành công không
-        boolean paymentSuccess = "00".equals(request.getVnp_ResponseCode()) 
+        boolean paymentSuccess = "00".equals(request.getVnp_ResponseCode())
                 && "00".equals(request.getVnp_TransactionStatus());
 
         // Build result
@@ -111,10 +111,10 @@ public class VNPayVerifySupport {
         VNPayVerifyResult result = resultBuilder.build();
 
         if (result.isVerifySuccess()) {
-            log.info("Payment verified successfully for orderId: {} (signature: {}, amount: {}, payment: {})", 
+            log.info("Payment verified successfully for orderId: {} (signature: {}, amount: {}, payment: {})",
                     request.getVnp_TxnRef(), signatureValid, amountValid, paymentSuccess);
         } else {
-            log.warn("Payment verification failed for orderId: {} (signature: {}, amount: {})", 
+            log.warn("Payment verification failed for orderId: {} (signature: {}, amount: {})",
                     request.getVnp_TxnRef(), signatureValid, amountValid);
         }
 
@@ -177,7 +177,7 @@ public class VNPayVerifySupport {
      * @return true nếu hợp lệ, false nếu thiếu tham số
      */
     private boolean validateRequiredParams(Map<String, String> params, String orderId) {
-        if (!params.containsKey("vnp_TmnCode") || !params.containsKey("vnp_TxnRef") 
+        if (!params.containsKey("vnp_TmnCode") || !params.containsKey("vnp_TxnRef")
                 || !params.containsKey("vnp_ResponseCode") || !params.containsKey("vnp_TransactionStatus")
                 || !params.containsKey("vnp_Amount") || !params.containsKey("vnp_BankCode")
                 || !params.containsKey("vnp_OrderInfo") || !params.containsKey("vnp_TransactionNo")
@@ -209,20 +209,19 @@ public class VNPayVerifySupport {
             }
             amountInVnd = Long.parseLong(vnpAmount) / 100; // VNPay trả về amount tính bằng xu
         } catch (NumberFormatException e) {
-            log.error("Invalid vnp_Amount format for orderId: {}. Value: {}", 
+            log.error("Invalid vnp_Amount format for orderId: {}. Value: {}",
                     request.getVnp_TxnRef(), request.getVnp_Amount(), e);
             return "Invalid vnp_Amount format: " + e.getMessage();
         }
 
         if (amountInVnd != transaction.getAmount().longValue()) {
-            log.error("Amount mismatch. Expected: {} VND, Received: {} VND (from vnp_Amount: {})", 
+            log.error("Amount mismatch. Expected: {} VND, Received: {} VND (from vnp_Amount: {})",
                     transaction.getAmount(), amountInVnd, request.getVnp_Amount());
-            return "Amount mismatch. Expected: " + transaction.getAmount() + 
+            return "Amount mismatch. Expected: " + transaction.getAmount() +
                     " VND, Received: " + amountInVnd + " VND";
         }
-        
+
         return null; // Valid
     }
 
 }
-

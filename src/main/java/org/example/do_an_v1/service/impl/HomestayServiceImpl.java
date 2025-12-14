@@ -429,45 +429,6 @@ public class HomestayServiceImpl implements HomestayService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<?> findUserHistoryHomestays(Long userId) {
-        if (userId == null) {
-            throw new IllegalArgumentException("User id is required");
-        }
-
-        // Lấy user và customer
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
-
-        Customer customer = customerRepository.findByUser(user);
-        if (customer == null) {
-            return new ApiResponse<>(404, "Customer profile not found for this user", null);
-        }
-
-        // Lấy tất cả bills của customer, chỉ lấy những bills đã được thanh toán hoặc hoàn tất
-        List<Bill> bills = billRepository.findByCustomer(customer);
-        
-        // Filter chỉ lấy các bills đã hoàn tất hoặc đã check-in (có thể review được)
-        List<Bill> completedBills = bills.stream()
-                .filter(bill -> {
-                    StatusBill status = bill.getStatus();
-                    return status == StatusBill.SUCCEED 
-//                            || status == StatusBill.COMPLAINT_EXPIRED
-                            || status == StatusBill.CHECKIN_EXPIRED
-                            || status == StatusBill.COMPLAINT_PENDING
-                            || status == StatusBill.CHECKIN_PENDING;
-                })
-                .collect(Collectors.toList());
-
-        // Map sang BillDTO
-        List<BillDTO> billDTOS = completedBills.stream()
-                .map(BillMapper::toDTO)
-                .collect(Collectors.toList());
-
-        return new ApiResponse<>(200, "User booking history retrieved successfully", billDTOS);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public ApiResponse<?> detailHomestay(Long id) {
         if (id == null) {
             throw new IllegalArgumentException("Homestay id is required");
@@ -491,284 +452,284 @@ public class HomestayServiceImpl implements HomestayService {
         return new ApiResponse<>(200, "Homestay detail retrieved successfully", homestayDTO);
     }
 
-    @Override
-    @Transactional
-    public ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO) {
-        if (userId == null) {
-            throw new IllegalArgumentException("User id is required");
-        }
-        if (reviewDTO == null) {
-            throw new IllegalArgumentException("Review data is required");
-        }
-        if (reviewDTO.getHomestayId() == null) {
-            throw new IllegalArgumentException("Homestay id is required");
-        }
-        if (reviewDTO.getRating() == null || reviewDTO.getRating() < 1 || reviewDTO.getRating() > 5) {
-            throw new IllegalArgumentException("Rating must be between 1 and 5");
-        }
-        if (reviewDTO.getComment() == null || reviewDTO.getComment().trim().isEmpty()) {
-            throw new IllegalArgumentException("Comment is required");
-        }
-
-        // Lấy user và customer
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
-
-        Customer customer = customerRepository.findByUser(user);
-        if (customer == null) {
-            return new ApiResponse<>(404, "Customer profile not found for this user", null);
-        }
-
-        // Lấy homestay
-        Homestay homestay = homestayRepository.findById(reviewDTO.getHomestayId())
-                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + reviewDTO.getHomestayId()));
-
-        // Validate: Customer đã booking homestay này chưa?
-        Optional<Bill> billOptional = billRepository.findByHomestayAndCustomer(homestay, customer);
-        if (billOptional.isEmpty()) {
-            return new ApiResponse<>(403, "You must book this homestay before reviewing", null);
-        }
-
-        Bill bill = billOptional.get();
-        // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
-        StatusBill billStatus = bill.getStatus();
-        if (billStatus != StatusBill.COMPLAINT_PENDING 
-                && billStatus != StatusBill.CHECKIN_PENDING
-//                && billStatus != StatusBill.COMPLAINT_EXPIRED
-                && billStatus != StatusBill.SUCCEED) {
-            return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
-        }
-
-        // Validate: Customer đã review homestay này chưa? (tránh duplicate)
-        Optional<Review> existingReview = reviewRepository.findByHomestayAndCustomer(homestay, customer);
-        if (existingReview.isPresent()) {
-            return new ApiResponse<>(409, "You have already reviewed this homestay", null);
-        }
-
-        // Tạo Review entity
-        Review review = Review.builder()
-                .rating(reviewDTO.getRating())
-                .comment(reviewDTO.getComment().trim())
-                .homestay(homestay)
-                .customer(customer)
-                .build();
-
-        // Lưu review trước để có ID
-        Review savedReview = reviewRepository.save(review);
-
-        // Xử lý images nếu có
-        Set<Image> reviewImages = new HashSet<>();
-        if (reviewDTO.getImageUrls() != null && !reviewDTO.getImageUrls().isEmpty()) {
-            final Review reviewForImages = savedReview; // Make final for lambda
-            List<Image> imagesToSave = reviewDTO.getImageUrls().stream()
-                    .filter(img -> img != null && img.getImage_url() != null && !img.getImage_url().trim().isEmpty())
-                    .map(img -> {
-                        Image image = ImageMapper.toEntity(img);
-                        image.setReview(reviewForImages);
-                        return imageRepository.save(image);
-                    })
-                    .collect(Collectors.toList());
-            reviewImages.addAll(imagesToSave);
-            savedReview.setListImage(reviewImages);
-            savedReview = reviewRepository.save(savedReview);
-        }
-
-        // Sử dụng savedReview làm finalReview
-        final Review finalReview = savedReview;
-
-        // Thêm review vào homestay
-        Set<Review> reviews = homestay.getListReview();
-        if (reviews == null) {
-            reviews = new HashSet<>();
-        }
-        reviews.add(finalReview);
-        homestay.setListReview(reviews);
-
-        // Tính lại rating trung bình của homestay
-        List<Review> allReviews = reviewRepository.findByHomestay(homestay);
-        if (!allReviews.isEmpty()) {
-            double averageRating = allReviews.stream()
-                    .mapToInt(Review::getRating)
-                    .average()
-                    .orElse(0.0);
-            homestay.setRating((float) averageRating);
-        }
-
-        // Lưu homestay với rating mới
-        homestay = homestayRepository.save(homestay);
-
-        // Map sang DTO để trả về
-        ReviewDTO responseDTO = ReviewMapper.toDTO(finalReview);
-
-        return new ApiResponse<>(201, "Review submitted successfully", responseDTO);
-    }
-
-    @Override
-    @Transactional
-    public ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO) {
-        if (userId == null) {
-            throw new IllegalArgumentException("User id is required");
-        }
-        if (reviewId == null) {
-            throw new IllegalArgumentException("Review id is required");
-        }
-        if (reviewDTO == null) {
-            throw new IllegalArgumentException("Review data is required");
-        }
-        if (reviewDTO.getRating() != null && (reviewDTO.getRating() < 1 || reviewDTO.getRating() > 5)) {
-            throw new IllegalArgumentException("Rating must be between 1 and 5");
-        }
-        if (reviewDTO.getComment() != null && reviewDTO.getComment().trim().isEmpty()) {
-            throw new IllegalArgumentException("Comment cannot be empty");
-        }
-
-        // Lấy user và customer
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
-
-        Customer customer = customerRepository.findByUser(user);
-        if (customer == null) {
-            return new ApiResponse<>(404, "Customer profile not found for this user", null);
-        }
-
-        // Tìm review theo ID
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new IllegalArgumentException("Review not found for id " + reviewId));
-
-        // Validate: Review phải thuộc về customer hiện tại
-        if (!review.getCustomer().getId().equals(customer.getId())) {
-            return new ApiResponse<>(403, "You can only update your own reviews", null);
-        }
-
-        // Lấy homestay từ review
-        Homestay homestay = review.getHomestay();
-        if (homestay == null) {
-            return new ApiResponse<>(404, "Homestay not found for this review", null);
-        }
-
-        // Update rating nếu có
-        if (reviewDTO.getRating() != null) {
-            review.setRating(reviewDTO.getRating());
-        }
-
-        // Update comment nếu có
-        if (reviewDTO.getComment() != null) {
-            review.setComment(reviewDTO.getComment().trim());
-        }
-
-        // Xử lý images: xóa images cũ và thêm images mới
-        if (reviewDTO.getImageUrls() != null) {
-            // Xóa tất cả images cũ của review
-            Set<Image> oldImages = review.getListImage();
-            if (oldImages != null && !oldImages.isEmpty()) {
-                // Set review = null cho các images cũ trước khi xóa
-                oldImages.forEach(image -> image.setReview(null));
-                imageRepository.deleteAll(oldImages);
-            }
-
-            // Thêm images mới nếu có
-            Set<Image> newImages = new HashSet<>();
-            if (!reviewDTO.getImageUrls().isEmpty()) {
-                final Review reviewForImages = review; // Make final for lambda
-                List<Image> imagesToSave = reviewDTO.getImageUrls().stream()
-                        .filter(img -> img != null && img.getImage_url() != null && !img.getImage_url().trim().isEmpty())
-                        .map(img -> {
-                            Image image = ImageMapper.toEntity(img);
-                            image.setReview(reviewForImages);
-                            return imageRepository.save(image);
-                        })
-                        .collect(Collectors.toList());
-                newImages.addAll(imagesToSave);
-            }
-            review.setListImage(newImages);
-        }
-
-        // Lưu review đã update
-        Review updatedReview = reviewRepository.save(review);
-
-        // Tính lại rating trung bình của homestay
-        // List<Review> allReviews = reviewRepository.findByHomestay(homestay);
-        // if (!allReviews.isEmpty()) {
-        //     double averageRating = allReviews.stream()
-        //             .mapToInt(Review::getRating)
-        //             .average()
-        //             .orElse(0.0);
-        //     homestay.setRating((float) averageRating);
-        //     homestayRepository.save(homestay);
-        // }
-
-        // Map sang DTO để trả về
-        ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
-
-        return new ApiResponse<>(200, "Review updated successfully", responseDTO);
-    }
-
-    @Override
-    @Transactional
-    public ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request) {
-        if (homestayId == null) {
-            throw new IllegalArgumentException("Homestay ID is required");
-        }
-        if (request == null || request.getDailyPrices() == null || request.getDailyPrices().isEmpty()) {
-            throw new IllegalArgumentException("Daily prices list is required");
-        }
-
-        // Lấy homestay
-        Homestay homestay = homestayRepository.findById(homestayId)
-                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id: " + homestayId));
-
-        // Xử lý từng daily price trong request
-        for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
-            if (priceUpdate.getDay() == null || priceUpdate.getPrice() == null) {
-                continue; // Bỏ qua nếu thiếu thông tin
-            }
-
-            // Tìm hoặc tạo PricePerDay
-            PricePerDay pricePerDay = resolvePricePerDay(priceUpdate.getDay(), priceUpdate.getPrice());
-
-            // Tìm HomestayDailyPrice hiện có cho homestay và pricePerDay này
-            Optional<HomestayDailyPrice> existingDailyPrice = homestay.getListHomestayDailyPrice().stream()
-                    .filter(hdp -> hdp.getPricePerDay() != null && 
-                            hdp.getPricePerDay().getId().equals(pricePerDay.getId()))
-                    .findFirst();
-
-            if (existingDailyPrice.isPresent()) {
-                // Cập nhật giá nếu đã tồn tại
-                HomestayDailyPrice dailyPrice = existingDailyPrice.get();
-                // Chỉ cập nhật nếu chưa được booked
-                if (!Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-                    dailyPrice.setPrice(priceUpdate.getPrice());
-                    homestayDailyPricesRepository.save(dailyPrice);
-                }
-            } else {
-                // Tạo mới HomestayDailyPrice
-                HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
-                        .price(priceUpdate.getPrice())
-                        .isBooked(Boolean.FALSE)
-                        .pricePerDay(pricePerDay)
-                        .homestay(homestay)
-                        .build();
-                homestayDailyPricesRepository.save(newDailyPrice);
-                
-                // Thêm vào set của homestay
-                if (homestay.getListHomestayDailyPrice() == null) {
-                    homestay.setListHomestayDailyPrice(new HashSet<>());
-                }
-                homestay.getListHomestayDailyPrice().add(newDailyPrice);
-            }
-        }
-
-        // Lưu homestay
-        Homestay savedHomestay = homestayRepository.save(homestay);
-
-        // Lấy images
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
-
-        // Map sang DTO
-        HomestayDTO responseDTO = homestayMapper.toDto(savedHomestay, images);
-
-        return new ApiResponse<>(200, "Homestay prices updated successfully", responseDTO);
-    }
+//    @Override
+//    @Transactional
+//    public ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO) {
+//        if (userId == null) {
+//            throw new IllegalArgumentException("User id is required");
+//        }
+//        if (reviewDTO == null) {
+//            throw new IllegalArgumentException("Review data is required");
+//        }
+//        if (reviewDTO.getHomestayId() == null) {
+//            throw new IllegalArgumentException("Homestay id is required");
+//        }
+//        if (reviewDTO.getRating() == null || reviewDTO.getRating() < 1 || reviewDTO.getRating() > 5) {
+//            throw new IllegalArgumentException("Rating must be between 1 and 5");
+//        }
+//        if (reviewDTO.getComment() == null || reviewDTO.getComment().trim().isEmpty()) {
+//            throw new IllegalArgumentException("Comment is required");
+//        }
+//
+//        // Lấy user và customer
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+//
+//        Customer customer = customerRepository.findByUser(user);
+//        if (customer == null) {
+//            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+//        }
+//
+//        // Lấy homestay
+//        Homestay homestay = homestayRepository.findById(reviewDTO.getHomestayId())
+//                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + reviewDTO.getHomestayId()));
+//
+//        // Validate: Customer đã booking homestay này chưa?
+//        Optional<Bill> billOptional = billRepository.findByHomestayAndCustomer(homestay, customer);
+//        if (billOptional.isEmpty()) {
+//            return new ApiResponse<>(403, "You must book this homestay before reviewing", null);
+//        }
+//
+//        Bill bill = billOptional.get();
+//        // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
+//        StatusBill billStatus = bill.getStatus();
+//        if (billStatus != StatusBill.COMPLAINT_PENDING
+//                && billStatus != StatusBill.CHECKIN_PENDING
+////                && billStatus != StatusBill.COMPLAINT_EXPIRED
+//                && billStatus != StatusBill.SUCCEED) {
+//            return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
+//        }
+//
+//        // Validate: Customer đã review homestay này chưa? (tránh duplicate)
+//        Optional<Review> existingReview = reviewRepository.findByHomestayAndCustomer(homestay, customer);
+//        if (existingReview.isPresent()) {
+//            return new ApiResponse<>(409, "You have already reviewed this homestay", null);
+//        }
+//
+//        // Tạo Review entity
+//        Review review = Review.builder()
+//                .rating(reviewDTO.getRating())
+//                .comment(reviewDTO.getComment().trim())
+//                .homestay(homestay)
+//                .customer(customer)
+//                .build();
+//
+//        // Lưu review trước để có ID
+//        Review savedReview = reviewRepository.save(review);
+//
+//        // Xử lý images nếu có
+//        Set<Image> reviewImages = new HashSet<>();
+//        if (reviewDTO.getImageUrls() != null && !reviewDTO.getImageUrls().isEmpty()) {
+//            final Review reviewForImages = savedReview; // Make final for lambda
+//            List<Image> imagesToSave = reviewDTO.getImageUrls().stream()
+//                    .filter(img -> img != null && img.getImage_url() != null && !img.getImage_url().trim().isEmpty())
+//                    .map(img -> {
+//                        Image image = ImageMapper.toEntity(img);
+//                        image.setReview(reviewForImages);
+//                        return imageRepository.save(image);
+//                    })
+//                    .collect(Collectors.toList());
+//            reviewImages.addAll(imagesToSave);
+//            savedReview.setListImage(reviewImages);
+//            savedReview = reviewRepository.save(savedReview);
+//        }
+//
+//        // Sử dụng savedReview làm finalReview
+//        final Review finalReview = savedReview;
+//
+//        // Thêm review vào homestay
+//        Set<Review> reviews = homestay.getListReview();
+//        if (reviews == null) {
+//            reviews = new HashSet<>();
+//        }
+//        reviews.add(finalReview);
+//        homestay.setListReview(reviews);
+//
+//        // Tính lại rating trung bình của homestay
+//        List<Review> allReviews = reviewRepository.findByHomestay(homestay);
+//        if (!allReviews.isEmpty()) {
+//            double averageRating = allReviews.stream()
+//                    .mapToInt(Review::getRating)
+//                    .average()
+//                    .orElse(0.0);
+//            homestay.setRating((float) averageRating);
+//        }
+//
+//        // Lưu homestay với rating mới
+//        homestay = homestayRepository.save(homestay);
+//
+//        // Map sang DTO để trả về
+//        ReviewDTO responseDTO = ReviewMapper.toDTO(finalReview);
+//
+//        return new ApiResponse<>(201, "Review submitted successfully", responseDTO);
+//    }
+//
+//    @Override
+//    @Transactional
+//    public ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO) {
+//        if (userId == null) {
+//            throw new IllegalArgumentException("User id is required");
+//        }
+//        if (reviewId == null) {
+//            throw new IllegalArgumentException("Review id is required");
+//        }
+//        if (reviewDTO == null) {
+//            throw new IllegalArgumentException("Review data is required");
+//        }
+//        if (reviewDTO.getRating() != null && (reviewDTO.getRating() < 1 || reviewDTO.getRating() > 5)) {
+//            throw new IllegalArgumentException("Rating must be between 1 and 5");
+//        }
+//        if (reviewDTO.getComment() != null && reviewDTO.getComment().trim().isEmpty()) {
+//            throw new IllegalArgumentException("Comment cannot be empty");
+//        }
+//
+//        // Lấy user và customer
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+//
+//        Customer customer = customerRepository.findByUser(user);
+//        if (customer == null) {
+//            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+//        }
+//
+//        // Tìm review theo ID
+//        Review review = reviewRepository.findById(reviewId)
+//                .orElseThrow(() -> new IllegalArgumentException("Review not found for id " + reviewId));
+//
+//        // Validate: Review phải thuộc về customer hiện tại
+//        if (!review.getCustomer().getId().equals(customer.getId())) {
+//            return new ApiResponse<>(403, "You can only update your own reviews", null);
+//        }
+//
+//        // Lấy homestay từ review
+//        Homestay homestay = review.getHomestay();
+//        if (homestay == null) {
+//            return new ApiResponse<>(404, "Homestay not found for this review", null);
+//        }
+//
+//        // Update rating nếu có
+//        if (reviewDTO.getRating() != null) {
+//            review.setRating(reviewDTO.getRating());
+//        }
+//
+//        // Update comment nếu có
+//        if (reviewDTO.getComment() != null) {
+//            review.setComment(reviewDTO.getComment().trim());
+//        }
+//
+//        // Xử lý images: xóa images cũ và thêm images mới
+//        if (reviewDTO.getImageUrls() != null) {
+//            // Xóa tất cả images cũ của review
+//            Set<Image> oldImages = review.getListImage();
+//            if (oldImages != null && !oldImages.isEmpty()) {
+//                // Set review = null cho các images cũ trước khi xóa
+//                oldImages.forEach(image -> image.setReview(null));
+//                imageRepository.deleteAll(oldImages);
+//            }
+//
+//            // Thêm images mới nếu có
+//            Set<Image> newImages = new HashSet<>();
+//            if (!reviewDTO.getImageUrls().isEmpty()) {
+//                final Review reviewForImages = review; // Make final for lambda
+//                List<Image> imagesToSave = reviewDTO.getImageUrls().stream()
+//                        .filter(img -> img != null && img.getImage_url() != null && !img.getImage_url().trim().isEmpty())
+//                        .map(img -> {
+//                            Image image = ImageMapper.toEntity(img);
+//                            image.setReview(reviewForImages);
+//                            return imageRepository.save(image);
+//                        })
+//                        .collect(Collectors.toList());
+//                newImages.addAll(imagesToSave);
+//            }
+//            review.setListImage(newImages);
+//        }
+//
+//        // Lưu review đã update
+//        Review updatedReview = reviewRepository.save(review);
+//
+//        // Tính lại rating trung bình của homestay
+//        // List<Review> allReviews = reviewRepository.findByHomestay(homestay);
+//        // if (!allReviews.isEmpty()) {
+//        //     double averageRating = allReviews.stream()
+//        //             .mapToInt(Review::getRating)
+//        //             .average()
+//        //             .orElse(0.0);
+//        //     homestay.setRating((float) averageRating);
+//        //     homestayRepository.save(homestay);
+//        // }
+//
+//        // Map sang DTO để trả về
+//        ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
+//
+//        return new ApiResponse<>(200, "Review updated successfully", responseDTO);
+//    }
+//
+//    @Override
+//    @Transactional
+//    public ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request) {
+//        if (homestayId == null) {
+//            throw new IllegalArgumentException("Homestay ID is required");
+//        }
+//        if (request == null || request.getDailyPrices() == null || request.getDailyPrices().isEmpty()) {
+//            throw new IllegalArgumentException("Daily prices list is required");
+//        }
+//
+//        // Lấy homestay
+//        Homestay homestay = homestayRepository.findById(homestayId)
+//                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id: " + homestayId));
+//
+//        // Xử lý từng daily price trong request
+//        for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
+//            if (priceUpdate.getDay() == null || priceUpdate.getPrice() == null) {
+//                continue; // Bỏ qua nếu thiếu thông tin
+//            }
+//
+//            // Tìm hoặc tạo PricePerDay
+//            PricePerDay pricePerDay = resolvePricePerDay(priceUpdate.getDay(), priceUpdate.getPrice());
+//
+//            // Tìm HomestayDailyPrice hiện có cho homestay và pricePerDay này
+//            Optional<HomestayDailyPrice> existingDailyPrice = homestay.getListHomestayDailyPrice().stream()
+//                    .filter(hdp -> hdp.getPricePerDay() != null &&
+//                            hdp.getPricePerDay().getId().equals(pricePerDay.getId()))
+//                    .findFirst();
+//
+//            if (existingDailyPrice.isPresent()) {
+//                // Cập nhật giá nếu đã tồn tại
+//                HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+//                // Chỉ cập nhật nếu chưa được booked
+//                if (!Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+//                    dailyPrice.setPrice(priceUpdate.getPrice());
+//                    homestayDailyPricesRepository.save(dailyPrice);
+//                }
+//            } else {
+//                // Tạo mới HomestayDailyPrice
+//                HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
+//                        .price(priceUpdate.getPrice())
+//                        .isBooked(Boolean.FALSE)
+//                        .pricePerDay(pricePerDay)
+//                        .homestay(homestay)
+//                        .build();
+//                homestayDailyPricesRepository.save(newDailyPrice);
+//
+//                // Thêm vào set của homestay
+//                if (homestay.getListHomestayDailyPrice() == null) {
+//                    homestay.setListHomestayDailyPrice(new HashSet<>());
+//                }
+//                homestay.getListHomestayDailyPrice().add(newDailyPrice);
+//            }
+//        }
+//
+//        // Lưu homestay
+//        Homestay savedHomestay = homestayRepository.save(homestay);
+//
+//        // Lấy images
+//        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+//
+//        // Map sang DTO
+//        HomestayDTO responseDTO = homestayMapper.toDto(savedHomestay, images);
+//
+//        return new ApiResponse<>(200, "Homestay prices updated successfully", responseDTO);
+//    }
 
     /**
      * Tự động tạo 30 ngày giá từ ngày tạo homestay với giá basePrice

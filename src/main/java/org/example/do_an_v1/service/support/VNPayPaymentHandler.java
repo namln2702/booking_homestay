@@ -150,7 +150,7 @@ public class VNPayPaymentHandler {
             }
 
             // Update bill và transaction status
-            bill.setStatus(StatusBill.PAYMENT_FAILED);
+            bill.setStatus(StatusBill.DEPOSIT_PAID);
             transaction.setStatus(StatusTransaction.FAILED);
 
             billRepository.save(bill);
@@ -182,7 +182,7 @@ public class VNPayPaymentHandler {
         // KHÔNG unlock homestay vì đã check-in rồi
         if (bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING) {
             // Update bill và transaction status
-            bill.setStatus(StatusBill.PAYMENT_FAILED);
+            bill.setStatus(StatusBill.REMAINING_PAYMENT_FAILED);
             transaction.setStatus(StatusTransaction.FAILED);
 
             billRepository.save(bill);

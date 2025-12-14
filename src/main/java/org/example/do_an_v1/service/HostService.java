@@ -4,6 +4,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.CheckinRequest;
 import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
+import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
@@ -70,4 +71,11 @@ public interface HostService {
      * (các khiếu nại đang chờ host xử lý)
      */
     ApiResponse<?> getComplaintProcessingBills(Long hostUserId);
+
+    /**
+     * Host xử lý khiếu nại (đồng ý hoặc không đồng ý)
+     * - Đồng ý: chuyển bill status thành REFUNDED
+     * - Không đồng ý: chuyển bill status thành ADMIN_COMPLAINT_PROCESSING (để admin xử lý)
+     */
+    ApiResponse<?> processComplaint(Long hostUserId, ProcessComplaintRequest request);
 }

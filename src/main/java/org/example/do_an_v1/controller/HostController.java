@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.request.CheckinRequest;
 import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
+import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
@@ -155,6 +156,18 @@ public class HostController {
     public ApiResponse<?> getComplaintProcessingBills() {
         Long hostUserId = identityResolver.requireUserId(null);
         return hostService.getComplaintProcessingBills(hostUserId);
+    }
+
+    /**
+     * Host xử lý khiếu nại (đồng ý hoặc không đồng ý)
+     * - Đồng ý: chuyển bill status thành REFUNDED và tạo transaction REFUND
+     * - Không đồng ý: chuyển bill status thành ADMIN_COMPLAINT_PROCESSING (để admin xử lý)
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PostMapping("/complaints/process")
+    public ApiResponse<?> processComplaint(@RequestBody @Valid ProcessComplaintRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.processComplaint(hostUserId, request);
     }
 
     //  Cap nhap lai token host

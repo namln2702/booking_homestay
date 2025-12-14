@@ -442,7 +442,7 @@ public class CustomerServiceImpl implements CustomerService {
         // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
         StatusBill billStatus = bill.getStatus();
         if (billStatus != StatusBill.COMPLAINT_PENDING
-                && billStatus != StatusBill.CHECKIN_PENDING
+                && billStatus != StatusBill.REMAINING_PAYMENT_PENDING
 //                && billStatus != StatusBill.COMPLAINT_EXPIRED
                 && billStatus != StatusBill.SUCCEED) {
             return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
@@ -612,34 +612,6 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
     }
 
-    @Transactional
-    public ApiResponse<?> confirmCheckin(org.example.do_an_v1.dto.request.CheckinRequest request) {
-        if (request == null || request.getBillId() == null) {
-            throw new IllegalArgumentException("Bill ID is required");
-        }
-
-        Bill bill = billRepository.findById(request.getBillId()).orElse(null);
-        if (bill == null) {
-            return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
-        }
-
-        // Validate: Mã code phải khớp với code của bill
-        if (request.getCode() == null || !request.getCode().equals(bill.getCode())) {
-            throw new IllegalArgumentException("Invalid check-in code");
-        }
-
-        // Validate: Bill phải ở trạng thái CHECKIN_PENDING
-        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
-            throw new IllegalStateException("Bill must be in CHECKIN_PENDING status to confirm checkin. Current status: " + bill.getStatus());
-        }
-
-        // Cập nhật trạng thái bill thành COMPLAINT_PENDING
-        bill.setStatus(StatusBill.COMPLAINT_PENDING);
-        bill.setActualCheckinTime(LocalDateTime.now());
-        billRepository.save(bill);
-
-        return new ApiResponse<>(200, "Check-in confirmed successfully. Bill status changed to COMPLAINT_PENDING", null);
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -679,6 +651,8 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Customer bills retrieved successfully", billDTOS);
     }
 
+
+    // Chưa checkin đúng hạn nên bị hủy
     @Override
     @Transactional
     public ApiResponse<?> cancelBill(Long userId, Long billId) {
@@ -695,6 +669,9 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // Validate: Bill phải ở trạng thái DEPOSIT_PENDING hoặc DEPOSIT_PAID hoặc REMAINING_PAYMENT_PENDING
+        /* TODO
+        Kiểm tra xem những trạng thái nào thì được cancel bill
+         */
         if (bill.getStatus() != StatusBill.DEPOSIT_PENDING 
                 && bill.getStatus() != StatusBill.DEPOSIT_PAID 
                 && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
@@ -750,8 +727,8 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
 
-        // Cập nhật status bill thành PAYMENT_FAILED (hoặc có thể tạo status mới CANCELLED)
-        bill.setStatus(StatusBill.PAYMENT_FAILED);
+        // Cập nhật status bill thành CHECKIN_EXPIRED (hoặc có thể tạo status mới CANCELLED)
+        bill.setStatus(StatusBill.CANCELLED);
         billRepository.save(bill);
 
         String message = canRefund 

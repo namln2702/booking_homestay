@@ -3,14 +3,18 @@ package org.example.do_an_v1.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.response.BillComplaintResponse;
 import org.example.do_an_v1.dto.request.CheckinRequest;
 import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
+import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Admin;
+import org.example.do_an_v1.entity.Complaint;
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.Homestay;
 import org.example.do_an_v1.entity.HomestayDailyPrice;
@@ -28,8 +32,10 @@ import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.Bill;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.mapper.BillMapper;
+import org.example.do_an_v1.mapper.ComplaintMapper;
 import org.example.do_an_v1.repository.AdminRepository;
 import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.ComplaintRepository;
 import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.HomestayRepository;
 import org.example.do_an_v1.repository.HostRepository;
@@ -69,6 +75,7 @@ public class HostServiceImpl implements HostService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final VNPayPaymentSupport vnPayPaymentSupport;
+    private final ComplaintRepository complaintRepository;
 
     @Override
     @Transactional
@@ -250,20 +257,20 @@ public class HostServiceImpl implements HostService {
         }
 
         List<Bill> bills = billRepository.findByHomestay_Host(host);
+//
+//        // Lọc các bill đã/đang được sử dụng (logic tương tự history customer)
+//        List<Bill> filtered = bills.stream()
+//                .filter(bill -> {
+//                    StatusBill status = bill.getStatus();
+//                    return status == StatusBill.SUCCEED
+////                            || status == StatusBill.COMPLAINT_EXPIRED
+//                            || status == StatusBill.CHECKIN_EXPIRED
+//                            || status == StatusBill.COMPLAINT_PENDING
+//                            || status == StatusBill.CHECKIN_PENDING;
+//                })
+//                .toList();
 
-        // Lọc các bill đã/đang được sử dụng (logic tương tự history customer)
-        List<Bill> filtered = bills.stream()
-                .filter(bill -> {
-                    StatusBill status = bill.getStatus();
-                    return status == StatusBill.SUCCEED
-//                            || status == StatusBill.COMPLAINT_EXPIRED
-                            || status == StatusBill.CHECKIN_EXPIRED
-                            || status == StatusBill.COMPLAINT_PENDING
-                            || status == StatusBill.CHECKIN_PENDING;
-                })
-                .toList();
-
-        List<BillDTO> billDTOS = filtered.stream()
+        List<BillDTO> billDTOS = bills.stream()
                 .map(BillMapper::toDTO)
                 .toList();
 
@@ -291,16 +298,133 @@ public class HostServiceImpl implements HostService {
                 .filter(bill -> bill.getStatus() == StatusBill.HOST_COMPLAINT_PROCESSING)
                 .toList();
 
-        // Map sang DTO
-        List<BillDTO> billDTOS = complaintProcessingBills.stream()
-                .map(BillMapper::toDTO)
+        // Map sang BillComplaintResponse - chỉ chứa thông tin bill và complaint
+        List<BillComplaintResponse> responses = complaintProcessingBills.stream()
+                .map(bill -> {
+                    // Tìm complaint của bill này
+                    Complaint complaint = complaintRepository.findByBill(bill).stream()
+                            .findFirst()
+                            .orElse(null);
+                    
+                    // Map complaint sang DTO
+                    ComplaintDTO complaintDTO = complaint != null 
+                            ? ComplaintMapper.toDTO(complaint)
+                            : null;
+                    
+                    // Tạo response chỉ với bill info và complaint info
+                    return BillComplaintResponse.builder()
+                            .billId(bill.getId())
+                            .billCode(bill.getCode())
+                            .billStatus(bill.getStatus())
+                            .checkIn(bill.getCheckIn())
+                            .checkOut(bill.getCheckOut())
+                            .actualCheckinTime(bill.getActualCheckinTime())
+                            .totalAmount(bill.getTotalAmount())
+                            .billCreatedAt(bill.getCreatedAt())
+                            .complaint(complaintDTO)
+                            .build();
+                })
                 .toList();
 
-        log.info("Retrieved {} complaint processing bills for host {}", billDTOS.size(), hostUserId);
+        log.info("Retrieved {} complaint processing bills for host {}", responses.size(), hostUserId);
 
         return new ApiResponse<>(200, 
-                String.format("Retrieved %d complaint processing bills", billDTOS.size()), 
-                billDTOS);
+                String.format("Retrieved %d complaint processing bills", responses.size()), 
+                responses);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> processComplaint(Long hostUserId, ProcessComplaintRequest request) {
+        // Validate input
+        if (hostUserId == null) {
+            return new ApiResponse<>(400, "Host user ID is required", null);
+        }
+        if (request == null) {
+            return new ApiResponse<>(400, "Request is required", null);
+        }
+        if (request.getComplaintId() == null) {
+            return new ApiResponse<>(400, "Complaint ID is required", null);
+        }
+        if (request.getApproved() == null) {
+            return new ApiResponse<>(400, "Approval status is required", null);
+        }
+
+        // Tìm host
+        Host host = hostRepository.findById(hostUserId).orElse(null);
+        if (host == null) {
+            return new ApiResponse<>(404, "Host not found with id: " + hostUserId, null);
+        }
+
+        // Tìm complaint
+        Complaint complaint = complaintRepository.findById(request.getComplaintId()).orElse(null);
+        if (complaint == null) {
+            return new ApiResponse<>(404, "Complaint not found with id: " + request.getComplaintId(), null);
+        }
+
+        // Lấy bill từ complaint
+        Bill bill = complaint.getBill();
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found for this complaint", null);
+        }
+
+        // Validate: Bill phải thuộc về homestay của host này
+        if (bill.getHomestay() == null || bill.getHomestay().getHost() == null 
+                || !Objects.equals(bill.getHomestay().getHost().getId(), host.getId())) {
+            return new ApiResponse<>(403, "You can only process complaints for bills of your own homestays", null);
+        }
+
+        // Validate: Bill phải ở trạng thái HOST_COMPLAINT_PROCESSING
+        if (bill.getStatus() != StatusBill.HOST_COMPLAINT_PROCESSING) {
+            return new ApiResponse<>(400, 
+                    "Bill must be in HOST_COMPLAINT_PROCESSING status to process complaint. Current status: " + bill.getStatus(), 
+                    null);
+        }
+
+        // Xử lý theo quyết định của host
+        if (request.getApproved()) {
+            // Host đồng ý -> chuyển thành PENDING_REFUNDED và tạo transaction REFUND
+            bill.setStatus(StatusBill.PENDING_REFUNDED);
+            billRepository.save(bill);
+
+            // Tạo transaction REFUND (admin -> customer)
+            // Lấy admin user
+            User adminUser = adminRepository.findAll().stream()
+                    .map(Admin::getUser)
+                    .findFirst()
+                    .orElse(null);
+
+            if (adminUser != null && bill.getTotalAmount() != null) {
+                Transaction refundTransaction = Transaction.builder()
+                        .amount(bill.getTotalAmount())
+                        .transactionType(TypeTransaction.REFUND)
+                        .status(StatusTransaction.PENDING) // Chờ admin xác nhận
+                        .bill(bill)
+                        .fromUser(adminUser)
+                        .toUser(bill.getCustomer().getUser())
+                        .completedAt(null) // Chưa hoàn tất, chờ admin xác nhận
+                        .build();
+                transactionRepository.save(refundTransaction);
+            }
+
+            log.info("Host {} approved complaint {} for bill {}. Bill status changed to REFUNDED.", 
+                    hostUserId, request.getComplaintId(), bill.getId());
+
+            return new ApiResponse<>(200, 
+                    "Complaint approved. Bill status changed to REFUNDED. Refund transaction created.", 
+                    null);
+        } else {
+            // Host không đồng ý -> chuyển thành ADMIN_COMPLAINT_PROCESSING (để admin xử lý)
+            bill.setStatus(StatusBill.ADMIN_COMPLAINT_PROCESSING);
+            billRepository.save(bill);
+
+            log.info("Host {} rejected complaint {} for bill {}. Bill status changed to ADMIN_COMPLAINT_PROCESSING.", 
+                    hostUserId, request.getComplaintId(), bill.getId());
+
+            return new ApiResponse<>(200, 
+                    "Complaint rejected. Bill status changed to ADMIN_COMPLAINT_PROCESSING. Admin will review.", 
+                    null);
+        }
     }
 
     @Override
@@ -679,7 +803,7 @@ public class HostServiceImpl implements HostService {
         }
 
         // Validate: Bill phải ở trạng thái CHECKIN_PENDING (đã thanh toán cọc nhưng chưa check-in)
-        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+        if (bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
 

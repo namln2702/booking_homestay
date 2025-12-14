@@ -25,14 +25,12 @@ public interface HomestayService {
 
     ApiResponse<?> findHomestay(FindHomeStayDTO findHomeStayDTO);
 
-//    ApiResponse<?> getAll(int page, int size);
-    ApiResponse<?> findUserHistoryHomestays(Long userId);
 
     ApiResponse<?> detailHomestay(Long id);
-
-    ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
-
-    ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
-
-    ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request);
+//
+//    ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
+//
+//    ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
+//
+//    ApiResponse<HomestayDTO> updateHomestayPrices(Long homestayId, UpdateHomestayPriceRequest request);
 }

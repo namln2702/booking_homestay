@@ -3,7 +3,6 @@ package org.example.do_an_v1.service.impl;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.do_an_v1.configuration.VNPayConfig;
 import org.example.do_an_v1.dto.request.VNPayPaymentRequest;
 import org.example.do_an_v1.dto.request.VNPayReturnRequest;
 import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
@@ -18,31 +17,27 @@ import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.VNPayService;
-import org.example.do_an_v1.service.support.VNPayPaymentHandler;
 import org.example.do_an_v1.service.support.VNPayPaymentSupport;
 import org.example.do_an_v1.service.support.VNPayVerifyResult;
 import org.example.do_an_v1.service.support.VNPayVerifySupport;
-import org.example.do_an_v1.utils.VNPayUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class VNPayServiceImpl implements VNPayService {
 
-    private final VNPayConfig vnPayConfig;
+    private final VNPayVerifySupport vnPayVerifySupport;
+    private final VNPayPaymentSupport vnPayPaymentSupport;
     private final BillRepository billRepository;
     private final TransactionRepository transactionRepository;
     private final HomestayDailyPricesRepository homestayDailyPricesRepository;
     private final EmailService emailService;
-    private final VNPayVerifySupport vnPayVerifySupport;
-    private final VNPayPaymentSupport vnPayPaymentSupport;
-    private final VNPayPaymentHandler vnPayPaymentHandler;
 
     @Override
     @Transactional
@@ -62,161 +57,8 @@ public class VNPayServiceImpl implements VNPayService {
 
     @Override
     @Transactional
-    public ApiResponse<?> handleIpnCallback(Map<String, String> params) {
-        try {
-            log.info("Received VNPay IPN callback: {}", params);
-
-            // Xác thực chữ ký
-            if (!VNPayUtil.verifyPayment(params, vnPayConfig.getSecretKey())) {
-                log.warn("Invalid VNPay IPN signature");
-                return new ApiResponse<>(400, "Invalid signature", null);
-            }
-
-            // Lấy thông tin từ params
-            String vnp_ResponseCode = params.get("vnp_ResponseCode");
-            String vnp_TxnRef = params.get("vnp_TxnRef");
-            String vnp_TransactionStatus = params.get("vnp_TransactionStatus");
-            String vnp_Amount = params.get("vnp_Amount");
-            // Có thể sử dụng các thông tin sau để log hoặc lưu vào database nếu cần
-            // String vnp_TransactionNo = params.get("vnp_TransactionNo");
-            // String vnp_BankCode = params.get("vnp_BankCode");
-            // String vnp_PayDate = params.get("vnp_PayDate");
-
-            // Tra cứu transaction bằng orderId (vnp_TxnRef)
-            Transaction transaction = transactionRepository.findByOrderId(vnp_TxnRef).orElse(null);
-            if (transaction == null) {
-                return new ApiResponse<>(404, "Transaction not found with orderId: " + vnp_TxnRef, null);
-            }
-
-            Bill bill = transaction.getBill();
-
-            // Kiểm tra amount
-            long amountInVnd = Long.parseLong(vnp_Amount) / 100; // VNPay trả về amount tính bằng xu
-            if (amountInVnd != transaction.getAmount().longValue()) {
-                log.error("Amount mismatch. Expected: {}, Received: {}", transaction.getAmount(), amountInVnd);
-                return new ApiResponse<>(400, "Amount mismatch", null);
-            }
-
-            // Xử lý kết quả thanh toán
-            if ("00".equals(vnp_ResponseCode) && "00".equals(vnp_TransactionStatus)) {
-                // Thanh toán thành công
-                if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
-                    bill.setStatus(StatusBill.CHECKIN_PENDING);
-                    transaction.setStatus(StatusTransaction.SUCCESS);
-                    
-                    billRepository.save(bill);
-                    transactionRepository.save(transaction);
-
-                    // Gửi email mã code bill cho customer nếu có email
-                    if (bill.getCustomer() != null
-                            && bill.getCustomer().getUser() != null
-                            && bill.getCustomer().getUser().getEmail() != null) {
-                        String email = bill.getCustomer().getUser().getEmail();
-                        String code = bill.getCode();
-                        if (code != null && !code.isBlank()) {
-                            emailService.sendSimpleEmail(email, "Your booking code: " + code);
-                        }
-                    }
-
-                    log.info("Payment successful for bill {}: orderId {}", bill.getId(), vnp_TxnRef);
-                    return new ApiResponse<>(200, "Payment successful", null);
-                } else if (bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING) {
-                    // Thanh toán phần còn lại thành công -> chuyển sang COMPLAINT_PENDING
-                    bill.setStatus(StatusBill.COMPLAINT_PENDING);
-                    transaction.setStatus(StatusTransaction.SUCCESS);
-                    
-                    billRepository.save(bill);
-                    transactionRepository.save(transaction);
-
-                    log.info("Remaining payment successful for bill {}: orderId {}", bill.getId(), vnp_TxnRef);
-                    return new ApiResponse<>(200, "Remaining payment successful", null);
-                } else {
-                    log.warn("Bill {} is not in DEPOSIT_PENDING or REMAINING_PAYMENT_PENDING status. Current status: {}", bill.getId(), bill.getStatus());
-                    return new ApiResponse<>(200, "Payment already processed", null);
-                }
-            } else {
-                // Thanh toán thất bại - unlock homestay_daily_prices (chỉ khi thanh toán cọc thất bại)
-                if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
-                    // Unlock homestay_daily_prices
-                    List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
-                            .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
-                            .toList();
-
-                    for (HomestayDailyPrice dailyPrice : dailyPrices) {
-                        dailyPrice.setIsBooked(false);
-                        dailyPrice.setBill(null);
-                        homestayDailyPricesRepository.save(dailyPrice);
-                    }
-
-                    bill.setStatus(StatusBill.PAYMENT_FAILED);
-                    transaction.setStatus(StatusTransaction.FAILED);
-                    
-                    billRepository.save(bill);
-                    transactionRepository.save(transaction);
-
-                    log.info("Payment failed for bill {}: orderId {}. Daily prices unlocked.", bill.getId(), vnp_TxnRef);
-                    return new ApiResponse<>(200, "Payment failed", null);
-                }
-            }
-
-            return new ApiResponse<>(200, "IPN processed", null);
-
-        } catch (Exception e) {
-            log.error("Error processing VNPay IPN callback", e);
-            return new ApiResponse<>(500, "Error processing IPN: " + e.getMessage(), null);
-        }
-    }
-
-    @Override
-    public ApiResponse<?> handleReturnUrl(Map<String, String> params) {
-        try {
-            log.info("Received VNPay return URL: {}", params);
-
-            // Xác thực chữ ký
-            if (!VNPayUtil.verifyPayment(params, vnPayConfig.getSecretKey())) {
-                log.warn("Invalid VNPay return URL signature");
-                return new ApiResponse<>(400, "Invalid signature", null);
-            }
-
-            // Lấy thông tin từ params
-            String vnp_ResponseCode = params.get("vnp_ResponseCode");
-            String vnp_TxnRef = params.get("vnp_TxnRef");
-            String vnp_TransactionStatus = params.get("vnp_TransactionStatus");
-
-            // Tra cứu transaction bằng orderId (vnp_TxnRef)
-            Optional<Transaction> transactionOpt = transactionRepository.findByOrderId(vnp_TxnRef);
-            
-            if (transactionOpt.isEmpty()) {
-                return new ApiResponse<>(404, "Transaction not found with orderId: " + vnp_TxnRef, null);
-            }
-
-            Transaction transaction = transactionOpt.get();
-            Bill bill = transaction.getBill();
-
-            // Trả về thông tin để frontend xử lý
-            Map<String, Object> result = Map.of(
-                    "success", "00".equals(vnp_ResponseCode) && "00".equals(vnp_TransactionStatus),
-                    "billId", bill.getId(),
-                    "billCode", bill.getCode(),
-                    "transactionId", transaction.getId(),
-                    "orderId", vnp_TxnRef,
-                    "responseCode", vnp_ResponseCode,
-                    "message", "00".equals(vnp_ResponseCode) ? "Payment successful" : "Payment failed"
-            );
-
-            return new ApiResponse<>(200, "Return URL processed", result);
-
-        } catch (Exception e) {
-            log.error("Error processing VNPay return URL", e);
-            return new ApiResponse<>(500, "Error processing return URL: " + e.getMessage(), null);
-        }
-    }
-
-
-    @Override
-    @Transactional
-    public ApiResponse<?> verifyAndUpdatePayment(VNPayReturnRequest request) {
-        // Bước 1: Verify signature và validate amount (chỉ verify, không xử lý nghiệp vụ)
+    public ApiResponse<?> verifyDepositPayment(VNPayReturnRequest request) {
+        // Bước 1: Verify signature và validate amount (phần chung)
         VNPayVerifyResult verifyResult = vnPayVerifySupport.verifyPayment(request);
         
         // Kiểm tra nếu verifyResult có error (transaction not found, missing params, etc.)
@@ -224,31 +66,266 @@ public class VNPayServiceImpl implements VNPayService {
             return new ApiResponse<>(400, verifyResult.getErrorMessage(), null);
         }
         
-        // Bước 2: Xử lý nghiệp vụ dựa trên bill status
-        Map<String, Object> result;
-        Bill bill = verifyResult.getBill();
-        
-        if (bill == null) {
-            return new ApiResponse<>(400, "Bill not found", null);
-        }
-        
-        if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
-            // Xử lý verify cho thanh toán 30% đầu tiên
-            result = vnPayPaymentHandler.handleDepositPayment(verifyResult);
-        } else if (bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING) {
-            // Xử lý verify cho thanh toán 70% còn lại
-            result = vnPayPaymentHandler.handleRemainingPayment(verifyResult);
-        } else {
-            log.warn("Bill {} is not in DEPOSIT_PENDING or REMAINING_PAYMENT_PENDING status. Current status: {}", 
-                    bill.getId(), bill.getStatus());
-            return new ApiResponse<>(400, 
-                    "Bill is not in DEPOSIT_PENDING or REMAINING_PAYMENT_PENDING status. Current status: " + bill.getStatus(), 
-                    null);
-        }
-        
+        // Bước 2: Xử lý nghiệp vụ cho thanh toán 30% (deposit)
+        Map<String, Object> result = handleDepositPayment(verifyResult);
         String message = (String) result.get("message");
         
         return new ApiResponse<>(200, message, result);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> verifyRemainingPayment(VNPayReturnRequest request) {
+        // Bước 1: Verify signature và validate amount (phần chung)
+        VNPayVerifyResult verifyResult = vnPayVerifySupport.verifyPayment(request);
+        
+        // Kiểm tra nếu verifyResult có error (transaction not found, missing params, etc.)
+        if (verifyResult.getErrorMessage() != null && !verifyResult.isVerifySuccess()) {
+            return new ApiResponse<>(400, verifyResult.getErrorMessage(), null);
+        }
+        
+        // Bước 2: Xử lý nghiệp vụ cho thanh toán 70% (remaining payment)
+        Map<String, Object> result = handleRemainingPayment(verifyResult);
+        String message = (String) result.get("message");
+        
+        return new ApiResponse<>(200, message, result);
+    }
+
+    /**
+     * Xử lý verify cho thanh toán 30% đầu tiên (DEPOSIT_PENDING)
+     */
+    private Map<String, Object> handleDepositPayment(VNPayVerifyResult verifyResult) {
+        if (!verifyResult.isVerifySuccess()) {
+            // Nếu verify không thành công, xử lý failure
+            return handleDepositPaymentFailure(verifyResult);
+        }
+
+        if (!verifyResult.isPaymentSuccess()) {
+            // Nếu payment thất bại, xử lý failure
+            return handleDepositPaymentFailure(verifyResult);
+        }
+
+        Bill bill = verifyResult.getBill();
+        Transaction transaction = verifyResult.getTransaction();
+
+        // Validate: Bill phải ở trạng thái DEPOSIT_PENDING
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING) {
+            log.warn("Bill {} is not in DEPOSIT_PENDING status. Current status: {}", 
+                    bill.getId(), bill.getStatus());
+            return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                    verifyResult.getResponseCode(), 
+                    "Bill is not in DEPOSIT_PENDING status. Current status: " + bill.getStatus());
+        }
+
+        // Thanh toán cọc thành công -> chuyển sang REMAINING_PAYMENT_PENDING
+        bill.setStatus(StatusBill.REMAINING_PAYMENT_PENDING);
+        transaction.setStatus(StatusTransaction.SUCCESS);
+
+        billRepository.save(bill);
+        transactionRepository.save(transaction);
+
+        // Gửi email mã code bill cho customer
+        sendDepositPaymentSuccessEmail(bill);
+
+        log.info("Deposit payment (30%) processed successfully for bill {}: orderId {}", 
+                bill.getId(), verifyResult.getOrderId());
+
+        return buildSuccessResult(bill, transaction, verifyResult.getOrderId(), 
+                "Deposit payment (30%) verified and updated successfully");
+    }
+
+    /**
+     * Xử lý verify cho thanh toán 70% còn lại (REMAINING_PAYMENT_PENDING)
+     */
+    private Map<String, Object> handleRemainingPayment(VNPayVerifyResult verifyResult) {
+        if (!verifyResult.isVerifySuccess()) {
+            // Nếu verify không thành công, xử lý failure
+            return handleRemainingPaymentFailure(verifyResult);
+        }
+
+        if (!verifyResult.isPaymentSuccess()) {
+            // Nếu payment thất bại, xử lý failure
+            return handleRemainingPaymentFailure(verifyResult);
+        }
+
+        Bill bill = verifyResult.getBill();
+        Transaction transaction = verifyResult.getTransaction();
+
+        // Validate: Bill phải ở trạng thái REMAINING_PAYMENT_PENDING
+        if (bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
+            log.warn("Bill {} is not in REMAINING_PAYMENT_PENDING status. Current status: {}", 
+                    bill.getId(), bill.getStatus());
+            return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                    verifyResult.getResponseCode(), 
+                    "Bill is not in REMAINING_PAYMENT_PENDING status. Current status: " + bill.getStatus());
+        }
+
+        // Thanh toán phần còn lại thành công -> chuyển sang COMPLAINT_PENDING
+        bill.setStatus(StatusBill.COMPLAINT_PENDING);
+        transaction.setStatus(StatusTransaction.SUCCESS);
+
+        billRepository.save(bill);
+        transactionRepository.save(transaction);
+
+        log.info("Remaining payment (70%) processed successfully for bill {}: orderId {}", 
+                bill.getId(), verifyResult.getOrderId());
+
+        return buildSuccessResult(bill, transaction, verifyResult.getOrderId(), 
+                "Remaining payment (70%) verified and updated successfully");
+    }
+
+    /**
+     * Xử lý khi deposit payment thất bại
+     */
+    private Map<String, Object> handleDepositPaymentFailure(VNPayVerifyResult verifyResult) {
+        Bill bill = verifyResult.getBill();
+        Transaction transaction = verifyResult.getTransaction();
+
+        if (bill == null || transaction == null) {
+            log.warn("Cannot handle deposit payment failure: bill or transaction is null");
+            return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                    verifyResult.getResponseCode(), verifyResult.getErrorMessage());
+        }
+
+        // Chỉ xử lý nếu bill đang ở trạng thái DEPOSIT_PENDING
+        if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
+            // Unlock homestay_daily_prices
+            List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
+                    .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
+                    .toList();
+
+            for (HomestayDailyPrice dailyPrice : dailyPrices) {
+                dailyPrice.setIsBooked(false);
+                dailyPrice.setBill(null);
+                homestayDailyPricesRepository.save(dailyPrice);
+            }
+
+            // Update bill và transaction status
+            bill.setStatus(StatusBill.DEPOSIT_PAID);
+            transaction.setStatus(StatusTransaction.FAILED);
+
+            billRepository.save(bill);
+            transactionRepository.save(transaction);
+
+            log.info("Deposit payment failed for bill {}: {}. Daily prices unlocked.", 
+                    bill.getId(), verifyResult.getErrorMessage());
+        }
+
+        return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                verifyResult.getResponseCode(), verifyResult.getErrorMessage());
+    }
+
+    /**
+     * Xử lý khi remaining payment thất bại
+     */
+    private Map<String, Object> handleRemainingPaymentFailure(VNPayVerifyResult verifyResult) {
+        Bill bill = verifyResult.getBill();
+        Transaction transaction = verifyResult.getTransaction();
+
+        if (bill == null || transaction == null) {
+            log.warn("Cannot handle remaining payment failure: bill or transaction is null");
+            return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                    verifyResult.getResponseCode(), verifyResult.getErrorMessage());
+        }
+
+        // Chỉ xử lý nếu bill đang ở trạng thái REMAINING_PAYMENT_PENDING
+        // KHÔNG unlock homestay vì đã check-in rồi
+        if (bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING) {
+            // Update bill và transaction status
+            bill.setStatus(StatusBill.REMAINING_PAYMENT_FAILED);
+            transaction.setStatus(StatusTransaction.FAILED);
+
+            billRepository.save(bill);
+            transactionRepository.save(transaction);
+
+            log.info("Remaining payment failed for bill {}: {}.", 
+                    bill.getId(), verifyResult.getErrorMessage());
+        }
+
+        return buildFailureResult(bill, transaction, verifyResult.getOrderId(), 
+                verifyResult.getResponseCode(), verifyResult.getErrorMessage());
+    }
+
+    /**
+     * Gửi email thông báo deposit payment thành công
+     */
+    private void sendDepositPaymentSuccessEmail(Bill bill) {
+        if (bill.getCustomer() != null
+                && bill.getCustomer().getUser() != null
+                && bill.getCustomer().getUser().getEmail() != null) {
+            String email = bill.getCustomer().getUser().getEmail();
+            String code = bill.getCode();
+            String name = bill.getCustomer().getUser().getName();
+            Long billId = bill.getId();
+
+            if (code != null && !code.isBlank()) {
+                String content = String.format(
+                        "Hello %s,\n\n" +
+                                "Thank you for your booking.\n\n" +
+                                "Booking information:\n" +
+                                "- Booking code: %s\n" +
+                                "- Bill ID: %d\n\n" +
+                                "Please keep this information for your reference.\n\n" +
+                                "Best regards,\n" +
+                                "Homestay Booking System",
+                        name,
+                        code,
+                        billId
+                );
+
+                try {
+                    emailService.sendSimpleEmail(email, content);
+                } catch (Exception e) {
+                    log.error("Error sending deposit payment success email to {}", email, e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Build success result
+     */
+    private Map<String, Object> buildSuccessResult(
+            Bill bill, 
+            Transaction transaction, 
+            String orderId,
+            String message
+    ) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("billId", bill.getId());
+        result.put("billCode", bill.getCode());
+        result.put("transactionId", transaction.getId());
+        result.put("orderId", orderId);
+        result.put("message", message);
+        return result;
+    }
+
+    /**
+     * Build failure result
+     */
+    private Map<String, Object> buildFailureResult(
+            Bill bill, 
+            Transaction transaction, 
+            String orderId, 
+            String responseCode,
+            String reason
+    ) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        if (bill != null) {
+            result.put("billId", bill.getId());
+            result.put("billCode", bill.getCode());
+        }
+        if (transaction != null) {
+            result.put("transactionId", transaction.getId());
+        }
+        result.put("orderId", orderId);
+        if (responseCode != null) {
+            result.put("responseCode", responseCode);
+        }
+        result.put("message", reason != null ? reason : "Payment failed");
+        return result;
     }
 }
 

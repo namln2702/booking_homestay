@@ -14,13 +14,9 @@ public enum StatusBill {
      */
     DEPOSIT_PAID(11),
 
-    /**
-     * Khi khách đến homestay và cần nhập mã check-in (checkinCode).
-     */
-    CHECKIN_VERIFY(12),
 
     /**
-     * Khách cần thanh toán nốt phần còn lại của đơn hàng.
+     * Khách cần check in và thanh toán nốt phần còn lại của đơn hàng.
      */
     REMAINING_PAYMENT_PENDING(13),
 
@@ -28,13 +24,8 @@ public enum StatusBill {
      * Thanh toán thất bại hoặc khách không thanh toán đúng hạn.
      * Đơn bị hủy, không có giao dịch tiền.
      */
-    PAYMENT_FAILED(2),
+    REMAINING_PAYMENT_FAILED(2),
 
-    /**
-     * Khách hàng đã thanh toán đầy đủ (cọc + phần còn lại).
-     * Đơn đang chờ đến ngày check-in hoặc hoàn tất check-in.
-     */
-    CHECKIN_PENDING(3),
 
     /**
      * Khách không check-in đúng hạn.
@@ -65,6 +56,10 @@ public enum StatusBill {
      */
     ADMIN_COMPLAINT_PROCESSING(7),
 
+    /*
+       * Chờ được admin thanh toán
+     */
+    PENDING_REFUNDED(14),
     /**
      * Khiếu nại được xử lý thành công.
      * Admin hoàn tiền cho Customer (admin → customer).
@@ -81,8 +76,12 @@ public enum StatusBill {
      * Đơn hoàn tất thành công.
      * Không còn khiếu nại, admin chuyển tiền cho host.
      */
-    SUCCEED(10);
+    SUCCEED(10),
 
+    /**
+     * Đơn bị hủy
+     */
+    CANCELLED (15);
     private final int code;
 
     StatusBill(int code){
