@@ -3,6 +3,7 @@ package org.example.do_an_v1.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BookingDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -98,10 +99,36 @@ public class CustomerController {
      * Nếu muộn hơn thì không được hoàn tiền
      */
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
-    @PostMapping("/bills/{billId}/cancel")
-    public ApiResponse<?> cancelBill(@PathVariable Long billId) {
+    @PostMapping("/bills/cancel/{billId}")
+    public ApiResponse<?> cancelBill(@PathVariable(name = "billId") Long billId) {
         Long effectiveUserId = identityResolver.requireUserId(null);
         return customerService.cancelBill(effectiveUserId, billId);
+    }
+
+    /**
+     * Customer tạo khiếu nại
+     * Chỉ có thể khiếu nại trong thời gian (N + 1) ngày sau checkout
+     * N là số ngày đặt phòng (từ checkIn đến checkOut)
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PostMapping("/complaints")
+    public ApiResponse<?> createComplaint(@RequestBody @Valid ComplaintDTO complaintDTO) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.createComplaint(effectiveUserId, complaintDTO);
+    }
+
+    /**
+     * Customer cập nhật khiếu nại
+     * Chỉ có thể update khi complaint chưa được xử lý bởi admin
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @PutMapping("/complaints/{complaintId}")
+    public ApiResponse<?> updateComplaint(
+            @PathVariable Long complaintId,
+            @RequestBody @Valid ComplaintDTO complaintDTO
+    ) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.updateComplaint(effectiveUserId, complaintId, complaintDTO);
     }
 
 }

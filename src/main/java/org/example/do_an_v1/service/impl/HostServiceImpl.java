@@ -1,6 +1,7 @@
 package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -37,6 +38,9 @@ import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.repository.UserRepository;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
+import org.example.do_an_v1.service.support.VNPayPaymentSupport;
+import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -49,6 +53,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HostServiceImpl implements HostService {
@@ -63,6 +68,7 @@ public class HostServiceImpl implements HostService {
     private final PricePerDayRepository pricePerDayRepository;
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final VNPayPaymentSupport vnPayPaymentSupport;
 
     @Override
     @Transactional
@@ -265,50 +271,79 @@ public class HostServiceImpl implements HostService {
     }
 
     @Override
-    @Transactional
-    public ApiResponse<?> confirmCheckin(Long hostUserId, CheckinRequest request) {
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getComplaintProcessingBills(Long hostUserId) {
         if (hostUserId == null) {
-            throw new IllegalArgumentException("Host user ID is required");
-        }
-        if (request == null || request.getBillId() == null) {
-            throw new IllegalArgumentException("Bill ID is required");
+            return new ApiResponse<>(400, "Host user ID is required", null);
         }
 
-        Bill bill = billRepository.findById(request.getBillId())
-                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+        // Tìm host
+        Host host = hostRepository.findById(hostUserId).orElse(null);
+        if (host == null) {
+            return new ApiResponse<>(404, "Host not found with id: " + hostUserId, null);
+        }
+
+        // Lấy tất cả bills của các homestay thuộc host này
+        List<Bill> allBills = billRepository.findByHomestay_Host(host);
+
+        // Lọc các bill ở trạng thái HOST_COMPLAINT_PROCESSING
+        List<Bill> complaintProcessingBills = allBills.stream()
+                .filter(bill -> bill.getStatus() == StatusBill.HOST_COMPLAINT_PROCESSING)
+                .toList();
+
+        // Map sang DTO
+        List<BillDTO> billDTOS = complaintProcessingBills.stream()
+                .map(BillMapper::toDTO)
+                .toList();
+
+        log.info("Retrieved {} complaint processing bills for host {}", billDTOS.size(), hostUserId);
+
+        return new ApiResponse<>(200, 
+                String.format("Retrieved %d complaint processing bills", billDTOS.size()), 
+                billDTOS);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> confirmCheckin(Long hostUserId, CheckinRequest request, HttpServletRequest httpRequest) {
+        if (hostUserId == null) {
+            return new ApiResponse<>(400, "Host user ID is required", null);
+        }
+        if (request == null || request.getBillId() == null) {
+            return new ApiResponse<>(400, "Bill ID is required", null);
+        }
+
+        Bill bill = billRepository.findById(request.getBillId()).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
+        }
 
         // Validate: Bill phải có homestay
         if (bill.getHomestay() == null) {
-            throw new IllegalStateException("Bill must have a homestay associated");
+            return new ApiResponse<>(400, "Bill must have a homestay associated", null);
         }
 
         // Validate: Host phải sở hữu homestay này
         Long homestayHostId = bill.getHomestay().getHost().getId();
         if (!Objects.equals(homestayHostId, hostUserId)) {
-            throw new IllegalStateException("Host can only check-in customers for their own homestays");
+            return new ApiResponse<>(403, "Host can only check-in customers for their own homestays", null);
         }
 
-        // Validate: Bill phải ở trạng thái CHECKIN_PENDING
-        if (bill.getStatus() != StatusBill.CHECKIN_PENDING) {
-            throw new IllegalStateException("Bill must be in CHECKIN_PENDING status to confirm checkin. Current status: " + bill.getStatus());
+        // Validate: Bill phải ở trạng thái REMAINING_PAYMENT_PENDING
+        if (bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
+            return new ApiResponse<>(400, "Bill must be in REMAINING_PAYMENT_PENDING status to confirm checkin. Current status: " + bill.getStatus(), null);
         }
 
         // Tính 70% còn lại cần thanh toán
         if (bill.getTotalAmount() == null) {
-            throw new IllegalStateException("Bill total amount is not set");
+            return new ApiResponse<>(400, "Bill total amount is not set", null);
         }
 
-        // Tính tổng số tiền đã thanh toán (30% cọc)
-        double paidAmount = transactionRepository.findByBillId(bill.getId()).stream()
-                .filter(t -> t.getTransactionType() == TypeTransaction.BOOKING_PAYMENT 
-                        && t.getStatus() == StatusTransaction.SUCCESS)
-                .mapToDouble(t -> t.getAmount().doubleValue())
-                .sum();
-
         // Tính 70% còn lại
-        double remainingAmount = bill.getTotalAmount().doubleValue() - paidAmount;
+        double remainingAmount = bill.getTotalAmount().doubleValue() * 0.7;
 
         // Tạo transaction mới cho phần còn lại (70%)
+        Transaction remainingPaymentTransaction = null;
         if (remainingAmount > 0) {
             // Lấy admin user
             User adminUser = adminRepository.findAll().stream()
@@ -317,10 +352,10 @@ public class HostServiceImpl implements HostService {
                     .orElse(null);
 
             if (adminUser == null) {
-                throw new IllegalStateException("No admin user found for transaction");
+                return new ApiResponse<>(500, "No admin user found for transaction", null);
             }
 
-            Transaction remainingPaymentTransaction = Transaction.builder()
+            remainingPaymentTransaction = Transaction.builder()
                     .completedAt(LocalDateTime.now().plusMinutes(15))
                     .transactionType(TypeTransaction.BOOKING_PAYMENT)
                     .status(StatusTransaction.PENDING)
@@ -337,6 +372,36 @@ public class HostServiceImpl implements HostService {
         bill.setActualCheckinTime(LocalDateTime.now());
         billRepository.save(bill);
 
+        // Tạo payment URL cho phần 70% còn lại nếu có transaction
+        if (remainingPaymentTransaction != null && httpRequest != null) {
+            VNPayPaymentResponse paymentResponse = vnPayPaymentSupport.createPaymentUrlForTransaction(
+                    remainingPaymentTransaction,
+                    httpRequest
+            );
+
+            if (paymentResponse != null) {
+                // Trả về response với payment URL
+                return new ApiResponse<>(200, 
+                        "Check-in confirmed successfully. Please pay the remaining 70% of the bill.", 
+                        java.util.Map.of(
+                                "paymentUrl", paymentResponse.getPaymentUrl(),
+                                "orderId", paymentResponse.getOrderId(),
+                                "amount", paymentResponse.getAmount(),
+                                "message", "Please complete the payment for the remaining 70%"
+                        )
+                );
+            } else {
+                // Nếu có lỗi khi tạo payment URL, vẫn trả về success nhưng không có payment URL
+                log.error("Error creating payment URL for remaining payment. Transaction ID: {}", 
+                        remainingPaymentTransaction.getId());
+                return new ApiResponse<>(200, 
+                        "Check-in confirmed successfully. Please pay the remaining 70% of the bill. " +
+                        "Note: Payment URL generation failed. Please contact support.", 
+                        null);
+            }
+        }
+
+        // Nếu không có remaining payment hoặc không có httpRequest, trả về response thông thường
         return new ApiResponse<>(200, "Check-in confirmed successfully. Please pay the remaining 70% of the bill.", null);
     }
 
@@ -344,25 +409,49 @@ public class HostServiceImpl implements HostService {
     @Transactional
     public ApiResponse<?> confirmCheckout(CheckoutRequest request) {
         if (request == null || request.getBillId() == null) {
-            throw new IllegalArgumentException("Bill ID is required");
+            return new ApiResponse<>(400, "Bill ID is required", null);
         }
 
-        Bill bill = billRepository.findById(request.getBillId())
-                .orElseThrow(() -> new RuntimeException("Bill not found with id: " + request.getBillId()));
+        Bill bill = billRepository.findById(request.getBillId()).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
+        }
 
         // Validate: Bill phải ở trạng thái COMPLAINT_PENDING
         if (bill.getStatus() != StatusBill.COMPLAINT_PENDING) {
-            throw new IllegalStateException("Bill must be in COMPLAINT_PENDING status to confirm checkout. Current status: " + bill.getStatus());
+            return new ApiResponse<>(400, "Bill must be in COMPLAINT_PENDING status to confirm checkout. Current status: " + bill.getStatus(), null);
+        }
+
+        // Validate: Phải sau ngày check-in mới được checkout
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime checkInTime = bill.getActualCheckinTime() != null 
+                ? bill.getActualCheckinTime() 
+                : bill.getCheckIn();
+        
+        if (now.isBefore(checkInTime) || now.isEqual(checkInTime)) {
+            return new ApiResponse<>(400, "Cannot checkout before or on check-in date. Check-in time: " + checkInTime, null);
         }
 
         // Validate: Host phải sở hữu homestay này
         // (Có thể thêm validation này nếu cần)
 
+        // Unlock homestay_daily_prices - các ngày đã book giờ có thể book lại
+        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
+                .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
+                .toList();
+
+        for (HomestayDailyPrice dailyPrice : dailyPrices) {
+            dailyPrice.setIsBooked(false);
+            homestayDailyPricesRepository.save(dailyPrice);
+        }
+
         // Cập nhật trạng thái bill thành SUCCEED
         bill.setStatus(StatusBill.SUCCEED);
         billRepository.save(bill);
 
-        return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED", null);
+        log.info("Check-out confirmed for bill {}. Unlocked {} daily prices.", bill.getId(), dailyPrices.size());
+
+        return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED. Daily prices unlocked.", null);
     }
 
     @Override
@@ -615,8 +704,8 @@ public class HostServiceImpl implements HostService {
             homestayDailyPricesRepository.save(dailyPrice);
         }
 
-        // Cập nhật status bill thành PAYMENT_FAILED (không hoàn tiền)
-        bill.setStatus(StatusBill.PAYMENT_FAILED);
+//         Cập nhật status bill thành PAYMENT_FAILED (không hoàn tiền)
+        bill.setStatus(StatusBill.CHECKIN_EXPIRED);
         billRepository.save(bill);
 
         return new ApiResponse<>(200, "Bill cancelled successfully. No refund will be processed.", null);

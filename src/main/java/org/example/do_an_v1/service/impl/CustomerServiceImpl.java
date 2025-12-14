@@ -25,7 +25,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.time.temporal.ChronoUnit.DAYS;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
@@ -46,6 +48,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final TransactionRepository transactionRepository;
     private final PricePerDayRepository pricePerDayRepository;
     private final EmailService emailService;
+    private final AdminRepository adminRepository;
 
     @Override
     @Transactional
@@ -311,34 +314,34 @@ public class CustomerServiceImpl implements CustomerService {
         BillDTO billDTO = BillMapper.toDTO(billWithDetails);
 
         // Gửi email mã code
-        String emailToSend;
-        if (billWithDetails.getCustomerBookingInfo() != null && 
-            billWithDetails.getCustomerBookingInfo().getEmail() != null) {
-            // Nếu có customerBookingInfo, gửi đến email của customerBookingInfo
-            emailToSend = billWithDetails.getCustomerBookingInfo().getEmail();
-        } else {
-            // Nếu không có, gửi đến email của customer
-            emailToSend = customer.getUser().getEmail();
-        }
+//        String emailToSend;
+//        if (billWithDetails.getCustomerBookingInfo() != null &&
+//            billWithDetails.getCustomerBookingInfo().getEmail() != null) {
+//            // Nếu có customerBookingInfo, gửi đến email của customerBookingInfo
+//            emailToSend = billWithDetails.getCustomerBookingInfo().getEmail();
+//        } else {
+//            // Nếu không có, gửi đến email của customer
+//            emailToSend = customer.getUser().getEmail();
+//        }
 
         // Gửi email mã code booking
-        if (emailToSend != null && !emailToSend.trim().isEmpty()) {
-            String emailContent = String.format(
-                "Mã đặt phòng của bạn: %s\n\n" +
-                "Thông tin đặt phòng:\n" +
-                "- Homestay: %s\n" +
-                "- Check-in: %s\n" +
-                "- Check-out: %s\n" +
-                "- Mã đơn: %s\n\n" +
-                "Vui lòng sử dụng mã này để check-in.",
-                billWithDetails.getCode(),
-                homestay.getTitle(),
-                billWithDetails.getCheckIn(),
-                billWithDetails.getCheckOut(),
-                billWithDetails.getCode()
-            );
-            emailService.sendSimpleEmail(emailToSend, emailContent);
-        }
+//        if (emailToSend != null && !emailToSend.trim().isEmpty()) {
+//            String emailContent = String.format(
+//                "Mã đặt phòng của bạn: %s\n\n" +
+//                "Thông tin đặt phòng:\n" +
+//                "- Homestay: %s\n" +
+//                "- Check-in: %s\n" +
+//                "- Check-out: %s\n" +
+//                "- Mã đơn: %s\n\n" +
+//                "Vui lòng sử dụng mã này để check-in.",
+//                billWithDetails.getCode(),
+//                homestay.getTitle(),
+//                billWithDetails.getCheckIn(),
+//                billWithDetails.getCheckOut(),
+//                billWithDetails.getCode()
+//            );
+//            emailService.sendSimpleEmail(emailToSend, emailContent);
+//        }
 
         return new ApiResponse<>(200, "Save bill success", billDTO);
     }
@@ -691,10 +694,10 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(403, "You can only cancel your own bills", null);
         }
 
-        // Validate: Bill phải ở trạng thái DEPOSIT_PENDING hoặc DEPOSIT_PAID hoặc CHECKIN_PENDING
+        // Validate: Bill phải ở trạng thái DEPOSIT_PENDING hoặc DEPOSIT_PAID hoặc REMAINING_PAYMENT_PENDING
         if (bill.getStatus() != StatusBill.DEPOSIT_PENDING 
                 && bill.getStatus() != StatusBill.DEPOSIT_PAID 
-                && bill.getStatus() != StatusBill.CHECKIN_PENDING) {
+                && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
 
@@ -756,5 +759,187 @@ public class CustomerServiceImpl implements CustomerService {
                 : "Bill cancelled successfully. No refund as cancellation is less than 2 days before check-in.";
 
         return new ApiResponse<>(200, message, null);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> createComplaint(Long userId, ComplaintDTO complaintDTO) {
+        // Validate input
+        if (userId == null) {
+            return new ApiResponse<>(400, "User ID is required", null);
+        }
+        if (complaintDTO == null) {
+            return new ApiResponse<>(400, "Complaint data is required", null);
+        }
+        if (complaintDTO.getBillId() == null) {
+            return new ApiResponse<>(400, "Bill ID is required", null);
+        }
+        if (complaintDTO.getDescription() == null || complaintDTO.getDescription().trim().isEmpty()) {
+            return new ApiResponse<>(400, "Description is required", null);
+        }
+
+        // Tìm bill
+        Bill bill = billRepository.findById(complaintDTO.getBillId()).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + complaintDTO.getBillId(), null);
+        }
+
+        // Validate: Bill phải thuộc về customer này
+        Customer customer = customerRepository.findByUser(userRepository.findById(userId).orElse(null));
+        if (customer == null || !Objects.equals(bill.getCustomer().getId(), customer.getId())) {
+            return new ApiResponse<>(403, "You can only create complaints for your own bills", null);
+        }
+
+        // Validate: Bill phải ở trạng thái COMPLAINT_PENDING (sau checkout)
+        if (bill.getStatus() != StatusBill.COMPLAINT_PENDING && bill.getStatus() != StatusBill.SUCCEED) {
+            return new ApiResponse<>(400, "Bill must be in COMPLAINT_PENDING status to create complaint. Current status: " + bill.getStatus(), null);
+        }
+
+        // Tính N = số ngày đặt phòng (từ checkIn đến checkOut)
+        LocalDateTime checkIn = bill.getCheckIn();
+        LocalDateTime checkOut = bill.getCheckOut();
+        long numberOfDays = DAYS.between(checkIn.toLocalDate(), checkOut.toLocalDate());
+        
+        // Thời gian cho phép khiếu nại: (N + 1) ngày sau checkout
+        LocalDateTime checkoutTime = bill.getCheckOut();
+        LocalDateTime complaintDeadline = checkoutTime.plusDays(numberOfDays + 1);
+        LocalDateTime now = LocalDateTime.now();
+
+        // Kiểm tra xem có trong thời gian cho phép khiếu nại không
+        if (now.isAfter(complaintDeadline)) {
+            return new ApiResponse<>(422, 
+                    String.format("Complaint deadline has passed. You can only file a complaint within %d days after checkout. Deadline: %s", 
+                            numberOfDays + 1, complaintDeadline), 
+                    null);
+        }
+
+        // Kiểm tra xem đã có complaint cho bill này chưa
+//        List<Complaint> existingComplaints = complaintRepository.findByBill(bill);
+//        if (!existingComplaints.isEmpty()) {
+//            return new ApiResponse<>(400, "A complaint already exists for this bill", null);
+//        }
+
+        // Lấy admin đầu tiên để assign vào complaint (theo yêu cầu entity)
+        Admin admin = adminRepository.findAll().stream()
+                .findFirst()
+                .orElse(null);
+        if (admin == null) {
+            return new ApiResponse<>(500, "No admin found to process complaint", null);
+        }
+
+        // Lưu images
+        Set<Image> images = new HashSet<>();
+        if (complaintDTO.getImageUrls() != null && !complaintDTO.getImageUrls().isEmpty()) {
+            complaintDTO.getImageUrls().forEach(imageUrl -> {
+                if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+                    Image image = Image.builder()
+                            .image_url(imageUrl)
+                            .build();
+                    images.add(imageRepository.save(image));
+                }
+            });
+        }
+
+        // Tạo complaint
+        Complaint complaint = Complaint.builder()
+                .bill(bill)
+                .admin(admin)
+                .description(complaintDTO.getDescription())
+                .listImage(images)
+                .build();
+
+        Complaint savedComplaint = complaintRepository.save(complaint);
+
+        // Cập nhật status bill (nếu cần - có thể đã là HOST_COMPLAINT_PROCESSING rồi)
+        bill.setStatus(StatusBill.HOST_COMPLAINT_PROCESSING);
+        billRepository.save(bill);
+
+        log.info("Complaint created successfully for bill {} by customer {}. Days allowed: {}, Deadline: {}", 
+                bill.getId(), userId, numberOfDays + 1, complaintDeadline);
+
+        // Map entity sang DTO để tránh circular reference
+        ComplaintDTO resultDTO = ComplaintMapper.toDTO(savedComplaint);
+
+        return new ApiResponse<>(200, "Complaint created successfully", resultDTO);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> updateComplaint(Long userId, Long complaintId, ComplaintDTO complaintDTO) {
+        // Validate input
+        if (userId == null) {
+            return new ApiResponse<>(400, "User ID is required", null);
+        }
+        if (complaintId == null) {
+            return new ApiResponse<>(400, "Complaint ID is required", null);
+        }
+        if (complaintDTO == null) {
+            return new ApiResponse<>(400, "Complaint data is required", null);
+        }
+        if (complaintDTO.getDescription() == null || complaintDTO.getDescription().trim().isEmpty()) {
+            return new ApiResponse<>(400, "Description is required", null);
+        }
+
+        // Tìm complaint
+        Complaint complaint = complaintRepository.findById(complaintId).orElse(null);
+        if (complaint == null) {
+            return new ApiResponse<>(404, "Complaint not found with id: " + complaintId, null);
+        }
+
+        // Validate: Complaint phải thuộc về customer này
+        Bill bill = complaint.getBill();
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found for this complaint", null);
+        }
+
+        Customer customer = customerRepository.findByUser(userRepository.findById(userId).orElse(null));
+        if (customer == null || !Objects.equals(bill.getCustomer().getId(), customer.getId())) {
+            return new ApiResponse<>(403, "You can only update your own complaints", null);
+        }
+
+        // Validate: Chỉ có thể update khi bill ở trạng thái COMPLAINT_PENDING hoặc HOST_COMPLAINT_PROCESSING
+        // (chưa được xử lý bởi admin)
+        if ( bill.getStatus() != StatusBill.HOST_COMPLAINT_PROCESSING) {
+            return new ApiResponse<>(400, 
+                    "Cannot update complaint. Bill is already being processed by admin or has been resolved. Current status: " + bill.getStatus(), 
+                    null);
+        }
+
+        // Cập nhật description
+        complaint.setDescription(complaintDTO.getDescription());
+
+        // Cập nhật images nếu có
+        if (complaintDTO.getImageUrls() != null) {
+            // Xóa các images cũ liên quan đến complaint này
+            Set<Image> oldImages = complaint.getListImage();
+            if (oldImages != null && !oldImages.isEmpty()) {
+                for (Image oldImage : oldImages) {
+                    oldImage.setComplaint(null);
+                    imageRepository.save(oldImage);
+                }
+            }
+
+            // Tạo images mới
+            Set<Image> newImages = new HashSet<>();
+            complaintDTO.getImageUrls().forEach(imageUrl -> {
+                if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+                    Image image = Image.builder()
+                            .image_url(imageUrl)
+                            .complaint(complaint)
+                            .build();
+                    newImages.add(imageRepository.save(image));
+                }
+            });
+            complaint.setListImage(newImages);
+        }
+
+        Complaint updatedComplaint = complaintRepository.save(complaint);
+
+        log.info("Complaint {} updated successfully by customer {}", complaintId, userId);
+
+        // Map entity sang DTO để tránh circular reference
+        ComplaintDTO resultDTO = ComplaintMapper.toDTO(updatedComplaint);
+
+        return new ApiResponse<>(200, "Complaint updated successfully", resultDTO);
     }
 }

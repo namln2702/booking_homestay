@@ -9,6 +9,7 @@ import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 public interface HostService {
@@ -33,7 +34,7 @@ public interface HostService {
      */
     ApiResponse<?> getBillsForHostHomestays(Long hostUserId);
 
-    ApiResponse<?> confirmCheckin(Long hostUserId, CheckinRequest request);
+    ApiResponse<?> confirmCheckin(Long hostUserId, CheckinRequest request, HttpServletRequest httpRequest);
 
     ApiResponse<?> confirmCheckout(CheckoutRequest request);
 
@@ -63,4 +64,10 @@ public interface HostService {
      * Sau 3h từ thời gian check-in, host có thể hủy và không cần hoàn tiền
      */
     ApiResponse<?> cancelBill(Long hostUserId, Long billId);
+
+    /**
+     * Host lấy danh sách các bill ở trạng thái HOST_COMPLAINT_PROCESSING
+     * (các khiếu nại đang chờ host xử lý)
+     */
+    ApiResponse<?> getComplaintProcessingBills(Long hostUserId);
 }

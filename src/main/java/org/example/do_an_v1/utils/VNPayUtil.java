@@ -62,6 +62,7 @@ public class VNPayUtil {
             // ✅ hashData: PHẢI encode giá trị theo US_ASCII (theo yêu cầu VNPay)
             hashData.append(fieldName)
                     .append('=')
+//                    .append(fieldValue);
                     .append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
 
             // ✅ query: encode cả tên và giá trị theo UTF-8
@@ -130,7 +131,8 @@ public class VNPayUtil {
                 // Giống như khi tạo payment URL
                 hashData.append(fieldName)
                         .append('=')
-                        .append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
+                        .append(fieldValue);
+//                        .append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
 
                 // Thêm & nếu không phải field cuối cùng
                 if (i < validFields.size() - 1) {

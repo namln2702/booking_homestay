@@ -3,23 +3,22 @@ package org.example.do_an_v1.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.do_an_v1.dto.request.PaymentNotificationRequest;
+import org.example.do_an_v1.dto.request.CreatePaymentUrlRequest;
 import org.example.do_an_v1.dto.request.VNPayPaymentRequest;
 import org.example.do_an_v1.dto.request.VNPayReturnRequest;
+import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
 import org.example.do_an_v1.payload.ApiResponse;
-import org.example.do_an_v1.service.PaymentService;
 import org.example.do_an_v1.service.VNPayService;
+import org.example.do_an_v1.service.support.VNPayPaymentSupport;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RequestMapping("/payment")
 @RestController
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PaymentService paymentService;
     private final VNPayService vnPayService;
+    private final VNPayPaymentSupport vnPayPaymentSupport;
 
     /**
      * API nhận thông báo về quá trình thanh toán từ payment gateway
@@ -32,7 +31,7 @@ public class PaymentController {
 //    }
 
     /**
-     * Tạo payment URL từ VNPay
+     * Tạo payment URL từ VNPay (API cũ - giữ lại để tương thích)
      * @param request Thông tin thanh toán (billId)
      * @param httpRequest HTTP request để lấy IP address
      * @return Payment URL từ VNPay
@@ -42,6 +41,49 @@ public class PaymentController {
                                             HttpServletRequest httpRequest) {
         return vnPayService.createPaymentUrl(request, httpRequest);
     }
+
+    /**
+     * Tạo payment URL từ VNPay (API mới - linh hoạt hơn)
+     * Có thể truyền billId hoặc transactionId
+     * 
+     * @param request Thông tin thanh toán (billId hoặc transactionId)
+     * @param httpRequest HTTP request để lấy IP address
+     * @return Payment URL từ VNPay
+     */
+//    @PostMapping("/vnpay/create-url")
+//    public ApiResponse<VNPayPaymentResponse> createPaymentUrl(
+//            @RequestBody @Valid CreatePaymentUrlRequest request,
+//            HttpServletRequest httpRequest
+//    ) {
+//        try {
+//            VNPayPaymentResponse response;
+//
+//            if (request.getTransactionId() != null) {
+//                // Tạo payment URL cho transaction cụ thể
+//                response = vnPayPaymentSupport.createPaymentUrlForTransactionId(
+//                        request.getTransactionId(),
+//                        httpRequest
+//                );
+//            } else if (request.getBillId() != null) {
+//                // Tạo payment URL cho bill (tự động tìm transaction PENDING)
+//                response = vnPayPaymentSupport.createPaymentUrlForBill(
+//                        request.getBillId(),
+//                        httpRequest
+//                );
+//            } else {
+//                return new ApiResponse<>(400, "Either billId or transactionId is required", null);
+//            }
+//
+//            return new ApiResponse<>(200, "Payment URL created successfully", response);
+//
+//        } catch (IllegalArgumentException e) {
+//            return new ApiResponse<>(400, e.getMessage(), null);
+//        } catch (IllegalStateException e) {
+//            return new ApiResponse<>(400, e.getMessage(), null);
+//        } catch (Exception e) {
+//            return new ApiResponse<>(500, "Error creating payment URL: " + e.getMessage(), null);
+//        }
+//    }
 
     /**
      * Xử lý IPN callback từ VNPay

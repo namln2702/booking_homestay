@@ -80,9 +80,10 @@ public class HostController {
      */
     @PreAuthorize("hasAuthority('ROLE_HOST')")
     @PostMapping("/checkin")
-    public ApiResponse<?> confirmCheckin(@RequestBody @Valid CheckinRequest request) {
+    public ApiResponse<?> confirmCheckin(@RequestBody @Valid CheckinRequest request,
+                                        jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long hostUserId = identityResolver.requireUserId(null);
-        return hostService.confirmCheckin(hostUserId, request);
+        return hostService.confirmCheckin(hostUserId, request, httpRequest);
     }
 
     /**
@@ -143,6 +144,17 @@ public class HostController {
     public ApiResponse<?> cancelBill(@PathVariable Long billId) {
         Long effectiveUserId = identityResolver.requireUserId(null);
         return hostService.cancelBill(effectiveUserId, billId);
+    }
+
+    /**
+     * Host lấy danh sách các bill ở trạng thái HOST_COMPLAINT_PROCESSING
+     * (các khiếu nại đang chờ host xử lý)
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/bills/complaint-processing")
+    public ApiResponse<?> getComplaintProcessingBills() {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getComplaintProcessingBills(hostUserId);
     }
 
     //  Cap nhap lai token host
