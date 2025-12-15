@@ -2,36 +2,25 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
-import org.example.do_an_v1.entity.ConfirmEmail;
-import org.example.do_an_v1.entity.Admin;
-import org.example.do_an_v1.entity.Host;
-import org.example.do_an_v1.entity.User;
-import org.example.do_an_v1.enums.LevelAdmin;
-import org.example.do_an_v1.enums.RoleUser;
-import org.example.do_an_v1.enums.Status;
-import org.example.do_an_v1.enums.StatusHost;
-import org.example.do_an_v1.enums.StatusTransaction;
-import org.example.do_an_v1.enums.TypeTransaction;
+import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
+import org.example.do_an_v1.entity.*;
+import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
+import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
-import org.example.do_an_v1.repository.AdminRepository;
-import org.example.do_an_v1.repository.ConfirmEmailRepository;
-import org.example.do_an_v1.repository.HostRepository;
-import org.example.do_an_v1.repository.TransactionRepository;
-import org.example.do_an_v1.repository.UserRepository;
+import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.EmailService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import org.example.do_an_v1.entity.Transaction;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -49,10 +38,15 @@ public class AdminServiceImpl implements AdminService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final HostRepository hostRepository;
+    private final HomestayRepository homestayRepository;
+    private final HomestayImageRepository homestayImageRepository;
     private final ConfirmEmailRepository confirmEmailRepository;
+    private final BillRepository billRepository;
+    private final ComplaintRepository complaintRepository;
     private final TransactionRepository transactionRepository;
     private final EmailService emailService;
     private final ProfileMapper profileMapper;
+    private final HomestayMapper homestayMapper;
 
     @Override
     @Transactional
@@ -197,6 +191,73 @@ public class AdminServiceImpl implements AdminService {
         return new ApiResponse<>(200, "Host approved successfully", profileMapper.toHostDTO(savedHost));
     }
 
+
+    @Override
+    @Transactional
+    public ApiResponse<HomestayDTO> approveHomestay(Long homestayId, Boolean approve) {
+
+        if (homestayId == null) {
+            throw new IllegalArgumentException("Homestay id is required");
+        }
+        if (approve == null) {
+            return new ApiResponse<>(400, "Approval decision is required", null);
+        }
+
+//        Admin admin = adminRepository.findById(adminUserId)
+//                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
+
+//        if (admin.getStatus() != Status.ACTIVE) {
+//            return new ApiResponse<>(403, "Admin account is not active", null);
+//        }
+
+        Homestay homestay = homestayRepository.findById(homestayId)
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
+
+        if (homestay.getStatusHomestay() != StatusHomestay.PENDING) {
+            return new ApiResponse<>(409, "Homestay is not in a pending state", null);
+        }
+
+        if (Boolean.TRUE.equals(approve)) {
+            homestay.setStatusHomestay(StatusHomestay.ACTIVE);
+        } else {
+            homestay.setStatusHomestay(StatusHomestay.CANCEL);
+        }
+
+        Homestay savedHomestay = homestayRepository.save(homestay);
+
+        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+        HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
+
+        String message = Boolean.TRUE.equals(approve)
+                ? "Homestay approved successfully"
+                : "Homestay rejected successfully";
+
+        return new ApiResponse<>(200, message, response);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<HomestayDTO> updateHomestayStatus( Long homestayId, StatusHomestay status) {
+
+        if (homestayId == null) {
+            throw new IllegalArgumentException("Homestay id is required");
+        }
+        if (status == null) {
+            return new ApiResponse<>(400, "StatusHomestay is required", null);
+        }
+
+        Homestay homestay = homestayRepository.findById(homestayId)
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
+
+        homestay.setStatusHomestay(status);
+        Homestay savedHomestay = homestayRepository.save(homestay);
+
+        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+        HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
+
+        return new ApiResponse<>(200, "Homestay status updated successfully", response);
+    }
+
     private Admin requireActiveAdmin(Long adminUserId) {
         if (adminUserId == null) {
             throw new IllegalArgumentException("Admin user id is required");
@@ -264,6 +325,94 @@ public class AdminServiceImpl implements AdminService {
         transactionRepository.save(transaction);
 
         return new ApiResponse<>(200, "Refund confirmed successfully", mapToTransactionDTO(transaction));
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> processComplaintRefund(Long adminUserId, ProcessComplaintRefundRequest request) {
+        // Validate admin
+        Admin admin = requireActiveAdmin(adminUserId);
+        if (admin == null) {
+            return new ApiResponse<>(403, "Admin account is not active", null);
+        }
+
+        // Validate input
+        if (request == null || request.getComplaintId() == null) {
+            return new ApiResponse<>(400, "Complaint ID is required", null);
+        }
+        if (request.getApproved() == null) {
+            return new ApiResponse<>(400, "Approval decision is required", null);
+        }
+
+        // Tìm complaint
+        Complaint complaint = complaintRepository.findById(request.getComplaintId()).orElse(null);
+        if (complaint == null) {
+            return new ApiResponse<>(404, "Complaint not found with id: " + request.getComplaintId(), null);
+        }
+
+        // Lấy bill từ complaint
+        Bill bill = complaint.getBill();
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found for this complaint", null);
+        }
+
+        // Validate: Bill phải ở trạng thái ADMIN_COMPLAINT_PROCESSING
+        if (bill.getStatus() != StatusBill.ADMIN_COMPLAINT_PROCESSING) {
+            return new ApiResponse<>(400, 
+                    "Bill must be in ADMIN_COMPLAINT_PROCESSING status. Current status: " + bill.getStatus(), 
+                    null);
+        }
+
+        // Xử lý theo quyết định
+        if (Boolean.TRUE.equals(request.getApproved())) {
+            // Đồng ý: chuyển bill sang REFUNDED và tạo transaction REFUND mới
+            if (bill.getTotalAmount() == null) {
+                return new ApiResponse<>(400, "Bill total amount is not set", null);
+            }
+
+            // Lấy admin user để tạo transaction
+            User adminUser = admin.getUser();
+            if (adminUser == null) {
+                return new ApiResponse<>(500, "Admin user not found", null);
+            }
+
+            // Tạo transaction REFUND mới (admin -> customer)
+            Transaction refundTransaction = Transaction.builder()
+                    .amount(bill.getTotalAmount())
+                    .transactionType(TypeTransaction.REFUND)
+                    .status(StatusTransaction.SUCCESS) // Admin đã duyệt nên thành công luôn
+                    .bill(bill)
+                    .fromUser(adminUser)
+                    .toUser(bill.getCustomer().getUser())
+                    .completedAt(LocalDateTime.now())
+                    .build();
+            transactionRepository.save(refundTransaction);
+
+            // Cập nhật bill sang REFUNDED
+            bill.setStatus(StatusBill.REFUNDED);
+            billRepository.save(bill);
+
+            return new ApiResponse<>(200, 
+                    "Complaint approved. Bill status changed to REFUNDED. Refund transaction created.", 
+                    java.util.Map.of(
+                            "billId", bill.getId(),
+                            "billStatus", bill.getStatus(),
+                            "transactionId", refundTransaction.getId(),
+                            "transactionStatus", refundTransaction.getStatus(),
+                            "amount", refundTransaction.getAmount()
+                    ));
+        } else {
+            // Từ chối: chuyển bill sang REJECTED (không tạo transaction)
+            bill.setStatus(StatusBill.REJECTED);
+            billRepository.save(bill);
+
+            return new ApiResponse<>(200, 
+                    "Complaint rejected. Bill status changed to REJECTED.", 
+                    java.util.Map.of(
+                            "billId", bill.getId(),
+                            "billStatus", bill.getStatus()
+                    ));
+        }
     }
 
     /**

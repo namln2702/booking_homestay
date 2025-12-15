@@ -28,7 +28,7 @@ public class HomestayController {
 
     @GetMapping("/all")
     public ApiResponse<?> homestays(
-            @RequestParam(name = "status" , defaultValue = "ACTIVE") StatusHomestay statusHomestay,
+            @RequestParam(name = "status", required = false ) StatusHomestay statusHomestay,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ){

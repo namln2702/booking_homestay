@@ -173,36 +173,6 @@ public class HomestayServiceImpl implements HomestayService {
         return new ApiResponse<>(200, "Homestay detail retrieved successfully", response);
     }
 
-    @Override
-    @Transactional
-    public ApiResponse<HomestayDTO> approveHomestay(Long adminUserId, Long homestayId) {
-        if (adminUserId == null) {
-            throw new IllegalArgumentException("Admin user id is required");
-        }
-
-        Admin admin = adminRepository.findById(adminUserId)
-                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
-
-        if (admin.getStatus() != Status.ACTIVE) {
-            return new ApiResponse<>(403, "Admin account is not active", null);
-        }
-
-        Homestay homestay = homestayRepository.findById(homestayId)
-                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
-
-        if (homestay.getStatusHomestay() != StatusHomestay.PENDING) {
-            return new ApiResponse<>(409, "Homestay is not in a pending state", null);
-        }
-
-        homestay.setStatusHomestay(StatusHomestay.ACTIVE);
-        Homestay savedHomestay = homestayRepository.save(homestay);
-
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
-        HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
-
-        return new ApiResponse<>(200, "Homestay approved successfully", response);
-    }
-
     private void validateRequest(HomestayCreateRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Request payload is required");
@@ -439,9 +409,9 @@ public class HomestayServiceImpl implements HomestayService {
                 .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + id));
 
         // Chỉ trả về homestay có status ACTIVE cho public
-        if (homestay.getStatusHomestay() != StatusHomestay.ACTIVE) {
-            return new ApiResponse<>(404, "Homestay is not available", null);
-        }
+//        if (homestay.getStatusHomestay() != StatusHomestay.ACTIVE) {
+//            return new ApiResponse<>(404, "Homestay is not available", null);
+//        }
 
         // Lấy images của homestay
         List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);

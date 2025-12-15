@@ -53,6 +53,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
@@ -383,8 +384,8 @@ public class HostServiceImpl implements HostService {
 
         // Xử lý theo quyết định của host
         if (request.getApproved()) {
-            // Host đồng ý -> chuyển thành PENDING_REFUNDED và tạo transaction REFUND
-            bill.setStatus(StatusBill.PENDING_REFUNDED);
+            // Host đồng ý -> chuyển thành REFUNDED và tạo transaction REFUND
+            bill.setStatus(StatusBill.REFUNDED);
             billRepository.save(bill);
 
             // Tạo transaction REFUND (admin -> customer)
@@ -458,6 +459,16 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(400, "Bill must be in REMAINING_PAYMENT_PENDING status to confirm checkin. Current status: " + bill.getStatus(), null);
         }
 
+        if (bill.getCheckIn() == null) {
+            return new ApiResponse<>(400, "Bill does not have check-in date", null);
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate checkInDate = bill.getCheckIn().toLocalDate();
+        if (!today.isEqual(checkInDate)) {
+            return new ApiResponse<>(400, "Check-in is only allowed on the scheduled date: " + checkInDate, null);
+        }
+
         // Tính 70% còn lại cần thanh toán
         if (bill.getTotalAmount() == null) {
             return new ApiResponse<>(400, "Bill total amount is not set", null);
@@ -481,7 +492,7 @@ public class HostServiceImpl implements HostService {
 
             remainingPaymentTransaction = Transaction.builder()
                     .completedAt(LocalDateTime.now().plusMinutes(15))
-                    .transactionType(TypeTransaction.BOOKING_PAYMENT)
+                    .transactionType(TypeTransaction.CUSTOMER_PAYMENT_ADMIN_SECOND)
                     .status(StatusTransaction.PENDING)
                     .bill(bill)
                     .fromUser(bill.getCustomer().getUser())

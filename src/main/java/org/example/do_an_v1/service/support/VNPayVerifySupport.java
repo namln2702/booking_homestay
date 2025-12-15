@@ -10,15 +10,11 @@ import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.utils.VNPayUtil;
 import org.springframework.stereotype.Component;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
-/**
- * Component hỗ trợ xác thực thanh toán VNPay
- * CHỈ làm việc verify signature và validate amount
- * Nghiệp vụ xử lý (update status, unlock homestay, send email) sẽ được xử lý riêng
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -27,39 +23,26 @@ public class VNPayVerifySupport {
     private final VNPayConfig vnPayConfig;
     private final TransactionRepository transactionRepository;
 
-    /**
-     * Verify payment từ VNPay
-     * CHỈ làm việc verify signature và validate amount
-     * KHÔNG xử lý nghiệp vụ (update status, unlock homestay, send email)
-     *
-     * @param request VNPayReturnRequest từ FE
-     * @return VNPayVerifyResult chứa kết quả verify
-     * @throws IllegalArgumentException nếu request không hợp lệ hoặc transaction không tồn tại
-     */
     public VNPayVerifyResult verifyPayment(VNPayReturnRequest request) {
-        log.info("Verifying payment: orderId={}, responseCode={}",
+        log.info("Verifying VNPay payment: orderId={}, responseCode={}",
                 request.getVnp_TxnRef(), request.getVnp_ResponseCode());
 
-        // Tra cứu transaction bằng orderId
-        Optional<Transaction> transactionOpt = transactionRepository.findByOrderId(request.getVnp_TxnRef());
-        if (transactionOpt.isEmpty()) {
-            log.error("Transaction not found with orderId: {}", request.getVnp_TxnRef());
+        Transaction transaction = transactionRepository.findByOrderId(request.getVnp_TxnRef())
+                .orElse(null);
+        if (transaction == null) {
             return VNPayVerifyResult.builder()
                     .signatureValid(false)
                     .amountValid(false)
                     .paymentSuccess(false)
                     .orderId(request.getVnp_TxnRef())
-                    .errorMessage("Transaction not found with orderId: " + request.getVnp_TxnRef())
+                    .errorMessage("Transaction not found")
                     .build();
         }
 
-        Transaction transaction = transactionOpt.get();
         Bill bill = transaction.getBill();
 
-        // Build params map để verify signature
         Map<String, String> params = buildParamsMap(request);
 
-        // Validate required parameters
         if (!validateRequiredParams(params, request.getVnp_TxnRef())) {
             return VNPayVerifyResult.builder()
                     .transaction(transaction)
@@ -72,27 +55,13 @@ public class VNPayVerifySupport {
                     .build();
         }
 
-        // Verify signature
         boolean signatureValid = verifySignature(params, request.getVnp_TxnRef());
+        String amountError = validateAmount(request, transaction);
+        boolean amountValid = amountError == null;
+        boolean paymentSuccess = "00".equals(request.getVnp_ResponseCode()) &&
+                "00".equals(request.getVnp_TransactionStatus());
 
-        // Validate amount
-        boolean amountValid = false;
-        String amountError = null;
-        String validationError = validateAmount(request, transaction);
-        if (validationError == null) {
-            amountValid = true;
-        } else {
-            amountError = validationError;
-            log.warn("Amount validation failed for orderId: {}. Error: {}",
-                    request.getVnp_TxnRef(), amountError);
-        }
-
-        // Kiểm tra payment có thành công không
-        boolean paymentSuccess = "00".equals(request.getVnp_ResponseCode())
-                && "00".equals(request.getVnp_TransactionStatus());
-
-        // Build result
-        VNPayVerifyResult.VNPayVerifyResultBuilder resultBuilder = VNPayVerifyResult.builder()
+        VNPayVerifyResult.VNPayVerifyResultBuilder builder = VNPayVerifyResult.builder()
                 .transaction(transaction)
                 .bill(bill)
                 .signatureValid(signatureValid)
@@ -103,125 +72,80 @@ public class VNPayVerifySupport {
                 .orderId(request.getVnp_TxnRef());
 
         if (!signatureValid) {
-            resultBuilder.errorMessage("Invalid signature");
+            builder.errorMessage("Invalid signature");
         } else if (!amountValid) {
-            resultBuilder.errorMessage(amountError);
+            builder.errorMessage(amountError);
         }
 
-        VNPayVerifyResult result = resultBuilder.build();
+        VNPayVerifyResult result = builder.build();
 
         if (result.isVerifySuccess()) {
-            log.info("Payment verified successfully for orderId: {} (signature: {}, amount: {}, payment: {})",
-                    request.getVnp_TxnRef(), signatureValid, amountValid, paymentSuccess);
+            log.info("VNPay verify SUCCESS for orderId={}", request.getVnp_TxnRef());
         } else {
-            log.warn("Payment verification failed for orderId: {} (signature: {}, amount: {})",
+            log.warn("VNPay verify FAILED for orderId={} (signature={}, amount={})",
                     request.getVnp_TxnRef(), signatureValid, amountValid);
         }
 
         return result;
     }
 
-    /**
-     * Build params map từ VNPayReturnRequest
-     */
     private Map<String, String> buildParamsMap(VNPayReturnRequest request) {
         Map<String, String> params = new HashMap<>();
 
-        // Các tham số BẮT BUỘC - chỉ thêm nếu có giá trị
-        if (request.getVnp_TmnCode() != null && !request.getVnp_TmnCode().isEmpty()) {
-            params.put("vnp_TmnCode", request.getVnp_TmnCode());
-        }
-        if (request.getVnp_TxnRef() != null && !request.getVnp_TxnRef().isEmpty()) {
-            params.put("vnp_TxnRef", request.getVnp_TxnRef());
-        }
-        if (request.getVnp_ResponseCode() != null && !request.getVnp_ResponseCode().isEmpty()) {
-            params.put("vnp_ResponseCode", request.getVnp_ResponseCode());
-        }
-        if (request.getVnp_TransactionStatus() != null && !request.getVnp_TransactionStatus().isEmpty()) {
-            params.put("vnp_TransactionStatus", request.getVnp_TransactionStatus());
-        }
-        if (request.getVnp_Amount() != null && !request.getVnp_Amount().isEmpty()) {
-            params.put("vnp_Amount", request.getVnp_Amount());
-        }
-        if (request.getVnp_BankCode() != null && !request.getVnp_BankCode().isEmpty()) {
-            params.put("vnp_BankCode", request.getVnp_BankCode());
-        }
-        if (request.getVnp_OrderInfo() != null && !request.getVnp_OrderInfo().isEmpty()) {
-            params.put("vnp_OrderInfo", request.getVnp_OrderInfo());
-        }
-        if (request.getVnp_TransactionNo() != null && !request.getVnp_TransactionNo().isEmpty()) {
-            params.put("vnp_TransactionNo", request.getVnp_TransactionNo());
-        }
+        put(params, "vnp_TmnCode", request.getVnp_TmnCode());
+        put(params, "vnp_TxnRef", request.getVnp_TxnRef());
+        put(params, "vnp_ResponseCode", request.getVnp_ResponseCode());
+        put(params, "vnp_TransactionStatus", request.getVnp_TransactionStatus());
+        put(params, "vnp_Amount", request.getVnp_Amount());
+        put(params, "vnp_BankCode", request.getVnp_BankCode());
+        put(params, "vnp_OrderInfo", request.getVnp_OrderInfo());
+        put(params, "vnp_TransactionNo", request.getVnp_TransactionNo());
+        put(params, "vnp_SecureHash", request.getVnp_SecureHash());
 
-        // vnp_SecureHash phải được thêm vào để verifyPayment có thể lấy ra
-        if (request.getVnp_SecureHash() != null && !request.getVnp_SecureHash().isEmpty()) {
-            params.put("vnp_SecureHash", request.getVnp_SecureHash());
-        }
-
-        // Các tham số TÙY CHỌN
-        if (request.getVnp_BankTranNo() != null && !request.getVnp_BankTranNo().isEmpty()) {
-            params.put("vnp_BankTranNo", request.getVnp_BankTranNo());
-        }
-        if (request.getVnp_CardType() != null && !request.getVnp_CardType().isEmpty()) {
-            params.put("vnp_CardType", request.getVnp_CardType());
-        }
-        if (request.getVnp_PayDate() != null && !request.getVnp_PayDate().isEmpty()) {
-            params.put("vnp_PayDate", request.getVnp_PayDate());
-        }
+        put(params, "vnp_BankTranNo", request.getVnp_BankTranNo());
+        put(params, "vnp_CardType", request.getVnp_CardType());
+        put(params, "vnp_PayDate", request.getVnp_PayDate());
 
         return params;
     }
 
-    /**
-     * Validate các tham số bắt buộc
-     * @return true nếu hợp lệ, false nếu thiếu tham số
-     */
+    private void put(Map<String, String> map, String key, String value) {
+        if (value != null && !value.isEmpty()) {
+            map.put(key, URLDecoder.decode(value, StandardCharsets.UTF_8));
+        }
+    }
+
     private boolean validateRequiredParams(Map<String, String> params, String orderId) {
-        if (!params.containsKey("vnp_TmnCode") || !params.containsKey("vnp_TxnRef")
-                || !params.containsKey("vnp_ResponseCode") || !params.containsKey("vnp_TransactionStatus")
-                || !params.containsKey("vnp_Amount") || !params.containsKey("vnp_BankCode")
-                || !params.containsKey("vnp_OrderInfo") || !params.containsKey("vnp_TransactionNo")
-                || !params.containsKey("vnp_SecureHash")) {
-            log.error("Missing required parameters for orderId: {}. Params: {}", orderId, params.keySet());
-            return false;
+        String[] required = {
+                "vnp_TmnCode", "vnp_TxnRef", "vnp_ResponseCode",
+                "vnp_TransactionStatus", "vnp_Amount", "vnp_BankCode",
+                "vnp_OrderInfo", "vnp_TransactionNo", "vnp_SecureHash"
+        };
+
+        for (String key : required) {
+            if (!params.containsKey(key)) {
+                log.error("[VNPay] Missing param {} for orderId={}", key, orderId);
+                return false;
+            }
         }
         return true;
     }
 
-    /**
-     * Verify signature
-     */
     private boolean verifySignature(Map<String, String> params, String orderId) {
-        log.debug("Verifying payment signature for orderId: {}, params: {}", orderId, params);
+        log.debug("Verify signature for orderId={}, params={}", orderId, params);
         return VNPayUtil.verifyPayment(params, vnPayConfig.getSecretKey());
     }
 
-    /**
-     * Validate amount
-     * @return null nếu hợp lệ, error message nếu không hợp lệ
-     */
     private String validateAmount(VNPayReturnRequest request, Transaction transaction) {
-        long amountInVnd;
         try {
-            String vnpAmount = request.getVnp_Amount();
-            if (vnpAmount == null || vnpAmount.isEmpty()) {
-                return "vnp_Amount is null or empty";
+            long amount = Long.parseLong(request.getVnp_Amount()) / 100;
+            if (amount != transaction.getAmount().longValue()) {
+                return "Amount mismatch. Expected: " + transaction.getAmount() +
+                        ", received: " + amount;
             }
-            amountInVnd = Long.parseLong(vnpAmount) / 100; // VNPay trả về amount tính bằng xu
-        } catch (NumberFormatException e) {
-            log.error("Invalid vnp_Amount format for orderId: {}. Value: {}",
-                    request.getVnp_TxnRef(), request.getVnp_Amount(), e);
-            return "Invalid vnp_Amount format: " + e.getMessage();
+            return null;
+        } catch (Exception e) {
+            return "Invalid vnp_Amount format";
         }
-
-        if (amountInVnd != transaction.getAmount().longValue()) {
-            log.error("Amount mismatch. Expected: {} VND, Received: {} VND (from vnp_Amount: {})",
-                    transaction.getAmount(), amountInVnd, request.getVnp_Amount());
-            return "Amount mismatch. Expected: " + transaction.getAmount() +
-                    " VND, Received: " + amountInVnd + " VND";
-        }
-
-        return null; // Valid
     }
-
 }

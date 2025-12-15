@@ -21,8 +21,6 @@ public interface HomestayService {
 
     ApiResponse<HomestayDTO> getHomestayDetailForAdmin(Long adminUserId, Long homestayId);
 
-    ApiResponse<HomestayDTO> approveHomestay(Long adminUserId, Long homestayId);
-
     ApiResponse<?> findHomestay(FindHomeStayDTO findHomeStayDTO);
 
 

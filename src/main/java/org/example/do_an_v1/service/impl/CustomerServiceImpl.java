@@ -136,7 +136,8 @@ public class CustomerServiceImpl implements CustomerService {
         if (homestay == null) {
             return new ApiResponse<>(404, "Homestay not exists", null);
         }
-        
+
+
         // Convert Date sang LocalDate để xử lý
         Date checkInDate = bookingDTO.getCheckIn();
         Date checkOutDate = bookingDTO.getCheckOut();
@@ -148,7 +149,8 @@ public class CustomerServiceImpl implements CustomerService {
         LocalDate checkOutLocalDate = checkOutDate.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
-        
+
+
         // Convert sang java.sql.Date để query
         java.sql.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
         java.sql.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
@@ -287,7 +289,7 @@ public class CustomerServiceImpl implements CustomerService {
         // Create transaction cho thanh toán cọc (30%)
         Transaction transaction = Transaction.builder()
                 .completedAt(LocalDateTime.now().plusMinutes(15))
-                .transactionType(TypeTransaction.BOOKING_PAYMENT)
+                .transactionType(TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST)
                 .status(StatusTransaction.PENDING)
                 .bill(billResult)
                 .fromUser(customer.getUser())
@@ -699,7 +701,7 @@ public class CustomerServiceImpl implements CustomerService {
         if (canRefund) {
             // Tìm transaction thanh toán cọc đã thành công
             Transaction depositTransaction = transactionRepository.findByBillId(bill.getId()).stream()
-                    .filter(t -> t.getTransactionType() == TypeTransaction.BOOKING_PAYMENT 
+                    .filter(t -> t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST
                             && t.getStatus() == StatusTransaction.SUCCESS)
                     .findFirst()
                     .orElse(null);

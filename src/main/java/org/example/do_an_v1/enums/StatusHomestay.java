@@ -5,7 +5,7 @@ public enum StatusHomestay {
     BAN(1),
     ACTIVE(2),
     INACTIVE(3),
-
+    CANCEL(5),
     PENDING(4);
 
 
