@@ -6,11 +6,11 @@ import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lombok.extern.slf4j.Slf4j;
+import org.example.do_an_v1.dto.response.TokenValidationResponse;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.repository.InvalidateTokenRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
@@ -111,5 +111,49 @@ public class SecurityService {
             throw new JOSEException("Token has been deleted");
         }
 
+    }
+
+    /**
+     * Kiểm tra token có hợp lệ hay không (tận dụng method verifyToken có sẵn)
+     * @param token JWT token string
+     * @return true nếu token hợp lệ, false nếu không
+     */
+    public boolean isTokenValid(String token) {
+        try {
+            verifyToken(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Kiểm tra token và trả về lý do nếu token hư
+     * @param token JWT token string
+     * @return TokenValidationResponse
+     */
+    public TokenValidationResponse checkTokenExpiration(String token) {
+        try {
+            verifyToken(token);
+            return TokenValidationResponse.builder()
+                    .isValid(true)
+                    .reason(null)
+                    .build();
+        } catch (JOSEException e) {
+            return TokenValidationResponse.builder()
+                    .isValid(false)
+                    .reason(e.getMessage())
+                    .build();
+        } catch (ParseException e) {
+            return TokenValidationResponse.builder()
+                    .isValid(false)
+                    .reason("Token không đúng định dạng")
+                    .build();
+        } catch (Exception e) {
+            return TokenValidationResponse.builder()
+                    .isValid(false)
+                    .reason("Token không hợp lệ")
+                    .build();
+        }
     }
 }

@@ -8,6 +8,7 @@ import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.enums.StatusHomestay;
+import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -20,7 +21,7 @@ public interface AdminService {
 
     ApiResponse<AdminDTO> activateAdmin(AdminActivationRequest request) throws RuntimeException;
 
-    ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId);
+    ApiResponse<HostDTO> updateHostStatus(Long idHost, StatusHost statusHost);
 
     ApiResponse<HomestayDTO> approveHomestay(Long homestayId, Boolean approve);
 

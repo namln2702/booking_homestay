@@ -32,15 +32,14 @@ public class HostController {
         return hostService.registerHost(effectiveUserId, request);
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<List<HostDTO>>> listHosts(
             @RequestParam(name = "status", required = false, defaultValue = "PENDING") StatusHost status,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
-        Long adminUserId = identityResolver.requireUserId(null);
-        return hostService.getHostsForAdmin(adminUserId, status, page, size);
+        return hostService.getHostsForAdmin(status, page, size);
     }
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
     @GetMapping("/me")

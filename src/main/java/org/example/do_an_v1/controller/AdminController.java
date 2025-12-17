@@ -11,13 +11,13 @@ import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.HomestayApprovalRequest;
 import org.example.do_an_v1.dto.request.HomestayStatusUpdateRequest;
+import org.example.do_an_v1.dto.request.HostStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -81,11 +81,11 @@ public class AdminController {
         return adminService.updateHomestayStatus(request.getHomestayId(), request.getStatus());
     }
 
+    // Admin cập nhật trạng thái host (nhận idHost và statusHost)
 //    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @PutMapping("/{userId}/approve")
-    public ApiResponse<HostDTO> approveHost(@PathVariable Long userId) {
-        Long adminUserId = identityResolver.requireUserId(null);
-        return adminService.approveHost(adminUserId, userId);
+    @PutMapping("/host/status")
+    public ApiResponse<HostDTO> updateHostStatus(@RequestBody @Valid HostStatusUpdateRequest request) {
+        return adminService.updateHostStatus(request.getIdHost(), request.getStatusHost());
     }
 
     /**

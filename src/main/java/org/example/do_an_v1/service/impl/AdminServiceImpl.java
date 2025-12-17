@@ -163,34 +163,24 @@ public class AdminServiceImpl implements AdminService {
     private String buildInvitationMessage(String code) {
         return "You have been invited to join the admin team. Use this one-time activation code within 24 hours: " + code;
     }
-
     @Override
     @Transactional
-    public ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId) {
-        Admin admin = requireActiveAdmin(adminUserId);
-        if (admin == null) {
-            return new ApiResponse<>(403, "Admin account is not active", null);
+    public ApiResponse<HostDTO> updateHostStatus(Long idHost, StatusHost statusHost) {
+        if (idHost == null) {
+            throw new IllegalArgumentException("Host id is required");
+        }
+        if (statusHost == null) {
+            return new ApiResponse<>(400, "StatusHost is required", null);
         }
 
-        Host host = hostRepository.findById(hostUserId)
-                .orElseThrow(() -> new IllegalArgumentException("Host profile not found for user id " + hostUserId));
+        Host host = hostRepository.findById(idHost)
+                .orElseThrow(() -> new IllegalArgumentException("Host not found for id " + idHost));
 
-        if (host.getStatusHost() == StatusHost.ACTIVE) {
-            return new ApiResponse<>(409, "Host has already been approved", profileMapper.toHostDTO(host));
-        }
-
-        if (host.getStatusHost() != StatusHost.PENDING) {
-            return new ApiResponse<>(409, "Host status must be pending before approval", profileMapper.toHostDTO(host));
-        }
-
-        host.setStatusHost(StatusHost.ACTIVE);
-        if (host.getRole() != RoleUser.HOST) {
-            host.setRole(RoleUser.HOST);
-        }
+        host.setStatusHost(statusHost);
         Host savedHost = hostRepository.save(host);
-        return new ApiResponse<>(200, "Host approved successfully", profileMapper.toHostDTO(savedHost));
-    }
 
+        return new ApiResponse<>(200, "Host status updated successfully", profileMapper.toHostDTO(savedHost));
+    }
 
     @Override
     @Transactional

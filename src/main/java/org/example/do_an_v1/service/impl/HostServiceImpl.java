@@ -122,12 +122,7 @@ public class HostServiceImpl implements HostService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(Long adminUserId, StatusHost status, int page, int size) {
-        Admin admin = requireActiveAdmin(adminUserId);
-        if (admin == null) {
-            return new ApiResponse<>(403, "Admin account is not active", null);
-        }
-
+    public ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(StatusHost status, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
         Pageable pageable = PageRequest.of(safePage, safeSize);
