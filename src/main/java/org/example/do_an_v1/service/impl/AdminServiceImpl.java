@@ -2,6 +2,7 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
@@ -9,16 +10,20 @@ import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
+import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
-import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.EmailService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +41,7 @@ public class AdminServiceImpl implements AdminService {
     private static final int INVITE_CODE_LENGTH = 6;
 
     private final AdminRepository adminRepository;
+    private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
     private final HostRepository hostRepository;
     private final HomestayRepository homestayRepository;
@@ -246,6 +252,116 @@ public class AdminServiceImpl implements AdminService {
         HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
 
         return new ApiResponse<>(200, "Homestay status updated successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        
+        Page<Admin> adminPage = adminRepository.findAll(pageable);
+        
+        List<AdminDTO> admins = adminPage.getContent().stream()
+                .map(profileMapper::toAdminDTO)
+                .toList();
+        
+        PageResponse<List<AdminDTO>> response = PageResponse.<List<AdminDTO>>builder()
+                .page(adminPage.getNumber())
+                .size(adminPage.getSize())
+                .total(adminPage.getTotalElements())
+                .items(admins)
+                .build();
+        
+        return new ApiResponse<>(200, "Admins retrieved successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        
+        Page<Customer> customerPage = customerRepository.findAll(pageable);
+        
+        List<CustomerDTO> customers = customerPage.getContent().stream()
+                .map(profileMapper::toCustomerDTO)
+                .toList();
+        
+        PageResponse<List<CustomerDTO>> response = PageResponse.<List<CustomerDTO>>builder()
+                .page(customerPage.getNumber())
+                .size(customerPage.getSize())
+                .total(customerPage.getTotalElements())
+                .items(customers)
+                .build();
+        
+        return new ApiResponse<>(200, "Customers retrieved successfully", response);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<AdminDTO> updateAdminStatus(Long idAdmin, Status status) {
+        if (idAdmin == null) {
+            throw new IllegalArgumentException("Admin id is required");
+        }
+        if (status == null) {
+            return new ApiResponse<>(400, "Status is required", null);
+        }
+
+        Admin admin = adminRepository.findById(idAdmin)
+                .orElseThrow(() -> new IllegalArgumentException("Admin not found for id " + idAdmin));
+
+        admin.setStatus(status);
+        Admin savedAdmin = adminRepository.save(admin);
+
+        return new ApiResponse<>(200, "Admin status updated successfully", profileMapper.toAdminDTO(savedAdmin));
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<CustomerDTO> updateCustomerStatus(Long idCustomer, Status status) {
+        if (idCustomer == null) {
+            throw new IllegalArgumentException("Customer id is required");
+        }
+        if (status == null) {
+            return new ApiResponse<>(400, "Status is required", null);
+        }
+
+        Customer customer = customerRepository.findById(idCustomer)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found for id " + idCustomer));
+
+        customer.setStatus(status);
+        Customer savedCustomer = customerRepository.save(customer);
+
+        return new ApiResponse<>(200, "Customer status updated successfully", profileMapper.toCustomerDTO(savedCustomer));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<AdminDTO> getAdminById(Long idAdmin) {
+        if (idAdmin == null) {
+            throw new IllegalArgumentException("Admin id is required");
+        }
+
+        Admin admin = adminRepository.findById(idAdmin)
+                .orElseThrow(() -> new IllegalArgumentException("Admin not found for id " + idAdmin));
+
+        return new ApiResponse<>(200, "Admin detail retrieved successfully", profileMapper.toAdminDTO(admin));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<CustomerDTO> getCustomerById(Long idCustomer) {
+        if (idCustomer == null) {
+            throw new IllegalArgumentException("Customer id is required");
+        }
+
+        Customer customer = customerRepository.findById(idCustomer)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found for id " + idCustomer));
+
+        return new ApiResponse<>(200, "Customer detail retrieved successfully", profileMapper.toCustomerDTO(customer));
     }
 
     private Admin requireActiveAdmin(Long adminUserId) {

@@ -146,11 +146,7 @@ public class HostServiceImpl implements HostService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<HostDTO> getHostDetailForAdmin(Long adminUserId, Long hostUserId) {
-        Admin admin = requireActiveAdmin(adminUserId);
-        if (admin == null) {
-            return new ApiResponse<>(403, "Admin account is not active", null);
-        }
+    public ApiResponse<HostDTO> getHostDetailForAdmin( Long hostUserId) {
 
         Host host = hostRepository.findById(hostUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Host profile not found for user id " + hostUserId));

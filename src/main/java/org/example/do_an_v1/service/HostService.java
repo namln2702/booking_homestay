@@ -19,7 +19,7 @@ public interface HostService {
 
     ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(StatusHost status, int page, int size);
 
-    ApiResponse<HostDTO> getHostDetailForAdmin(Long adminUserId, Long hostUserId);
+    ApiResponse<HostDTO> getHostDetailForAdmin(Long hostUserId);
 
     ApiResponse<HostDTO> approveHost(Long adminUserId, Long hostUserId);
 

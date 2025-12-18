@@ -3,17 +3,21 @@ package org.example.do_an_v1.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
+import org.example.do_an_v1.dto.request.AdminStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
+import org.example.do_an_v1.dto.request.CustomerStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.HomestayApprovalRequest;
 import org.example.do_an_v1.dto.request.HomestayStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.HostStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HostService;
@@ -31,39 +35,49 @@ public class AdminController {
     private final HostService hostService;
     private final RequestIdentityResolver identityResolver;
 
-//    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
-//    @GetMapping("/homestays")
-//    public ApiResponse<PageResponse<List<HomestaySummaryDTO>>> listHomestays(
-//            @RequestParam(name = "status", required = false, defaultValue = "PENDING") StatusHomestay status,
-//            @RequestParam(name = "page", defaultValue = "0") int page,
-//            @RequestParam(name = "size", defaultValue = "20") int size
-//    ) {
-//        Long actorId = identityResolver.requireUserId(null);
-//        return homestayService.getHomestays(status, page, size);
-//    }
-//
-//    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
-//    @GetMapping("/homestays/{homestayId}")
-//    public ApiResponse<HomestayDTO> getHomestayDetail(@PathVariable Long homestayId) {
-//        Long actorId = identityResolver.requireUserId(null);
-//        return homestayService.getHomestayDetailForAdmin(actorId, homestayId);
-//    }
-
-//    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
     @PostMapping("/invite")
     public ApiResponse<AdminInvitationResponse> inviteAdmin(@RequestBody @Valid AdminInviteRequest request) {
         Long actorId = identityResolver.requireUserId(null);
         return adminService.inviteAdmin(actorId, request);
     }
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @GetMapping("/{userId}")
-    public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
-        Long adminUserId = identityResolver.requireUserId(null);
-        return hostService.getHostDetailForAdmin(adminUserId, userId);
-    }
+
     @PostMapping("/activate")
     public ApiResponse<AdminDTO> activateAdmin(@RequestBody @Valid AdminActivationRequest request) {
         return adminService.activateAdmin(request);
+    }
+
+    // Admin lấy danh sách tất cả admin
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping
+    public ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
+    ) {
+        return adminService.getAllAdmins(page, size);
+    }
+
+    // Admin lấy danh sách tất cả customer
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/customers")
+    public ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
+    ) {
+        return adminService.getAllCustomers(page, size);
+    }
+
+    // Admin cập nhật trạng thái admin
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PutMapping("/status")
+    public ApiResponse<AdminDTO> updateAdminStatus(@RequestBody @Valid AdminStatusUpdateRequest request) {
+        return adminService.updateAdminStatus(request.getIdAdmin(), request.getStatus());
+    }
+
+    // Admin cập nhật trạng thái customer
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PutMapping("/customers/status")
+    public ApiResponse<CustomerDTO> updateCustomerStatus(@RequestBody @Valid CustomerStatusUpdateRequest request) {
+        return adminService.updateCustomerStatus(request.getIdCustomer(), request.getStatus());
     }
 
     // Admins approve or reject homestays submitted by hosts
@@ -79,6 +93,26 @@ public class AdminController {
     public ApiResponse<HomestayDTO> updateHomestayStatus(@RequestBody @Valid HomestayStatusUpdateRequest request) {
 
         return adminService.updateHomestayStatus(request.getHomestayId(), request.getStatus());
+    }
+
+    // Admin lấy chi tiết admin theo idAdmin
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/{idAdmin}")
+    public ApiResponse<AdminDTO> getAdminDetail(@PathVariable Long idAdmin) {
+        return adminService.getAdminById(idAdmin);
+    }
+
+    // Admin lấy chi tiết customer theo idCustomer
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/customers/{idCustomer}")
+    public ApiResponse<CustomerDTO> getCustomerDetail(@PathVariable Long idCustomer) {
+        return adminService.getCustomerById(idCustomer);
+    }
+
+    //    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/host/{userId}")
+    public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
+        return hostService.getHostDetailForAdmin(userId);
     }
 
     // Admin cập nhật trạng thái host (nhận idHost và statusHost)

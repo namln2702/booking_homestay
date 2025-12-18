@@ -35,7 +35,7 @@ public class HostController {
 //    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<List<HostDTO>>> listHosts(
-            @RequestParam(name = "status", required = false, defaultValue = "PENDING") StatusHost status,
+            @RequestParam(name = "status", required = false) StatusHost status,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
