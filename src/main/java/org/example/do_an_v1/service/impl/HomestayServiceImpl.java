@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -350,21 +351,53 @@ public class HomestayServiceImpl implements HomestayService {
         Integer numBaby = findHomeStayDTO.getNumberBaby();
         
         // Xử lý ngày tháng: giữ nguyên hoặc null
-        String begin = (findHomeStayDTO.getBegin() != null && !findHomeStayDTO.getBegin().trim().isEmpty()) 
-                ? findHomeStayDTO.getBegin().trim() : null;
-        String end = (findHomeStayDTO.getEnd() != null && !findHomeStayDTO.getEnd().trim().isEmpty()) 
-                ? findHomeStayDTO.getEnd().trim() : null;
+        Date begin = parseDate(findHomeStayDTO.getBegin());
+        Date end = parseDate(findHomeStayDTO.getEnd());
 
-        List<Homestay> homestays = homestayRepository.findHomestay(
-                city,
-                state,
-                numAdults,
-                numChildren,
-                numBaby,
-                begin,
-                end);
+        List<Homestay> homestays;
+        if (begin != null && end != null) {
+            if (begin.after(end)) {
+                throw new IllegalArgumentException("Begin date must be before or equal to end date");
+            }
+            homestays = homestayRepository.findHomestayWithDateRange(
+                    city,
+                    state,
+                    numAdults,
+                    numChildren,
+                    numBaby,
+                    begin,
+                    end
+            );
+        } else {
+            homestays = homestayRepository.findHomestay(
+                    city,
+                    state,
+                    numAdults,
+                    numChildren,
+                    numBaby
+            );
+        }
 
-        return new ApiResponse<>(200, "Success", homestays);
+        List<HomestayDTO> homestayDTOS = homestays.stream()
+                .map(homestay -> {
+                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    return homestayMapper.toDto(homestay, images);
+                })
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Success", homestayDTOS);
+    }
+
+    private Date parseDate(String rawDate) {
+        if (rawDate == null || rawDate.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            LocalDate localDate = LocalDate.parse(rawDate.trim());
+            return java.sql.Date.valueOf(localDate);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid date format. Expected yyyy-MM-dd");
+        }
     }
 
 //    @Override
