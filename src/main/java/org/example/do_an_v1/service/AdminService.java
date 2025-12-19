@@ -12,6 +12,7 @@ import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
@@ -103,4 +104,10 @@ public interface AdminService {
      * Báo cáo tổng hợp dòng tiền từ customer và chi cho host
      */
     ApiResponse<AdminFinanceReportResponse> getFinanceReport();
+
+    /**
+     * Lấy thống kê tất cả homestays: số lượng booking, tổng tiền kiếm được, số lượng khiếu nại
+     * @return Danh sách thống kê của tất cả homestays
+     */
+    ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics();
 }

@@ -8,6 +8,7 @@ import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.mapper.UserMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
@@ -261,7 +262,7 @@ public class UserServiceImpl implements UserService {
                 return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
             }
             
-            UserDTO userDTO = userMapper.toUserDTO(user, roles, admin.getStatus());
+            UserDTO userDTO = userMapper.toUserDTO(user, roles, admin.getStatus(), null, null);
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .token(token)
                     .user(userDTO)
@@ -285,9 +286,10 @@ public class UserServiceImpl implements UserService {
                 return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
             }
 
-            // Lấy status từ customer (vì host không có Status enum, chỉ có StatusHost)
-            Status status = customer != null ? customer.getStatus() : null;
-            UserDTO userDTO = userMapper.toUserDTO(user, roles, status);
+            // Lấy status từ host và customer
+            StatusHost hostStatus = host != null ? host.getStatusHost() : null;
+            Status customerStatus = customer != null ? customer.getStatus() : null;
+            UserDTO userDTO = userMapper.toUserDTO(user, roles, null, hostStatus, customerStatus);
             return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                     .user(userDTO)
                     .token(token)
@@ -306,8 +308,8 @@ public class UserServiceImpl implements UserService {
             return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
         }
         
-        Status status = customer != null ? customer.getStatus() : null;
-        UserDTO userDTO = userMapper.toUserDTO(user, roles, status);
+        Status customerStatus = customer != null ? customer.getStatus() : null;
+        UserDTO userDTO = userMapper.toUserDTO(user, roles, null, null, customerStatus);
         return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
                 .token(token)
                 .user(userDTO)
