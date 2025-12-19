@@ -33,4 +33,14 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
      * Tất cả bills của các homestay thuộc về một host
      */
     List<Bill> findByHomestay_Host(Host host);
+
+    /**
+     * Đếm số lượng bills của một homestay
+     */
+    long countByHomestay(Homestay homestay);
+
+    /**
+     * Tìm tất cả bills của một homestay
+     */
+    List<Bill> findByHomestay(Homestay homestay);
 }

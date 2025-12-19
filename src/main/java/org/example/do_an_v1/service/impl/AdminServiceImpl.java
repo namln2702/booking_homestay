@@ -13,12 +13,14 @@ import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
+import org.example.do_an_v1.mapper.TransactionMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
@@ -451,7 +453,7 @@ public class AdminServiceImpl implements AdminService {
         List<TransactionDTO> transactionDTOS = transactions.stream()
                 .sorted(Comparator.comparing(Transaction::getCreatedAt,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .map(this::mapToTransactionDTO)
+                .map(TransactionMapper::toDTO)
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Transactions retrieved successfully", transactionDTOS);
@@ -485,7 +487,7 @@ public class AdminServiceImpl implements AdminService {
 
         // Map sang DTO
         List<TransactionDTO> refundDTOs = pendingRefunds.stream()
-                .map(this::mapToTransactionDTO)
+                .map(TransactionMapper::toDTO)
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Pending refunds retrieved successfully", refundDTOs);
@@ -523,7 +525,7 @@ public class AdminServiceImpl implements AdminService {
         transaction.setCompletedAt(LocalDateTime.now());
         transactionRepository.save(transaction);
 
-        return new ApiResponse<>(200, "Refund confirmed successfully", mapToTransactionDTO(transaction));
+        return new ApiResponse<>(200, "Refund confirmed successfully", TransactionMapper.toDTO(transaction));
     }
 
     @Override
@@ -645,23 +647,63 @@ public class AdminServiceImpl implements AdminService {
         return new ApiResponse<>(200, "Finance report generated successfully", report);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics() {
+        // Lấy tất cả homestays
+        List<Homestay> allHomestays = homestayRepository.findAll();
+
+        List<HomestayStatisticsDTO> statisticsList = allHomestays.stream()
+                .map(this::calculateHomestayStatistics)
+                .toList();
+
+        return new ApiResponse<>(200, "All homestay statistics retrieved successfully", statisticsList);
+    }
+
     /**
-     * Map Transaction entity sang TransactionDTO
+     * Tính thống kê cho một homestay
      */
-    private TransactionDTO mapToTransactionDTO(Transaction transaction) {
-        return TransactionDTO.builder()
-                .id(transaction.getId())
-                .amount(transaction.getAmount())
-                .transactionType(transaction.getTransactionType())
-                .status(transaction.getStatus())
-                .completedAt(transaction.getCompletedAt())
-                .fromUserId(transaction.getFromUser() != null ? transaction.getFromUser().getId() : null)
-                .fromUserEmail(transaction.getFromUser() != null ? transaction.getFromUser().getEmail() : null)
-                .toUserId(transaction.getToUser() != null ? transaction.getToUser().getId() : null)
-                .toUserEmail(transaction.getToUser() != null ? transaction.getToUser().getEmail() : null)
-                .billId(transaction.getBill() != null ? transaction.getBill().getId() : null)
-                .billCode(transaction.getBill() != null ? transaction.getBill().getCode() : null)
-                .proofImageUrl(transaction.getProofImageUrl())
+    private HomestayStatisticsDTO calculateHomestayStatistics(Homestay homestay) {
+        // Đếm số lượng bills (bookings)
+        long totalBookings = billRepository.countByHomestay(homestay);
+
+        // Tính tổng tiền kiếm được từ các Transaction PAYLOAD_HOST thành công
+        // Lấy tất cả bills của homestay
+        List<Bill> bills = billRepository.findByHomestay(homestay);
+        
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        for (Bill bill : bills) {
+
+            if(bill.getStatus() == StatusBill.SUCCEED
+                    || bill.getStatus() == StatusBill.REJECTED
+                    || bill.getStatus() == StatusBill.CANCELLED
+                    || bill.getStatus() == StatusBill.CHECKIN_EXPIRED
+                    || bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED
+            ){
+                if(bill.getTotalAmount() != null) totalRevenue = totalRevenue.add(bill.getTotalAmount());
+            }
+            // Tìm các transaction PAYLOAD_HOST thành công của bill này
+//            List<Transaction> payloadTransactions = transactionRepository.findByBill(bill).stream()
+//                    .filter(t -> t.getTransactionType() == TypeTransaction.PAYLOAD_HOST)
+//                    .filter(t -> t.getStatus() == StatusTransaction.SUCCESS)
+//                    .toList();
+//
+//            for (Transaction transaction : payloadTransactions) {
+//                if (transaction.getAmount() != null) {
+//                    totalRevenue = totalRevenue.add(transaction.getAmount());
+//                }
+//            }
+        }
+
+        // Đếm số lượng complaints
+        long totalComplaints = complaintRepository.countByHomestay(homestay);
+
+        return HomestayStatisticsDTO.builder()
+                .homestayId(homestay.getId())
+                .homestayTitle(homestay.getTitle())
+                .totalBookings(totalBookings)
+                .totalRevenue(totalRevenue)
+                .totalComplaints(totalComplaints)
                 .build();
     }
 

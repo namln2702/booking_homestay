@@ -79,9 +79,15 @@ public enum StatusBill {
     SUCCEED(10),
 
     /**
-     * Đơn bị hủy
+     * Đơn bị customer hủy, và được hoàn tiền
+     */
+    CANCELLED_REFUNDED (16),
+
+    /**
+     * Đơn bị customer hủy, và không được hoàn tiền
      */
     CANCELLED (15);
+
     private final int code;
 
     StatusBill(int code){

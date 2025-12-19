@@ -3,8 +3,8 @@ package org.example.do_an_v1.dto;
 
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusHost;
 
 import java.util.List;
 
@@ -27,7 +27,9 @@ public class UserDTO {
 
     private Boolean isOnline;
 
-    private Status status;
+    private Status statusAdmin;
+    private StatusHost statusHost;
+    private Status statusCustomer;
 
     private String avatarUrl;
 

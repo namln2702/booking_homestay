@@ -19,6 +19,7 @@ import org.example.do_an_v1.dto.request.HostStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -187,5 +188,15 @@ public class AdminController {
     public ApiResponse<?> processComplaintRefund(@RequestBody @Valid ProcessComplaintRefundRequest request) {
         Long adminUserId = identityResolver.requireUserId(null);
         return adminService.processComplaintRefund(adminUserId, request);
+    }
+
+    /**
+     * Admin lấy thống kê tất cả homestays: số lượng booking, tổng tiền kiếm được, số lượng khiếu nại
+     * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
+     */
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/homestays/statistics")
+    public ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics() {
+        return adminService.getAllHomestayStatistics();
     }
 }
