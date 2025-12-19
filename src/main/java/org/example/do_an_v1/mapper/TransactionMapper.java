@@ -31,6 +31,9 @@ public class TransactionMapper {
                 // Thông tin hóa đơn
                 .billId(transaction.getBill() != null ? transaction.getBill().getId() : null)
                 .billCode(transaction.getBill() != null ? transaction.getBill().getCode() : null)
+                
+                // Thông tin chứng minh (cho refund)
+                .proofImageUrl(transaction.getProofImageUrl())
                 .build();
     }
 

@@ -3,6 +3,7 @@ package org.example.do_an_v1.mapper;
 import org.example.do_an_v1.dto.UserDTO;
 import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusHost;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -52,9 +53,9 @@ public class UserMapper {
     }
 
     /**
-     * Map từ User Entity sang UserDTO với roles và status
+     * Map từ User Entity sang UserDTO với roles và các status (admin, host, customer)
      */
-    public UserDTO toUserDTO(User user, List<String> roles, Status status) {
+    public UserDTO toUserDTO(User user, List<String> roles, Status statusAdmin, StatusHost statusHost, Status statusCustomer) {
         if (user == null) {
             return null;
         }
@@ -70,7 +71,9 @@ public class UserMapper {
                 .avatarUrl(user.getAvatarUrl())
                 .googleId(user.getGoogleId())
                 .role(roles)
-                .status(status)
+                .statusAdmin(statusAdmin)
+                .statusHost(statusHost)
+                .statusCustomer(statusCustomer)
                 .build();
     }
 }

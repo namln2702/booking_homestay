@@ -10,6 +10,7 @@ import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
+import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusHomestay;
@@ -78,4 +79,10 @@ public interface AdminService {
      * @param request Thông tin quyết định (complaintId, approved, proofImageUrl)
      */
     ApiResponse<?> processComplaintRefund(Long adminUserId, ProcessComplaintRefundRequest request);
+
+    /**
+     * Lấy thống kê tất cả homestays: số lượng booking, tổng tiền kiếm được, số lượng khiếu nại
+     * @return Danh sách thống kê của tất cả homestays
+     */
+    ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics();
 }

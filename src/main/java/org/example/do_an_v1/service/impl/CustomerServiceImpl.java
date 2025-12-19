@@ -727,10 +727,12 @@ public class CustomerServiceImpl implements CustomerService {
                     transactionRepository.save(refundTransaction);
                 }
             }
-        }
 
-        // Cập nhật status bill thành CHECKIN_EXPIRED (hoặc có thể tạo status mới CANCELLED)
-        bill.setStatus(StatusBill.CANCELLED);
+            bill.setStatus(StatusBill.CANCELLED_REFUNDED);
+        }
+        else
+            // Cập nhật status bill thành CANCELLED do khong duoc hoang tien
+            bill.setStatus(StatusBill.CANCELLED);
         billRepository.save(bill);
 
         String message = canRefund 
