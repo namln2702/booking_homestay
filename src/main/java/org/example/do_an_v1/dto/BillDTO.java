@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.example.do_an_v1.enums.StatusBill;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -40,6 +41,7 @@ public class BillDTO {
     private LocalDateTime checkOut;       // Ngày check-out
     
     private LocalDateTime actualCheckin;  // Thời gian check-in thực tế (nếu có)
+    private BigDecimal totalAmount;       // Tổng giá trị bill (100%)
 
     // --- Thông tin giá theo ngày ---
     @Valid

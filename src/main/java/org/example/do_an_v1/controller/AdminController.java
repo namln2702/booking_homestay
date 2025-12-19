@@ -3,6 +3,7 @@ package org.example.do_an_v1.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -16,9 +17,11 @@ import org.example.do_an_v1.dto.request.HomestayApprovalRequest;
 import org.example.do_an_v1.dto.request.HomestayStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.HostStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
+import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
+import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HostService;
@@ -110,6 +113,27 @@ public class AdminController {
         return adminService.getCustomerById(idCustomer);
     }
 
+    // Danh sách toàn bộ bill trong hệ thống với các bộ lọc cơ bản
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/bills")
+    public ApiResponse<PageResponse<List<BillDTO>>> getAllBillsForAdmin(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "status", required = false) StatusBill status,
+            @RequestParam(name = "customerId", required = false) Long customerId,
+            @RequestParam(name = "hostId", required = false) Long hostId,
+            @RequestParam(name = "homestayId", required = false) Long homestayId
+    ) {
+        return adminService.getAllBills(page, size, status, customerId, hostId, homestayId);
+    }
+
+    // Danh sách giao dịch cho một bill
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/bills/{billId}/transactions")
+    public ApiResponse<List<TransactionDTO>> getBillTransactions(@PathVariable Long billId) {
+        return adminService.getTransactionsForBill(billId);
+    }
+
     //    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/host/{userId}")
     public ApiResponse<HostDTO> getHostForAdmin(@PathVariable Long userId) {
@@ -132,6 +156,15 @@ public class AdminController {
     public ApiResponse<List<TransactionDTO>> getPendingRefunds() {
         Long adminUserId = identityResolver.requireUserId(null);
         return adminService.getPendingRefunds(adminUserId);
+    }
+
+    /**
+     * Báo cáo nguồn thu/chi của hệ thống
+     */
+//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/reports/finance")
+    public ApiResponse<AdminFinanceReportResponse> getFinanceReport() {
+        return adminService.getFinanceReport();
     }
 
     /**

@@ -2,6 +2,7 @@ package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -10,12 +11,14 @@ import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
+import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
+import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.TransactionMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
@@ -32,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -42,6 +48,27 @@ import java.util.stream.IntStream;
 public class AdminServiceImpl implements AdminService {
 
     private static final int INVITE_CODE_LENGTH = 6;
+    private static final EnumSet<StatusBill> COMPLETED_BILL_STATUSES = EnumSet.of(
+            StatusBill.SUCCEED,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.CANCELLED
+    );
+    private static final List<TypeTransaction> CUSTOMER_REVENUE_TYPES = List.of(
+            TypeTransaction.CUSTOMER_PAYMENT_ADMIN,
+            TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST,
+            TypeTransaction.CUSTOMER_PAYMENT_ADMIN_SECOND,
+            TypeTransaction.BOOKING_PAYMENT
+    );
+    private static final List<TypeTransaction> HOST_PAYOUT_TYPES = List.of(
+            TypeTransaction.ADMIN_PAYMENT_HOST,
+            TypeTransaction.PAYLOAD_HOST
+    );
+    private static final List<TypeTransaction> CUSTOMER_REFUND_TYPES = List.of(TypeTransaction.REFUND);
+    private static final Comparator<Bill> BILL_CREATED_AT_DESC = Comparator
+            .comparing(Bill::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+            .reversed();
 
     private final AdminRepository adminRepository;
     private final CustomerRepository customerRepository;
@@ -367,6 +394,71 @@ public class AdminServiceImpl implements AdminService {
         return new ApiResponse<>(200, "Customer detail retrieved successfully", profileMapper.toCustomerDTO(customer));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<BillDTO>>> getAllBills(
+            int page,
+            int size,
+            StatusBill status,
+            Long customerId,
+            Long hostId,
+            Long homestayId
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+
+        List<Bill> filteredBills = billRepository.findAll().stream()
+                .filter(bill -> status == null || bill.getStatus() == status)
+                .filter(bill -> customerId == null
+                        || (bill.getCustomer() != null && Objects.equals(bill.getCustomer().getId(), customerId)))
+                .filter(bill -> homestayId == null
+                        || (bill.getHomestay() != null && Objects.equals(bill.getHomestay().getId(), homestayId)))
+                .filter(bill -> hostId == null
+                        || (bill.getHomestay() != null
+                        && bill.getHomestay().getHost() != null
+                        && Objects.equals(bill.getHomestay().getHost().getId(), hostId)))
+                .sorted(BILL_CREATED_AT_DESC)
+                .collect(Collectors.toList());
+
+        long total = filteredBills.size();
+        int fromIndex = Math.min(safePage * safeSize, filteredBills.size());
+        int toIndex = Math.min(fromIndex + safeSize, filteredBills.size());
+
+        List<BillDTO> billDTOS = filteredBills.subList(fromIndex, toIndex).stream()
+                .map(BillMapper::toDTO)
+                .collect(Collectors.toList());
+
+        PageResponse<List<BillDTO>> response = PageResponse.<List<BillDTO>>builder()
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
+                .items(billDTOS)
+                .build();
+
+        return new ApiResponse<>(200, "Bills retrieved successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<TransactionDTO>> getTransactionsForBill(Long billId) {
+        if (billId == null) {
+            throw new IllegalArgumentException("Bill id is required");
+        }
+
+        Bill bill = billRepository.findById(billId)
+                .orElseThrow(() -> new IllegalArgumentException("Bill not found for id " + billId));
+
+        List<Transaction> transactions = transactionRepository.findByBill(bill);
+
+        List<TransactionDTO> transactionDTOS = transactions.stream()
+                .sorted(Comparator.comparing(Transaction::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .map(TransactionMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Transactions retrieved successfully", transactionDTOS);
+    }
+
     private Admin requireActiveAdmin(Long adminUserId) {
         if (adminUserId == null) {
             throw new IllegalArgumentException("Admin user id is required");
@@ -526,6 +618,37 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional(readOnly = true)
+    public ApiResponse<AdminFinanceReportResponse> getFinanceReport() {
+        List<Bill> bills = billRepository.findAll();
+        long totalBills = bills.size();
+        long completedBills = bills.stream()
+                .filter(bill -> bill.getStatus() != null && COMPLETED_BILL_STATUSES.contains(bill.getStatus()))
+                .count();
+
+        List<Transaction> transactions = transactionRepository.findAll();
+
+        BigDecimal totalRevenueFromCustomers = calculateTotalAmount(transactions, CUSTOMER_REVENUE_TYPES);
+        BigDecimal totalPayoutToHosts = calculateTotalAmount(transactions, HOST_PAYOUT_TYPES);
+        BigDecimal totalRefundsToCustomers = calculateTotalAmount(transactions, CUSTOMER_REFUND_TYPES);
+
+        BigDecimal netRevenue = totalRevenueFromCustomers
+                .subtract(totalPayoutToHosts)
+                .subtract(totalRefundsToCustomers);
+
+        AdminFinanceReportResponse report = AdminFinanceReportResponse.builder()
+                .totalBills(totalBills)
+                .completedBills(completedBills)
+                .totalRevenueFromCustomers(totalRevenueFromCustomers)
+                .totalPayoutToHosts(totalPayoutToHosts)
+                .totalRefundsToCustomers(totalRefundsToCustomers)
+                .netRevenue(netRevenue)
+                .build();
+
+        return new ApiResponse<>(200, "Finance report generated successfully", report);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics() {
         // Lấy tất cả homestays
         List<Homestay> allHomestays = homestayRepository.findAll();
@@ -584,4 +707,17 @@ public class AdminServiceImpl implements AdminService {
                 .build();
     }
 
+    private BigDecimal calculateTotalAmount(List<Transaction> transactions, Collection<TypeTransaction> transactionTypes) {
+        if (transactions == null || transactions.isEmpty() || transactionTypes == null || transactionTypes.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        return transactions.stream()
+                .filter(transaction -> transaction.getStatus() == StatusTransaction.SUCCESS)
+                .filter(transaction -> transaction.getTransactionType() != null
+                        && transactionTypes.contains(transaction.getTransactionType()))
+                .filter(transaction -> transaction.getAmount() != null)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 }

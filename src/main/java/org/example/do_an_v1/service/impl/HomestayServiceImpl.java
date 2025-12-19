@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.HomestayDetailDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
+import org.example.do_an_v1.dto.ImageDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.request.HomestayDailyPriceRequest;
@@ -29,13 +31,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -453,6 +459,192 @@ public class HomestayServiceImpl implements HomestayService {
         HomestayDTO homestayDTO = homestayMapper.toDto(homestay, images);
 
         return new ApiResponse<>(200, "Homestay detail retrieved successfully", homestayDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<HomestayDetailDTO> detailHomestayFull(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Homestay id is required");
+        }
+
+        Homestay homestay = homestayRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + id));
+
+        List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+        HomestayDTO baseDto = homestayMapper.toDto(homestay, images);
+        List<Review> reviews = reviewRepository.findByHomestay(homestay);
+
+        HomestayDetailDTO detailDTO = HomestayDetailDTO.builder()
+                .id(homestay.getId())
+                .title(homestay.getTitle())
+                .description(homestay.getDescription())
+                .category(homestay.getCategory())
+                .rating(homestay.getRating())
+                .minGuest(homestay.getMinGuest())
+                .maxGuest(homestay.getMaxGuest())
+                .numBedrooms(homestay.getNumBedrooms())
+                .numBeds(homestay.getNumBeds())
+                .numBathrooms(homestay.getNumBathrooms())
+                .numKitchen(homestay.getNumKitchen())
+                .advancedPayment(homestay.getAdvancedPayment())
+                .warningCount(homestay.getWarningCount())
+                .basePrice(homestay.getBasePrice())
+                .status(homestay.getStatusHomestay())
+                .address(baseDto.getAddress())
+                .facilities(baseDto.getFacilities())
+                .amenities(baseDto.getAmenities())
+                .rules(baseDto.getRules())
+                .dailyPrices(baseDto.getDailyPrices())
+                .images(baseDto.getImages())
+                .host(mapHostSummary(homestay.getHost()))
+                .priceInsight(buildPriceInsight(homestay))
+                .reviews(mapReviewDetails(reviews))
+                .build();
+
+        return new ApiResponse<>(200, "Homestay detail retrieved successfully", detailDTO);
+    }
+
+    private HomestayDetailDTO.HostSummaryDTO mapHostSummary(Host host) {
+        if (host == null) {
+            return null;
+        }
+        User user = host.getUser();
+        return HomestayDetailDTO.HostSummaryDTO.builder()
+                .hostId(host.getId())
+                .status(host.getStatusHost())
+                .businessName(host.getBusinessName())
+                .qrCodeUrl(host.getQrCodeUrl())
+                .userId(user != null ? user.getId() : null)
+                .fullName(user != null ? user.getName() : null)
+                .avatarUrl(user != null ? user.getAvatarUrl() : null)
+                .phone(user != null ? user.getPhone() : null)
+                .email(user != null ? user.getEmail() : null)
+                .build();
+    }
+
+    private HomestayDetailDTO.PriceInsightDTO buildPriceInsight(Homestay homestay) {
+        Set<HomestayDailyPrice> priceSet = homestay.getListHomestayDailyPrice();
+        Float basePrice = homestay.getBasePrice();
+        if (priceSet == null || priceSet.isEmpty()) {
+            return HomestayDetailDTO.PriceInsightDTO.builder()
+                    .minPrice(basePrice)
+                    .maxPrice(basePrice)
+                    .averagePrice(basePrice)
+                    .totalNights(0)
+                    .availableNights(0)
+                    .bookedNights(0)
+                    .build();
+        }
+
+        List<HomestayDailyPrice> sorted = priceSet.stream()
+                .filter(price -> price.getPricePerDay() != null && price.getPricePerDay().getDay() != null)
+                .sorted(Comparator.comparing(price -> price.getPricePerDay().getDay()))
+                .collect(Collectors.toList());
+
+        if (sorted.isEmpty()) {
+            int available = (int) priceSet.stream()
+                    .filter(price -> !Boolean.TRUE.equals(price.getIsBooked()))
+                    .count();
+            int booked = priceSet.size() - available;
+            return HomestayDetailDTO.PriceInsightDTO.builder()
+                    .minPrice(basePrice)
+                    .maxPrice(basePrice)
+                    .averagePrice(basePrice)
+                    .totalNights(priceSet.size())
+                    .availableNights(available)
+                    .bookedNights(booked)
+                    .build();
+        }
+
+        Float minPrice = sorted.stream()
+                .map(HomestayDailyPrice::getPrice)
+                .filter(Objects::nonNull)
+                .min(Float::compare)
+                .orElse(basePrice);
+
+        Float maxPrice = sorted.stream()
+                .map(HomestayDailyPrice::getPrice)
+                .filter(Objects::nonNull)
+                .max(Float::compare)
+                .orElse(basePrice);
+
+        OptionalDouble avgOptional = sorted.stream()
+                .map(HomestayDailyPrice::getPrice)
+                .filter(Objects::nonNull)
+                .mapToDouble(Float::doubleValue)
+                .average();
+        Float averagePrice = avgOptional.isPresent() ? (float) avgOptional.getAsDouble() : basePrice;
+
+        long available = sorted.stream()
+                .filter(price -> !Boolean.TRUE.equals(price.getIsBooked()))
+                .count();
+        long booked = sorted.size() - available;
+
+        LocalDate firstDate = toLocalDate(sorted.get(0).getPricePerDay().getDay());
+        LocalDate lastDate = toLocalDate(sorted.get(sorted.size() - 1).getPricePerDay().getDay());
+
+        return HomestayDetailDTO.PriceInsightDTO.builder()
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .averagePrice(averagePrice)
+                .totalNights(sorted.size())
+                .availableNights((int) available)
+                .bookedNights((int) booked)
+                .firstDate(firstDate)
+                .lastDate(lastDate)
+                .build();
+    }
+
+    private List<HomestayDetailDTO.ReviewDetailDTO> mapReviewDetails(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return List.of();
+        }
+        return reviews.stream()
+                .sorted(Comparator.comparing(Review::getCreatedAt,
+                        Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder())).reversed())
+                .map(review -> {
+                    List<ImageDTO> reviewImages = review.getListImage() == null
+                            ? List.of()
+                            : review.getListImage().stream()
+                            .filter(Objects::nonNull)
+                            .map(ImageMapper::toDTO)
+                            .collect(Collectors.toList());
+
+                    return HomestayDetailDTO.ReviewDetailDTO.builder()
+                            .id(review.getId())
+                            .rating(review.getRating())
+                            .comment(review.getComment())
+                            .createdAt(review.getCreatedAt())
+                            .reviewer(mapReviewer(review.getCustomer()))
+                            .images(reviewImages)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private HomestayDetailDTO.ReviewerDTO mapReviewer(Customer customer) {
+        if (customer == null) {
+            return null;
+        }
+        User user = customer.getUser();
+        return HomestayDetailDTO.ReviewerDTO.builder()
+                .id(customer.getId())
+                .name(user != null ? user.getName() : null)
+                .avatarUrl(user != null ? user.getAvatarUrl() : null)
+                .email(user != null ? user.getEmail() : null)
+                .phone(user != null ? user.getPhone() : null)
+                .lastBooking(customer.getLastBooking())
+                .build();
+    }
+
+    private LocalDate toLocalDate(Date date) {
+        if (date == null) {
+            return null;
+        }
+        return date.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
     }
 
 //    @Override
