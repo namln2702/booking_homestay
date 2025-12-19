@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
+import org.example.do_an_v1.dto.HomestayDetailDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -21,7 +22,7 @@ public class HomestayController {
     private final HomestayService homestayService;
     private final RequestIdentityResolver identityResolver;
 
-    @GetMapping("/find")
+    @RequestMapping(value = "/find", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse<?> findHomestay(@RequestBody FindHomeStayDTO findHomeStayDTO){
         return homestayService.findHomestay(findHomeStayDTO);
     }
@@ -40,6 +41,10 @@ public class HomestayController {
         return homestayService.detailHomestay(id);
     }
 
+    @GetMapping("/{id}/full")
+    public ApiResponse<HomestayDetailDTO> homestayFull(@PathVariable("id") Long id) {
+        return homestayService.detailHomestayFull(id);
+    }
 
     @PreAuthorize("hasAuthority('ROLE_HOST')")
     @PostMapping()

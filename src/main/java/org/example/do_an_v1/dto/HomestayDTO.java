@@ -24,6 +24,7 @@ public class HomestayDTO {
     private String description;
     private String category;
     private Float rating;
+    private Integer numbersOfReview;
     private Integer minGuest;
     private Integer maxGuest;
     private Integer numBedrooms;

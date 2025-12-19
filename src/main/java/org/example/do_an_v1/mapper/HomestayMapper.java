@@ -32,6 +32,8 @@ public class HomestayMapper {
         List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
         List<HomestayDTO.HomestayImageDTO> imageDtos = mapImages(images);
 
+        int reviewCount = homestay.getListReview() != null ? homestay.getListReview().size() : 0;
+
         return HomestayDTO.builder()
                 .id(homestay.getId())
                 .hostId(homestay.getHost() != null ? homestay.getHost().getId() : null)
@@ -39,6 +41,7 @@ public class HomestayMapper {
                 .description(homestay.getDescription())
                 .category(homestay.getCategory())
                 .rating(homestay.getRating())
+                .numbersOfReview(reviewCount)
                 .minGuest(homestay.getMinGuest())
                 .maxGuest(homestay.getMaxGuest())
                 .numBedrooms(homestay.getNumBedrooms())
