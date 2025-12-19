@@ -1,6 +1,7 @@
 package org.example.do_an_v1.service;
 
 import org.example.do_an_v1.dto.AdminDTO;
+import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -9,9 +10,11 @@ import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
+import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -61,6 +64,23 @@ public interface AdminService {
     ApiResponse<CustomerDTO> getCustomerById(Long idCustomer);
 
     /**
+     * Lấy danh sách bill toàn hệ thống với bộ lọc cơ bản
+     */
+    ApiResponse<PageResponse<List<BillDTO>>> getAllBills(
+            int page,
+            int size,
+            StatusBill status,
+            Long customerId,
+            Long hostId,
+            Long homestayId
+    );
+
+    /**
+     * Lấy danh sách giao dịch của một bill cụ thể
+     */
+    ApiResponse<List<TransactionDTO>> getTransactionsForBill(Long billId);
+
+    /**
      * Lấy danh sách các transaction REFUND đang chờ xử lý
      */
     ApiResponse<List<TransactionDTO>> getPendingRefunds(Long adminUserId);
@@ -78,4 +98,9 @@ public interface AdminService {
      * @param request Thông tin quyết định (complaintId, approved, proofImageUrl)
      */
     ApiResponse<?> processComplaintRefund(Long adminUserId, ProcessComplaintRefundRequest request);
+
+    /**
+     * Báo cáo tổng hợp dòng tiền từ customer và chi cho host
+     */
+    ApiResponse<AdminFinanceReportResponse> getFinanceReport();
 }
