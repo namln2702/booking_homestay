@@ -315,35 +315,6 @@ public class CustomerServiceImpl implements CustomerService {
         // Convert sang BillDTO để trả về
         BillDTO billDTO = BillMapper.toDTO(billWithDetails);
 
-        // Gửi email mã code
-//        String emailToSend;
-//        if (billWithDetails.getCustomerBookingInfo() != null &&
-//            billWithDetails.getCustomerBookingInfo().getEmail() != null) {
-//            // Nếu có customerBookingInfo, gửi đến email của customerBookingInfo
-//            emailToSend = billWithDetails.getCustomerBookingInfo().getEmail();
-//        } else {
-//            // Nếu không có, gửi đến email của customer
-//            emailToSend = customer.getUser().getEmail();
-//        }
-
-        // Gửi email mã code booking
-//        if (emailToSend != null && !emailToSend.trim().isEmpty()) {
-//            String emailContent = String.format(
-//                "Mã đặt phòng của bạn: %s\n\n" +
-//                "Thông tin đặt phòng:\n" +
-//                "- Homestay: %s\n" +
-//                "- Check-in: %s\n" +
-//                "- Check-out: %s\n" +
-//                "- Mã đơn: %s\n\n" +
-//                "Vui lòng sử dụng mã này để check-in.",
-//                billWithDetails.getCode(),
-//                homestay.getTitle(),
-//                billWithDetails.getCheckIn(),
-//                billWithDetails.getCheckOut(),
-//                billWithDetails.getCode()
-//            );
-//            emailService.sendSimpleEmail(emailToSend, emailContent);
-//        }
 
         return new ApiResponse<>(200, "Save bill success", billDTO);
     }

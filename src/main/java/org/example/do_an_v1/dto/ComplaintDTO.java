@@ -1,7 +1,7 @@
 package org.example.do_an_v1.dto;
 
 import lombok.*;
-import org.example.do_an_v1.enums.Status;
+import org.example.do_an_v1.enums.StatusBill;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,10 +17,12 @@ public class ComplaintDTO {
     private String description;
     private LocalDateTime createdAt;// Thoi gian tao khieu nai
 
-    private Long adminId;           // ID admin xử lý (trích từ entity Admin)
-//    private String adminName;       // Tên admin (tuỳ chọn nếu muốn hiển thị)
+    private String adminName;      // Tên admin xử lý
 
     private Long billId;            // Id cua bill
+    private StatusBill billStatus;  // Trạng thái của bill
+
+    private String homestayTitle;   // Tên homestay được khiếu nại
 
     private List<String> imageUrls; // Danh sách URL hoặc tên ảnh (listImage)
 }

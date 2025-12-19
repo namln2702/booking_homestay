@@ -20,8 +20,16 @@ public class ComplaintMapper {
                 .id(complaint.getId())
                 .description(complaint.getDescription())
                 .createdAt(complaint.getCreatedAt())
-                .adminId(complaint.getAdmin() != null ? complaint.getAdmin().getId() : null)
+                .adminName(complaint.getAdmin() != null 
+                        && complaint.getAdmin().getUser() != null 
+                        ? complaint.getAdmin().getUser().getName() 
+                        : null)
                 .billId(complaint.getBill() != null ? complaint.getBill().getId() : null)
+                .billStatus(complaint.getBill() != null ? complaint.getBill().getStatus() : null)
+                .homestayTitle(complaint.getBill() != null 
+                        && complaint.getBill().getHomestay() != null 
+                        ? complaint.getBill().getHomestay().getTitle() 
+                        : null)
                 .imageUrls(
                         complaint.getListImage() != null && !complaint.getListImage().isEmpty()
                                 ? complaint.getListImage().stream()
