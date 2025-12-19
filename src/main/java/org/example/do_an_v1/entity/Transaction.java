@@ -23,7 +23,7 @@ public class Transaction extends BaseEntity{
 
     // Phan loai transaction
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", length = 20)
+    @Column(name = "type")
     private TypeTransaction transactionType;
 
     @Column(name = "completed_at")

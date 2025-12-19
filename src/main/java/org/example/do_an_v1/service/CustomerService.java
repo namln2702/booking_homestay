@@ -23,6 +23,8 @@ public interface CustomerService {
      * Thống kê các bill đã đặt của Customer
      */
     ApiResponse<?> getCustomerBills(Long userId);
+    ApiResponse<?> getCustomerOrders(Long userId);
+    ApiResponse<?> getCustomerComplaints(Long userId);
 
     /**
      * Customer hủy bill
