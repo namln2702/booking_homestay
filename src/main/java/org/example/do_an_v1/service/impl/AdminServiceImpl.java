@@ -3,6 +3,7 @@ package org.example.do_an_v1.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -19,6 +20,7 @@ import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
 import org.example.do_an_v1.mapper.BillMapper;
+import org.example.do_an_v1.mapper.ComplaintMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.TransactionMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
@@ -705,6 +707,28 @@ public class AdminServiceImpl implements AdminService {
                 .totalRevenue(totalRevenue)
                 .totalComplaints(totalComplaints)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<PageResponse<List<ComplaintDTO>>> getAllComplaints(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size > 0 ? size : 20;
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<Complaint> complaintPage = complaintRepository.findAll(pageable);
+
+        List<ComplaintDTO> complaints = complaintPage.getContent().stream()
+                .map(ComplaintMapper::toDTO)
+                .toList();
+
+        PageResponse<List<ComplaintDTO>> response = PageResponse.<List<ComplaintDTO>>builder()
+                .page(complaintPage.getNumber())
+                .size(complaintPage.getSize())
+                .total(complaintPage.getTotalElements())
+                .items(complaints)
+                .build();
+
+        return new ApiResponse<>(200, "Complaints retrieved successfully", response);
     }
 
     private BigDecimal calculateTotalAmount(List<Transaction> transactions, Collection<TypeTransaction> transactionTypes) {

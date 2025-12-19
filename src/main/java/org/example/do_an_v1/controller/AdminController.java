@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -198,5 +199,16 @@ public class AdminController {
     @GetMapping("/homestays/statistics")
     public ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics() {
         return adminService.getAllHomestayStatistics();
+    }
+
+    /**
+     * Admin lấy danh sách tất cả complaints với phân trang
+     */
+    @GetMapping("/complaints")
+    public ApiResponse<PageResponse<List<ComplaintDTO>>> getAllComplaints(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
+    ) {
+        return adminService.getAllComplaints(page, size);
     }
 }

@@ -2,6 +2,7 @@ package org.example.do_an_v1.service;
 
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.BillDTO;
+import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
@@ -110,4 +111,9 @@ public interface AdminService {
      * @return Danh sách thống kê của tất cả homestays
      */
     ApiResponse<List<HomestayStatisticsDTO>> getAllHomestayStatistics();
+
+    /**
+     * Lấy danh sách tất cả complaints với phân trang
+     */
+    ApiResponse<PageResponse<List<ComplaintDTO>>> getAllComplaints(int page, int size);
 }
