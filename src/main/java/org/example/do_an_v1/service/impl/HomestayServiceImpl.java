@@ -308,24 +308,24 @@ public class HomestayServiceImpl implements HomestayService {
         return pricePerDayRepository.save(newPricePerDay);
     }
 
-    private List<HomestayImage> persistImages(Homestay homestay, List<HomestayImage> imagesPayload) {
-        if (imagesPayload == null || imagesPayload.isEmpty()) {
+    private List<HomestayImage> persistImages(Homestay homestay, List<org.example.do_an_v1.dto.request.HomestayImageRequest> imageRequests) {
+        if (imageRequests == null || imageRequests.isEmpty()) {
             return List.of();
         }
 
         List<HomestayImage> images = new ArrayList<>();
-        boolean hasPrimary = imagesPayload.stream()
+        boolean hasPrimary = imageRequests.stream()
                 .anyMatch(image -> Boolean.TRUE.equals(image.getIsPrimary()));
 
-        for (int i = 0; i < imagesPayload.size(); i++) {
-            HomestayImage payloadImage = imagesPayload.get(i);
-            boolean isPrimary = Boolean.TRUE.equals(payloadImage.getIsPrimary());
+        for (int i = 0; i < imageRequests.size(); i++) {
+            org.example.do_an_v1.dto.request.HomestayImageRequest imageRequest = imageRequests.get(i);
+            boolean isPrimary = Boolean.TRUE.equals(imageRequest.getIsPrimary());
             if (!hasPrimary && i == 0) {
                 isPrimary = true;
             }
 
             HomestayImage image = HomestayImage.builder()
-                    .imageUrl(payloadImage.getImageUrl())
+                    .imageUrl(imageRequest.getImageUrl())
                     .isPrimary(isPrimary)
                     .homestay(homestay)
                     .build();
