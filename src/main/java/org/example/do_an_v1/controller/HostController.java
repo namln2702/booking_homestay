@@ -8,6 +8,7 @@ import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayStatusRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -167,6 +168,19 @@ public class HostController {
     public ApiResponse<?> processComplaint(@RequestBody @Valid ProcessComplaintRequest request) {
         Long hostUserId = identityResolver.requireUserId(null);
         return hostService.processComplaint(hostUserId, request);
+    }
+
+    /**
+     * Host cập nhật trạng thái homestay
+     * - ACTIVE -> INACTIVE: chuyển toàn bộ bill chưa hoàn thành sang REFUNDED và tạo transaction REFUND
+     * - INACTIVE -> ACTIVE: chỉ cập nhật status
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PutMapping("/homestays/status")
+    public ApiResponse<?> updateHomestayStatus(@RequestBody @Valid UpdateHomestayStatusRequest request) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.updateHomestayStatus(hostUserId, request);
     }
 
     //  Cap nhap lai token host
