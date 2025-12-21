@@ -9,6 +9,7 @@ import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.*;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.dto.response.CustomerComplaintResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderDailyPriceResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
@@ -218,6 +219,8 @@ public class CustomerServiceImpl implements CustomerService {
                 // Đã có thì lấy ra (có thể cập nhật giá nếu cần)
                 // Nếu giá khác nhau, có thể cập nhật hoặc giữ nguyên giá cũ
                 // Ở đây ta giữ nguyên giá đã có trong database
+               pricePerDay.setPrice(pricePerDayRequest.getPrice());
+                pricePerDay = pricePerDayRepository.save(pricePerDay);
             }
 
             // Tìm hoặc tạo HomestayDailyPrice cho homestay và pricePerDay này
@@ -695,6 +698,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .totalAmount(bill.getTotalAmount())
                 .depositAmount(resolveDepositAmount(bill))
                 .createdAt(bill.getCreatedAt())
+                .basePrice(homestay != null ? homestay.getBasePrice() : null)
+                .dailyPrices(mapDailyPrices(bill))
                 .build();
     }
 
@@ -712,6 +717,40 @@ public class CustomerServiceImpl implements CustomerService {
                 .checkOut(bill != null ? bill.getCheckOut() : null)
                 .billCreatedAt(bill != null ? bill.getCreatedAt() : null)
                 .complaint(ComplaintMapper.toDTO(complaint))
+                .build();
+    }
+
+    private List<CustomerOrderDailyPriceResponse> mapDailyPrices(Bill bill) {
+        if (bill == null || bill.getListHomestayDailyPrices() == null) {
+            return List.of();
+        }
+
+        Comparator<CustomerOrderDailyPriceResponse> byDate = Comparator
+                .comparing(CustomerOrderDailyPriceResponse::getDate, Comparator.nullsLast(Comparator.naturalOrder()));
+
+        return bill.getListHomestayDailyPrices().stream()
+                .map(this::mapDailyPrice)
+                .filter(Objects::nonNull)
+                .sorted(byDate)
+                .toList();
+    }
+
+    private CustomerOrderDailyPriceResponse mapDailyPrice(HomestayDailyPrice entity) {
+        if (entity == null) {
+            return null;
+        }
+
+        LocalDate date = null;
+        if (entity.getPricePerDay() != null && entity.getPricePerDay().getDay() != null) {
+            date = entity.getPricePerDay().getDay().toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+        }
+
+        return CustomerOrderDailyPriceResponse.builder()
+                .dailyPriceId(entity.getId())
+                .date(date)
+                .price(entity.getPrice())
                 .build();
     }
 

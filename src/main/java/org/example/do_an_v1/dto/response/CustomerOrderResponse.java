@@ -8,6 +8,7 @@ import org.example.do_an_v1.enums.StatusBill;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Lightweight view of a bill for the customer's "My Orders" screen.
@@ -27,4 +28,6 @@ public class CustomerOrderResponse {
     private BigDecimal totalAmount;
     private BigDecimal depositAmount;
     private LocalDateTime createdAt;
+    private Float basePrice;
+    private List<CustomerOrderDailyPriceResponse> dailyPrices;
 }
