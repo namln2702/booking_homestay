@@ -101,6 +101,13 @@ public class CustomerController {
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/me/orders/{billId}")
+    public ApiResponse<?> getMyOrderDetail(@PathVariable Long billId) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerOrderDetail(effectiveUserId, billId);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @GetMapping("/me/complaints")
     public ApiResponse<?> getMyComplaints() {
         Long effectiveUserId = identityResolver.requireUserId(null);

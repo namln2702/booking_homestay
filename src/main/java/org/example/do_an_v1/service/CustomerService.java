@@ -24,6 +24,7 @@ public interface CustomerService {
      */
     ApiResponse<?> getCustomerBills(Long userId);
     ApiResponse<?> getCustomerOrders(Long userId);
+    ApiResponse<?> getCustomerOrderDetail(Long userId, Long billId);
     ApiResponse<?> getCustomerComplaints(Long userId);
 
     /**

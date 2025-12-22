@@ -9,7 +9,11 @@ import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.*;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.dto.response.CustomerComplaintResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderActionPermissionResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderComplaintStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderDailyPriceResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderDetailResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderPaymentStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
@@ -21,6 +25,7 @@ import org.example.do_an_v1.utils.GenNumber;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -659,6 +664,50 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional(readOnly = true)
+    public ApiResponse<?> getCustomerOrderDetail(Long userId, Long billId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+        if (billId == null) {
+            throw new IllegalArgumentException("Bill id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        Bill bill = billRepository.findById(billId)
+                .orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
+        }
+
+        if (bill.getCustomer() == null || !Objects.equals(bill.getCustomer().getId(), customer.getId())) {
+            return new ApiResponse<>(403, "You can only view details for your own bills", null);
+        }
+
+        List<Transaction> transactions = transactionRepository.findByBill(bill);
+
+        CustomerOrderPaymentStatusResponse paymentStatus = buildPaymentStatusSnapshot(bill, transactions);
+        CustomerOrderComplaintStatusResponse complaintStatus = buildComplaintStatusSnapshot(bill);
+        CustomerOrderActionPermissionResponse actions = buildActionPermissions(bill, paymentStatus, complaintStatus);
+
+        CustomerOrderDetailResponse response = CustomerOrderDetailResponse.builder()
+                .summary(mapToCustomerOrder(bill))
+                .paymentStatus(paymentStatus)
+                .complaintStatus(complaintStatus)
+                .actions(actions)
+                .build();
+
+        return new ApiResponse<>(200, "Customer order detail retrieved successfully", response);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ApiResponse<?> getCustomerComplaints(Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("User id is required");
@@ -774,6 +823,226 @@ public class CustomerServiceImpl implements CustomerService {
         return bill.getTotalAmount() != null
                 ? bill.getTotalAmount().multiply(java.math.BigDecimal.valueOf(0.3))
                 : null;
+    }
+
+    private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
+        List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
+        BigDecimal depositAmount = resolveDepositAmount(bill);
+        BigDecimal totalAmount = bill.getTotalAmount();
+        BigDecimal remainingAmount = null;
+        if (totalAmount != null) {
+            if (depositAmount != null) {
+                remainingAmount = totalAmount.subtract(depositAmount).max(BigDecimal.ZERO);
+            } else {
+                remainingAmount = totalAmount;
+            }
+        }
+
+        Transaction depositTransaction = findLatestTransaction(safeTransactions, TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST, StatusTransaction.SUCCESS);
+        Transaction remainingTransaction = findLatestTransaction(safeTransactions, TypeTransaction.CUSTOMER_PAYMENT_ADMIN_SECOND, StatusTransaction.SUCCESS);
+        Transaction refundSuccessTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.SUCCESS);
+        Transaction refundPendingTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.PENDING);
+
+        boolean depositPaid = depositTransaction != null;
+        boolean remainingPaid = remainingTransaction != null;
+        boolean awaitingDeposit = bill.getStatus() == StatusBill.DEPOSIT_PENDING;
+        boolean remainingRequired = bill.getStatus() == StatusBill.DEPOSIT_PAID
+                || bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING;
+        boolean awaitingRemaining = remainingRequired && !remainingPaid;
+        boolean awaitingRefund = bill.getStatus() == StatusBill.PENDING_REFUNDED || refundPendingTransaction != null;
+        boolean refunded = bill.getStatus() == StatusBill.REFUNDED
+                || bill.getStatus() == StatusBill.CANCELLED_REFUNDED
+                || refundSuccessTransaction != null;
+        boolean paymentFailed = bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED;
+
+        String phase = determinePaymentPhase(bill.getStatus());
+
+        return CustomerOrderPaymentStatusResponse.builder()
+                .phase(phase)
+                .awaitingDeposit(awaitingDeposit)
+                .depositPaid(depositPaid)
+                .depositPaidAt(depositTransaction != null ? depositTransaction.getCompletedAt() : null)
+                .depositAmount(depositAmount)
+                .awaitingRemainingPayment(awaitingRemaining)
+                .remainingPaymentRequired(remainingRequired)
+                .remainingPaid(remainingPaid)
+                .remainingPaidAt(remainingTransaction != null ? remainingTransaction.getCompletedAt() : null)
+                .remainingAmount(remainingAmount)
+                .paymentFailed(paymentFailed)
+                .awaitingRefund(awaitingRefund)
+                .refunded(refunded)
+                .refundCompletedAt(refundSuccessTransaction != null ? refundSuccessTransaction.getCompletedAt() : null)
+                .build();
+    }
+
+    private static final List<StatusBill> STATUS_TIMELINE = List.of(
+            StatusBill.DEPOSIT_PENDING,
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+
+    private CustomerOrderComplaintStatusResponse buildComplaintStatusSnapshot(Bill bill) {
+        StatusBill status = bill.getStatus();
+        LocalDateTime complaintDeadline = calculateComplaintDeadline(bill);
+        LocalDateTime now = LocalDateTime.now();
+        boolean withinDeadline = complaintDeadline != null
+                && (now.isBefore(complaintDeadline) || now.isEqual(complaintDeadline));
+
+        boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
+        boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
+        boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
+        boolean refundInProgress = status == StatusBill.PENDING_REFUNDED;
+        boolean resolvedWithRefund = status == StatusBill.REFUNDED;
+        boolean resolvedWithoutRefund = status == StatusBill.REJECTED;
+
+        boolean complaintRelated = status == StatusBill.COMPLAINT_PENDING
+                || status == StatusBill.HOST_COMPLAINT_PROCESSING
+                || status == StatusBill.ADMIN_COMPLAINT_PROCESSING
+                || status == StatusBill.PENDING_REFUNDED
+                || status == StatusBill.REFUNDED
+                || status == StatusBill.REJECTED;
+
+        Complaint latestComplaint = findLatestComplaint(bill);
+        boolean canFileComplaint = withinDeadline && status == StatusBill.COMPLAINT_PENDING;
+
+        return CustomerOrderComplaintStatusResponse.builder()
+                .phase(determineComplaintPhase(status))
+                .complaintRelated(complaintRelated)
+                .inComplaintWindow(inComplaintWindow)
+                .underHostReview(underHostReview)
+                .underAdminReview(underAdminReview)
+                .refundInProgress(refundInProgress)
+                .resolvedWithRefund(resolvedWithRefund)
+                .resolvedWithoutRefund(resolvedWithoutRefund)
+                .complaintDeadline(complaintDeadline)
+                .withinComplaintDeadline(withinDeadline)
+                .latestComplaintId(latestComplaint != null ? latestComplaint.getId() : null)
+                .canFileComplaint(canFileComplaint)
+                .build();
+    }
+
+    private CustomerOrderActionPermissionResponse buildActionPermissions(
+            Bill bill,
+            CustomerOrderPaymentStatusResponse paymentStatus,
+            CustomerOrderComplaintStatusResponse complaintStatus
+    ) {
+        StatusBill status = bill.getStatus();
+        boolean canCancel = isStatusBeforeOrEqual(status, StatusBill.COMPLAINT_PENDING);
+        boolean canPayRemaining = status == StatusBill.REMAINING_PAYMENT_PENDING;
+        boolean canCheckIn = status == StatusBill.REMAINING_PAYMENT_PENDING && paymentStatus.isDepositPaid();
+
+        return CustomerOrderActionPermissionResponse.builder()
+                .canCancel(canCancel)
+                .canPayRemaining(canPayRemaining)
+                .canCheckIn(canCheckIn)
+                .canFileComplaint(complaintStatus.isCanFileComplaint())
+                .build();
+    }
+
+    private String determinePaymentPhase(StatusBill status) {
+        if (status == null) {
+            return "UNKNOWN";
+        }
+        return switch (status) {
+            case DEPOSIT_PENDING -> "WAITING_DEPOSIT";
+            case DEPOSIT_PAID -> "DEPOSIT_PAID_WAITING_CHECKIN";
+            case REMAINING_PAYMENT_PENDING -> "AWAITING_REMAINING_PAYMENT";
+            case REMAINING_PAYMENT_FAILED -> "REMAINING_PAYMENT_FAILED";
+            case CHECKIN_EXPIRED -> "CHECKIN_EXPIRED";
+            case COMPLAINT_PENDING -> "COMPLAINT_WINDOW";
+            case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
+            case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
+            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED -> "REFUNDED";
+            case REJECTED -> "COMPLAINT_REJECTED";
+            case SUCCEED -> "COMPLETED";
+            case CANCELLED_REFUNDED -> "CANCELLED_REFUNDED";
+            case CANCELLED -> "CANCELLED";
+        };
+    }
+
+    private String determineComplaintPhase(StatusBill status) {
+        if (status == null) {
+            return "NONE";
+        }
+        return switch (status) {
+            case COMPLAINT_PENDING -> "WINDOW";
+            case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
+            case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
+            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED, CANCELLED_REFUNDED -> "RESOLVED_REFUNDED";
+            case REJECTED, SUCCEED, CANCELLED -> "RESOLVED";
+            default -> "NONE";
+        };
+    }
+
+    private Complaint findLatestComplaint(Bill bill) {
+        if (bill == null || bill.getListComplaint() == null || bill.getListComplaint().isEmpty()) {
+            return null;
+        }
+
+        return bill.getListComplaint().stream()
+                .filter(Objects::nonNull)
+                .max(Comparator.comparing(Complaint::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    private LocalDateTime calculateComplaintDeadline(Bill bill) {
+        if (bill == null || bill.getCheckIn() == null || bill.getCheckOut() == null) {
+            return null;
+        }
+
+        long nights = DAYS.between(
+                bill.getCheckIn().toLocalDate(),
+                bill.getCheckOut().toLocalDate()
+        );
+        if (nights < 0) {
+            nights = 0;
+        }
+
+        return bill.getCheckOut().plusDays( 1);
+    }
+
+    private Transaction findLatestTransaction(List<Transaction> transactions, TypeTransaction type, StatusTransaction status) {
+        if (transactions == null || transactions.isEmpty()) {
+            return null;
+        }
+
+        return transactions.stream()
+                .filter(Objects::nonNull)
+                .filter(tx -> tx.getTransactionType() == type)
+                .filter(tx -> status == null || tx.getStatus() == status)
+                .max(Comparator.comparing(
+                        tx -> {
+                            LocalDateTime completedAt = tx.getCompletedAt();
+                            return completedAt != null ? completedAt : tx.getUpdatedAt();
+                        },
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ))
+                .orElse(null);
+    }
+
+    private boolean isStatusBeforeOrEqual(StatusBill status, StatusBill target) {
+        if (status == null || target == null) {
+            return false;
+        }
+        int currentIndex = STATUS_TIMELINE.indexOf(status);
+        int targetIndex = STATUS_TIMELINE.indexOf(target);
+        if (currentIndex == -1 || targetIndex == -1) {
+            return false;
+        }
+        return currentIndex <= targetIndex;
     }
 
 
