@@ -294,8 +294,8 @@ public class HostServiceImpl implements HostService {
         List<BillComplaintResponse> responses = complaintProcessingBills.stream()
                 .map(bill -> {
                     // Tìm complaint của bill này
-                    Complaint complaint = complaintRepository.findByBill(bill).stream()
-                            .findFirst()
+                    Complaint complaint = complaintRepository
+                            .findTopByBillOrderByCreatedAtDesc(bill)
                             .orElse(null);
                     
                     // Map complaint sang DTO
@@ -371,6 +371,13 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(400, 
                     "Bill must be in HOST_COMPLAINT_PROCESSING status to process complaint. Current status: " + bill.getStatus(), 
                     null);
+        }
+
+        Complaint latestComplaint = complaintRepository
+                .findTopByBillOrderByCreatedAtDesc(bill)
+                .orElse(null);
+        if (latestComplaint == null || !Objects.equals(latestComplaint.getId(), complaint.getId())) {
+            return new ApiResponse<>(400, "Complaint is no longer active for this bill", null);
         }
 
         // Xử lý theo quyết định của host

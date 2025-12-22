@@ -3,6 +3,7 @@ package org.example.do_an_v1.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
+import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
@@ -914,7 +915,10 @@ public class CustomerServiceImpl implements CustomerService {
                 || status == StatusBill.REJECTED;
 
         Complaint latestComplaint = findLatestComplaint(bill);
+        boolean hasActiveComplaint = latestComplaint != null;
         boolean canFileComplaint = withinDeadline && status == StatusBill.COMPLAINT_PENDING;
+        boolean canCancelComplaint = status == StatusBill.HOST_COMPLAINT_PROCESSING && hasActiveComplaint;
+        boolean canUpdateComplaint = canCancelComplaint;
 
         return CustomerOrderComplaintStatusResponse.builder()
                 .phase(determineComplaintPhase(status))
@@ -927,8 +931,10 @@ public class CustomerServiceImpl implements CustomerService {
                 .resolvedWithoutRefund(resolvedWithoutRefund)
                 .complaintDeadline(complaintDeadline)
                 .withinComplaintDeadline(withinDeadline)
-                .latestComplaintId(latestComplaint != null ? latestComplaint.getId() : null)
+                .latestComplaintId(hasActiveComplaint ? latestComplaint.getId() : null)
                 .canFileComplaint(canFileComplaint)
+                .canCancelComplaint(canCancelComplaint)
+                .canUpdateComplaint(canUpdateComplaint)
                 .build();
     }
 
@@ -988,13 +994,10 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private Complaint findLatestComplaint(Bill bill) {
-        if (bill == null || bill.getListComplaint() == null || bill.getListComplaint().isEmpty()) {
+        if (bill == null) {
             return null;
         }
-
-        return bill.getListComplaint().stream()
-                .filter(Objects::nonNull)
-                .max(Comparator.comparing(Complaint::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+        return complaintRepository.findTopByBillOrderByCreatedAtDesc(bill)
                 .orElse(null);
     }
 
@@ -1270,12 +1273,16 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(403, "You can only update your own complaints", null);
         }
 
-        // Validate: Chỉ có thể update khi bill ở trạng thái COMPLAINT_PENDING hoặc HOST_COMPLAINT_PROCESSING
-        // (chưa được xử lý bởi admin)
-        if ( bill.getStatus() != StatusBill.HOST_COMPLAINT_PROCESSING) {
-            return new ApiResponse<>(400, 
-                    "Cannot update complaint. Bill is already being processed by admin or has been resolved. Current status: " + bill.getStatus(), 
+        // Validate: Chỉ có thể update khi bill ở trạng thái HOST_COMPLAINT_PROCESSING
+        if (bill.getStatus() != StatusBill.HOST_COMPLAINT_PROCESSING) {
+            return new ApiResponse<>(400,
+                    "Complaint can only be updated when bill status is HOST_COMPLAINT_PROCESSING",
                     null);
+        }
+
+        Complaint latestComplaint = findLatestComplaint(bill);
+        if (latestComplaint == null || !Objects.equals(latestComplaint.getId(), complaint.getId())) {
+            return new ApiResponse<>(400, "Only the latest complaint for this bill can be updated", null);
         }
 
         // Cập nhật description
@@ -1314,5 +1321,75 @@ public class CustomerServiceImpl implements CustomerService {
         ComplaintDTO resultDTO = ComplaintMapper.toDTO(updatedComplaint);
 
         return new ApiResponse<>(200, "Complaint updated successfully", resultDTO);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<?> cancelComplaint(Long userId, Long billId, CancelComplaintRequest request) {
+        if (userId == null) {
+            return new ApiResponse<>(400, "User ID is required", null);
+        }
+        if (billId == null) {
+            return new ApiResponse<>(400, "Bill ID is required", null);
+        }
+
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(404, "User not found with id: " + userId, null);
+        }
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        Bill bill = billRepository.findById(billId).orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
+        }
+
+        if (bill.getCustomer() == null || !Objects.equals(bill.getCustomer().getId(), customer.getId())) {
+            return new ApiResponse<>(403, "You can only cancel complaints for your own bills", null);
+        }
+
+        if (bill.getStatus() != StatusBill.HOST_COMPLAINT_PROCESSING) {
+            return new ApiResponse<>(400,
+                    "Complaint can only be cancelled when bill status is HOST_COMPLAINT_PROCESSING",
+                    null);
+        }
+
+        Complaint latestComplaint = findLatestComplaint(bill);
+        if (latestComplaint == null) {
+            return new ApiResponse<>(400, "No active complaint found for this bill", null);
+        }
+
+        String reason = request != null ? request.getReason() : null;
+        if (reason != null && reason.trim().isEmpty()) {
+            reason = null;
+        }
+
+        Set<Image> images = latestComplaint.getListImage();
+        if (images != null && !images.isEmpty()) {
+            for (Image image : images) {
+                image.setComplaint(null);
+                imageRepository.delete(image);
+            }
+        }
+
+        complaintRepository.delete(latestComplaint);
+
+        bill.setStatus(StatusBill.COMPLAINT_PENDING);
+        billRepository.save(bill);
+
+        log.info("Complaint {} cancelled by customer {} for bill {}. Reason: {}", latestComplaint.getId(), userId, billId, reason);
+
+        Map<String, Object> data = Map.of(
+                "billId", bill.getId(),
+                "newBillStatus", bill.getStatus(),
+                "complaintId", latestComplaint.getId(),
+                "reason", reason
+        );
+
+        return new ApiResponse<>(200, "Complaint cancelled successfully", data);
     }
 }

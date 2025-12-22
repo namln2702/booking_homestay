@@ -24,4 +24,6 @@ public class CustomerOrderComplaintStatusResponse {
     private boolean withinComplaintDeadline;
     private Long latestComplaintId;
     private boolean canFileComplaint;
+    private boolean canCancelComplaint;
+    private boolean canUpdateComplaint;
 }

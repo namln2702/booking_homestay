@@ -5,6 +5,7 @@ import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
+import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 
 public interface CustomerService {
 
@@ -46,4 +47,9 @@ public interface CustomerService {
      * Chỉ có thể update khi complaint chưa được xử lý bởi admin
      */
     ApiResponse<?> updateComplaint(Long userId, Long complaintId, ComplaintDTO complaintDTO);
+
+    /**
+     * Customer hủy khiếu nại hiện tại của bill
+     */
+    ApiResponse<?> cancelComplaint(Long userId, Long billId, CancelComplaintRequest request);
 }
