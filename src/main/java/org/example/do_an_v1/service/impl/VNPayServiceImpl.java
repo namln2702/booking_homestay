@@ -7,12 +7,14 @@ import org.example.do_an_v1.dto.request.VNPayPaymentRequest;
 import org.example.do_an_v1.dto.request.VNPayReturnRequest;
 import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.Transaction;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusTransaction;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.CustomerRepository;
 import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.service.EmailService;
@@ -23,6 +25,8 @@ import org.example.do_an_v1.service.support.VNPayVerifySupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +41,7 @@ public class VNPayServiceImpl implements VNPayService {
     private final BillRepository billRepository;
     private final TransactionRepository transactionRepository;
     private final HomestayDailyPricesRepository homestayDailyPricesRepository;
+    private final CustomerRepository customerRepository;
     private final EmailService emailService;
 
     @Override
@@ -107,6 +112,11 @@ public class VNPayServiceImpl implements VNPayService {
 
         Bill bill = verifyResult.getBill();
         Transaction transaction = verifyResult.getTransaction();
+
+        Customer customer = bill.getCustomer();
+        customer.setLastBooking(LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")));
+        customer = customerRepository.save(customer);
 
         // Validate: Bill phải ở trạng thái DEPOSIT_PENDING
         if (bill.getStatus() != StatusBill.DEPOSIT_PENDING) {

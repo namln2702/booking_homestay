@@ -9,8 +9,9 @@ public enum StatusBill {
     DEPOSIT_PENDING(0),
 
     /**
-     * Khách đã thanh toán cọc thành công.
-     * Đơn đang chờ đến ngày check-in.
+     * Thanh toán đợt 1 thất bại
+     * Đơn bị hủy, không có giao dịch tiền.
+     * Status cuối của luồng thanh toán đợt 1.
      */
     DEPOSIT_PAID(11),
 
@@ -23,6 +24,7 @@ public enum StatusBill {
     /**
      * Thanh toán thất bại hoặc khách không thanh toán đúng hạn.
      * Đơn bị hủy, không có giao dịch tiền.
+     * Status cuối của luồng thanh toán đợt 2.
      */
     REMAINING_PAYMENT_FAILED(2),
 
@@ -63,28 +65,33 @@ public enum StatusBill {
     /**
      * Khiếu nại được xử lý thành công.
      * Admin hoàn tiền cho Customer (admin → customer).
+     * Status cuối của luồng refund
      */
     REFUNDED(8),
 
     /**
      * Khiếu nại bị từ chối.
      * Đơn kết thúc mà không hoàn tiền.
+     * Luồng thanh toán cuối của luồng refund
      */
     REJECTED(9),
 
     /**
      * Đơn hoàn tất thành công.
      * Không còn khiếu nại, admin chuyển tiền cho host.
+     * Luồng thanh toán cuối của luồng thanh toán
      */
     SUCCEED(10),
 
     /**
      * Đơn bị customer hủy, và được hoàn tiền
+     * Luồng thanh toán cuối của luồng thanh toán
      */
     CANCELLED_REFUNDED (16),
 
     /**
      * Đơn bị customer hủy, và không được hoàn tiền
+     * Luồng thanh toán cuối của luồng thanh toán sau khi thanh toán xong đợt 1
      */
     CANCELLED (15);
 

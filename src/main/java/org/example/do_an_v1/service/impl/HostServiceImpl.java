@@ -12,6 +12,8 @@ import org.example.do_an_v1.dto.request.CheckoutRequest;
 import org.example.do_an_v1.dto.request.HostRegistrationRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
+import org.example.do_an_v1.dto.request.UpdateHomestayStatusRequest;
+import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Complaint;
@@ -56,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -842,5 +845,121 @@ public class HostServiceImpl implements HostService {
         billRepository.save(bill);
 
         return new ApiResponse<>(200, "Bill cancelled successfully. No refund will be processed.", null);
+    }
+
+    // Trạng thái bill đã hoàn thành (không cần refund khi ẩn homestay)
+    private static final EnumSet<StatusBill> COMPLETED_BILL_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.CANCELLED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.SUCCEED,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED
+
+    );
+
+    @Override
+    @Transactional
+    public ApiResponse<?> updateHomestayStatus(Long hostUserId, UpdateHomestayStatusRequest request) {
+        if (hostUserId == null) {
+            return new ApiResponse<>(400, "Host user ID is required", null);
+        }
+        if (request == null || request.getHomestayId() == null) {
+            return new ApiResponse<>(400, "Homestay ID is required", null);
+        }
+        if (request.getStatus() == null) {
+            return new ApiResponse<>(400, "Status is required", null);
+        }
+
+        // Validate host
+        Host host = hostRepository.findById(hostUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Host not found for user id " + hostUserId));
+
+        // Validate homestay thuộc về host này
+        Homestay homestay = homestayRepository.findById(request.getHomestayId())
+                .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + request.getHomestayId()));
+
+        if (homestay.getHost() == null || !Objects.equals(homestay.getHost().getId(), host.getId())) {
+            return new ApiResponse<>(403, "You can only update status of your own homestays", null);
+        }
+
+        StatusHomestay currentStatus = homestay.getStatusHomestay();
+        StatusHomestay newStatus = request.getStatus();
+
+        // Nếu status không thay đổi
+        if (currentStatus == newStatus) {
+            return new ApiResponse<>(200, "Homestay status is already " + newStatus, null);
+        }
+
+        // Xử lý khi ACTIVE -> INACTIVE
+        if (currentStatus == StatusHomestay.ACTIVE && newStatus == StatusHomestay.INACTIVE) {
+            // Tìm tất cả bills chưa hoàn thành của homestay này
+            List<Bill> bills = billRepository.findByHomestay(homestay);
+            List<Bill> incompleteBills = bills.stream()
+                    .filter(bill -> bill.getStatus() != null && !COMPLETED_BILL_STATUSES.contains(bill.getStatus()))
+                    .toList();
+
+            // Lấy admin user để tạo transaction REFUND
+            User adminUser = adminRepository.findAll().stream()
+                    .filter(admin -> admin.getStatus() == Status.ACTIVE)
+                    .map(Admin::getUser)
+                    .findFirst()
+                    .orElse(null);
+
+            if (adminUser == null) {
+                return new ApiResponse<>(500, "No active admin found to process refunds", null);
+            }
+
+            int refundedCount = 0;
+            for (Bill bill : incompleteBills) {
+                // Chuyển bill sang REFUNDED
+                bill.setStatus(StatusBill.REFUNDED);
+                billRepository.save(bill);
+
+                // Tạo transaction REFUND nếu bill có totalAmount
+                if (bill.getTotalAmount() != null && bill.getTotalAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
+                    // Kiểm tra xem đã có transaction REFUND cho bill này chưa
+                    List<Transaction> existingRefunds = transactionRepository.findByBill(bill).stream()
+                            .filter(t -> t.getTransactionType() == TypeTransaction.REFUND)
+                            .toList();
+
+                    if (existingRefunds.isEmpty()) {
+                        Transaction refundTransaction = Transaction.builder()
+                                .amount(bill.getTotalAmount())
+                                .transactionType(TypeTransaction.REFUND)
+                                .status(StatusTransaction.PENDING) // Chờ admin xác nhận
+                                .bill(bill)
+                                .fromUser(adminUser)
+                                .toUser(bill.getCustomer() != null ? bill.getCustomer().getUser() : null)
+                                .completedAt(null)
+                                .build();
+                        transactionRepository.save(refundTransaction);
+                        refundedCount++;
+                    }
+                }
+            }
+
+            // Cập nhật status homestay
+            homestay.setStatusHomestay(StatusHomestay.INACTIVE);
+            homestayRepository.save(homestay);
+
+            return new ApiResponse<>(200, 
+                    String.format("Homestay status updated to INACTIVE. %d incomplete bills refunded.", refundedCount), 
+                    null);
+        }
+
+        // Xử lý khi INACTIVE -> ACTIVE (hoặc các trường hợp khác)
+        if (currentStatus == StatusHomestay.INACTIVE && newStatus == StatusHomestay.ACTIVE) {
+            homestay.setStatusHomestay(StatusHomestay.ACTIVE);
+            homestayRepository.save(homestay);
+            return new ApiResponse<>(200, "Homestay status updated to ACTIVE successfully", null);
+        }
+
+        // Các trường hợp khác: chỉ cập nhật status
+        homestay.setStatusHomestay(newStatus);
+        homestayRepository.save(homestay);
+        return new ApiResponse<>(200, "Homestay status updated successfully", null);
     }
 }
