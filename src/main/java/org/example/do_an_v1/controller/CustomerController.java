@@ -93,6 +93,20 @@ public class CustomerController {
         return customerService.getCustomerBills(effectiveUserId);
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/me/orders")
+    public ApiResponse<?> getMyOrders() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerOrders(effectiveUserId);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/me/complaints")
+    public ApiResponse<?> getMyComplaints() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerComplaints(effectiveUserId);
+    }
+
     /**
      * Customer hủy bill
      * Nếu hủy trước 2 ngày so với check-in thì được hoàn tiền

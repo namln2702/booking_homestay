@@ -8,6 +8,9 @@ import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.*;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
+import org.example.do_an_v1.dto.response.CustomerComplaintResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderDailyPriceResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderResponse;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.CustomerService;
@@ -216,6 +219,8 @@ public class CustomerServiceImpl implements CustomerService {
                 // Đã có thì lấy ra (có thể cập nhật giá nếu cần)
                 // Nếu giá khác nhau, có thể cập nhật hoặc giữ nguyên giá cũ
                 // Ở đây ta giữ nguyên giá đã có trong database
+               pricePerDay.setPrice(pricePerDayRequest.getPrice());
+                pricePerDay = pricePerDayRepository.save(pricePerDay);
             }
 
             // Tìm hoặc tạo HomestayDailyPrice cho homestay và pricePerDay này
@@ -625,6 +630,153 @@ public class CustomerServiceImpl implements CustomerService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Customer bills retrieved successfully", billDTOS);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getCustomerOrders(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        List<Bill> bills = billRepository.findByCustomer(customer);
+        Comparator<Bill> byCreatedAtDesc = Comparator
+                .comparing(Bill::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .reversed();
+
+        List<CustomerOrderResponse> responses = bills.stream()
+                .sorted(byCreatedAtDesc)
+                .map(this::mapToCustomerOrder)
+                .toList();
+
+        return new ApiResponse<>(200, "Customer orders retrieved successfully", responses);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getCustomerComplaints(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        List<Complaint> complaints = complaintRepository.findByBill_Customer(customer);
+        Comparator<Complaint> byCreatedAtDesc = Comparator
+                .comparing(Complaint::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .reversed();
+
+        List<CustomerComplaintResponse> responses = complaints.stream()
+                .sorted(byCreatedAtDesc)
+                .map(this::mapToCustomerComplaint)
+                .toList();
+
+        return new ApiResponse<>(200, "Customer complaints retrieved successfully", responses);
+    }
+
+    private CustomerOrderResponse mapToCustomerOrder(Bill bill) {
+        Homestay homestay = bill.getHomestay();
+        return CustomerOrderResponse.builder()
+                .billId(bill.getId())
+                .billCode(bill.getCode())
+                .status(bill.getStatus())
+                .homestayId(homestay != null ? homestay.getId() : null)
+                .homestayName(homestay != null ? homestay.getTitle() : null)
+                .checkIn(bill.getCheckIn())
+                .checkOut(bill.getCheckOut())
+                .totalAmount(bill.getTotalAmount())
+                .depositAmount(resolveDepositAmount(bill))
+                .createdAt(bill.getCreatedAt())
+                .basePrice(homestay != null ? homestay.getBasePrice() : null)
+                .dailyPrices(mapDailyPrices(bill))
+                .build();
+    }
+
+    private CustomerComplaintResponse mapToCustomerComplaint(Complaint complaint) {
+        Bill bill = complaint.getBill();
+        Homestay homestay = bill != null ? bill.getHomestay() : null;
+
+        return CustomerComplaintResponse.builder()
+                .billId(bill != null ? bill.getId() : null)
+                .billCode(bill != null ? bill.getCode() : null)
+                .billStatus(bill != null ? bill.getStatus() : null)
+                .homestayId(homestay != null ? homestay.getId() : null)
+                .homestayName(homestay != null ? homestay.getTitle() : null)
+                .checkIn(bill != null ? bill.getCheckIn() : null)
+                .checkOut(bill != null ? bill.getCheckOut() : null)
+                .billCreatedAt(bill != null ? bill.getCreatedAt() : null)
+                .complaint(ComplaintMapper.toDTO(complaint))
+                .build();
+    }
+
+    private List<CustomerOrderDailyPriceResponse> mapDailyPrices(Bill bill) {
+        if (bill == null || bill.getListHomestayDailyPrices() == null) {
+            return List.of();
+        }
+
+        Comparator<CustomerOrderDailyPriceResponse> byDate = Comparator
+                .comparing(CustomerOrderDailyPriceResponse::getDate, Comparator.nullsLast(Comparator.naturalOrder()));
+
+        return bill.getListHomestayDailyPrices().stream()
+                .map(this::mapDailyPrice)
+                .filter(Objects::nonNull)
+                .sorted(byDate)
+                .toList();
+    }
+
+    private CustomerOrderDailyPriceResponse mapDailyPrice(HomestayDailyPrice entity) {
+        if (entity == null) {
+            return null;
+        }
+
+        LocalDate date = null;
+        if (entity.getPricePerDay() != null && entity.getPricePerDay().getDay() != null) {
+            date = entity.getPricePerDay().getDay().toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+        }
+
+        return CustomerOrderDailyPriceResponse.builder()
+                .dailyPriceId(entity.getId())
+                .date(date)
+                .price(entity.getPrice())
+                .build();
+    }
+
+    private java.math.BigDecimal resolveDepositAmount(Bill bill) {
+        if (bill == null) {
+            return null;
+        }
+
+        List<Transaction> transactions = transactionRepository.findByBill(bill);
+        java.math.BigDecimal depositFromTransaction = transactions.stream()
+                .filter(tx -> tx.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST)
+                .map(Transaction::getAmount)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+
+        if (depositFromTransaction != null) {
+            return depositFromTransaction;
+        }
+
+        return bill.getTotalAmount() != null
+                ? bill.getTotalAmount().multiply(java.math.BigDecimal.valueOf(0.3))
+                : null;
     }
 
 
