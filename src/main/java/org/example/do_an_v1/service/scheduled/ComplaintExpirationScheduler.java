@@ -3,7 +3,6 @@ package org.example.do_an_v1.service.scheduled;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.entity.Bill;
-import org.example.do_an_v1.entity.Complaint;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.repository.BillRepository;
 import org.example.do_an_v1.repository.ComplaintRepository;
@@ -54,9 +53,9 @@ public class ComplaintExpirationScheduler {
                 // Kiểm tra xem đã hết thời gian khiếu nại chưa
                 if (now.isAfter(complaintDeadline) || now.isEqual(complaintDeadline)) {
                     // Kiểm tra xem có complaint nào cho bill này không
-                    List<Complaint> complaints = complaintRepository.findByBill(bill);
+                    boolean hasComplaint = !complaintRepository.findByBill(bill).isEmpty();
                     
-                    if (complaints.isEmpty()) {
+                    if (!hasComplaint) {
                         // Không có complaint -> chuyển thành SUCCEED
                         bill.setStatus(StatusBill.SUCCEED);
                         billRepository.save(bill);
@@ -66,8 +65,8 @@ public class ComplaintExpirationScheduler {
                                 bill.getId(), complaintDeadline);
                     } else {
                         // Có complaint -> giữ nguyên status (sẽ được xử lý bởi host/admin)
-                        log.debug("Bill {} has {} complaint(s), keeping status COMPLAINT_PENDING", 
-                                bill.getId(), complaints.size());
+                        log.debug("Bill {} has existing complaint(s), keeping status COMPLAINT_PENDING", 
+                                bill.getId());
                     }
                 }
             }
@@ -79,4 +78,3 @@ public class ComplaintExpirationScheduler {
         }
     }
 }
-

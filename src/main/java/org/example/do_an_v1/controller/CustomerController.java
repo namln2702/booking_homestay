@@ -6,6 +6,7 @@ import org.example.do_an_v1.dto.BookingDTO;
 import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
+import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.service.CustomerService;
@@ -101,6 +102,13 @@ public class CustomerController {
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/me/orders/{billId}")
+    public ApiResponse<?> getMyOrderDetail(@PathVariable Long billId) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerOrderDetail(effectiveUserId, billId);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @GetMapping("/me/complaints")
     public ApiResponse<?> getMyComplaints() {
         Long effectiveUserId = identityResolver.requireUserId(null);
@@ -143,6 +151,19 @@ public class CustomerController {
     ) {
         Long effectiveUserId = identityResolver.requireUserId(null);
         return customerService.updateComplaint(effectiveUserId, complaintId, complaintDTO);
+    }
+
+    /**
+     * Customer hủy khiếu nại hiện tại của bill
+     */
+    @PreAuthorize("hasAuthority('ROLE_CUSTOMER')")
+    @PostMapping("/bills/{billId}/complaint/cancel")
+    public ApiResponse<?> cancelComplaint(
+            @PathVariable Long billId,
+            @RequestBody(required = false) @Valid CancelComplaintRequest request
+    ) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.cancelComplaint(effectiveUserId, billId, request);
     }
 
 }
