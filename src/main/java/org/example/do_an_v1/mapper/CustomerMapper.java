@@ -1,6 +1,7 @@
 package org.example.do_an_v1.mapper;
 
 import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.PreferenceDTO;
 import org.example.do_an_v1.entity.Customer;
 
 import java.util.List;
@@ -16,12 +17,12 @@ public class CustomerMapper {
             return null;
         }
 
-        // Map listPreference từ Set<Preference> sang List<Long>
-        List<Long> listPreference = null;
+        // Map listPreference từ Set<Preference> sang List<PreferenceDTO>
+        List<PreferenceDTO> listPreference = null;
         if (customer.getListPreferences() != null && !customer.getListPreferences().isEmpty()) {
             listPreference = customer.getListPreferences().stream()
-                    .map(preference -> preference != null ? preference.getId() : null)
-                    .filter(id -> id != null)
+                    .map(PreferenceMapper::toDTO)
+                    .filter(dto -> dto != null)
                     .collect(Collectors.toList());
         }
 

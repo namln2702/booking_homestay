@@ -3,10 +3,12 @@ package org.example.do_an_v1.mapper.profile;
 import org.example.do_an_v1.dto.AdminDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HostDTO;
+import org.example.do_an_v1.dto.PreferenceDTO;
 import org.example.do_an_v1.entity.Admin;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.User;
+import org.example.do_an_v1.mapper.PreferenceMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -21,12 +23,12 @@ public class ProfileMapper {
         Long userId = user != null ? user.getId() : null;
         Long customerId = customer.getId() != null ? customer.getId() : userId;
 
-        // Map listPreference từ Set<Preference> sang List<Long>
-        List<Long> listPreference = null;
+        // Map listPreference từ Set<Preference> sang List<PreferenceDTO>
+        List<PreferenceDTO> listPreference = null;
         if (customer.getListPreferences() != null && !customer.getListPreferences().isEmpty()) {
             listPreference = customer.getListPreferences().stream()
-                    .map(preference -> preference != null ? preference.getId() : null)
-                    .filter(id -> id != null)
+                    .map(PreferenceMapper::toDTO)
+                    .filter(dto -> dto != null)
                     .collect(Collectors.toList());
         }
 

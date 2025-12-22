@@ -347,16 +347,19 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // Tạo Set mới chứa các preferences từ request
+        // Request có thể là List<PreferenceDTO> hoặc List<Long> (tương thích ngược)
         Set<Preference> newPreferences = new HashSet<>();
-        for (Long preferenceId : customerDTO.getListPreference()) {
-            if (preferenceId == null) {
-                continue; // Bỏ qua null values
+        if (customerDTO.getListPreference() != null) {
+            for (org.example.do_an_v1.dto.PreferenceDTO preferenceDTO : customerDTO.getListPreference()) {
+                if (preferenceDTO == null || preferenceDTO.getId() == null) {
+                    continue; // Bỏ qua null values
+                }
+                Preference preference = preferenceRepository.findById(preferenceDTO.getId()).orElse(null);
+                if (preference == null) {
+                    return new ApiResponse<>(404, "Preference not found with id: " + preferenceDTO.getId(), null);
+                }
+                newPreferences.add(preference);
             }
-            Preference preference = preferenceRepository.findById(preferenceId).orElse(null);
-            if (preference == null) {
-                return new ApiResponse<>(404, "Preference not found with id: " + preferenceId, null);
-            }
-            newPreferences.add(preference);
         }
 
         // Cập nhật preferences cho customer (thay thế toàn bộ)
