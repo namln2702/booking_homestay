@@ -6,11 +6,14 @@ import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
+
+import java.util.List;
 
 public interface CustomerService {
 
 
-    ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO customerDTO) throws RuntimeException;
+    ApiResponse<?> upsertCustomerProfile(Long userId, CustomerProfileUpdateRequest request) throws RuntimeException;
     ApiResponse<CustomerDTO> getCustomerByUserId(Long userId);
     ApiResponse<?> booking(Long userId, BookingDTO bookingDTO);
 
@@ -19,6 +22,8 @@ public interface CustomerService {
     ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
 
     ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
+
+    ApiResponse<List<ReviewDTO>> getCustomerReviews(Long userId);
 
     /**
      * Thống kê các bill đã đặt của Customer

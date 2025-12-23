@@ -7,12 +7,15 @@ import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -24,13 +27,13 @@ public class CustomerController {
     private final SessionConfig sessionConfig;
 
     /**
-     * register a new customer
+     * Customer updates their own profile
      */
-    @PostMapping
-    public ApiResponse<CustomerDTO> upsertProfileCustomer(@RequestBody @Valid CustomerDTO customerDTO) {
-        Long effectiveUserId = identityResolver.requireUserId(customerDTO.getIdUser());
-        customerDTO.setIdUser(effectiveUserId);
-        return customerService.upsertCustomerProfile(customerDTO);
+    @PreAuthorize("hasAuthority('ROLE_CUSTOMER')")
+    @PutMapping("/me")
+    public ApiResponse<?> upsertProfileCustomer(@RequestBody CustomerProfileUpdateRequest request) {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.upsertCustomerProfile(effectiveUserId, request);
     }
 
     // Fetch the authenticated customer's profile
@@ -73,6 +76,13 @@ public class CustomerController {
     ){
         Long effectiveUserId = identityResolver.requireUserId(null);
         return customerService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/user/reviews")
+    public ApiResponse<List<ReviewDTO>> getMyReviews() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerReviews(effectiveUserId);
     }
 
     //update Preference for Customer
