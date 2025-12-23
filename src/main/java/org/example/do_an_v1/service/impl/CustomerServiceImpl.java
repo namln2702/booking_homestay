@@ -964,6 +964,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
         List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
+        StatusBill status = bill.getStatus();
         BigDecimal depositAmount = resolveDepositAmount(bill);
         BigDecimal totalAmount = bill.getTotalAmount();
         BigDecimal remainingAmount = null;
@@ -980,19 +981,22 @@ public class CustomerServiceImpl implements CustomerService {
         Transaction refundSuccessTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.SUCCESS);
         Transaction refundPendingTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.PENDING);
 
-        boolean depositPaid = depositTransaction != null;
-        boolean remainingPaid = remainingTransaction != null;
-        boolean awaitingDeposit = bill.getStatus() == StatusBill.DEPOSIT_PENDING;
-        boolean remainingRequired = bill.getStatus() == StatusBill.DEPOSIT_PAID
-                || bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING;
-        boolean awaitingRemaining = remainingRequired && !remainingPaid;
-        boolean awaitingRefund = bill.getStatus() == StatusBill.PENDING_REFUNDED || refundPendingTransaction != null;
-        boolean refunded = bill.getStatus() == StatusBill.REFUNDED
-                || bill.getStatus() == StatusBill.CANCELLED_REFUNDED
-                || refundSuccessTransaction != null;
-        boolean paymentFailed = bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED;
+        boolean depositSettledByStatus = status != null && DEPOSIT_COMPLETED_STATUSES.contains(status);
+        boolean depositPaid = depositSettledByStatus || depositTransaction != null;
+        boolean awaitingDeposit = status == StatusBill.DEPOSIT_PENDING && !depositPaid;
 
-        String phase = determinePaymentPhase(bill.getStatus());
+        boolean remainingSettledByStatus = status != null && REMAINING_PAYMENT_COMPLETED_STATUSES.contains(status);
+        boolean remainingPaid = remainingSettledByStatus || remainingTransaction != null;
+        boolean remainingRequired = status != null && REMAINING_PAYMENT_REQUIRED_STATUSES.contains(status);
+        boolean awaitingRemaining = remainingRequired && !remainingPaid;
+
+        boolean awaitingRefund = status == StatusBill.PENDING_REFUNDED || refundPendingTransaction != null;
+        boolean refunded = status == StatusBill.REFUNDED
+                || status == StatusBill.CANCELLED_REFUNDED
+                || refundSuccessTransaction != null;
+        boolean paymentFailed = status == StatusBill.REMAINING_PAYMENT_FAILED;
+
+        String phase = determinePaymentPhase(status);
 
         return CustomerOrderPaymentStatusResponse.builder()
                 .phase(phase)
@@ -1027,6 +1031,38 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.SUCCEED,
             StatusBill.CANCELLED_REFUNDED,
             StatusBill.CANCELLED
+    );
+
+    private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED
+    );
+
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING
     );
 
     private CustomerOrderComplaintStatusResponse buildComplaintStatusSnapshot(Bill bill) {
