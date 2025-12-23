@@ -24,7 +24,7 @@ public class AmenitiesServiceImpl implements AmenitiesService {
     @Override
     @Transactional(readOnly = true)
     public ApiResponse<List<AmenitiesDTO>> getAllAmenities() {
-        List<Amenities> amenities = amenitiesRepository.findAll();
+        List<Amenities> amenities = amenitiesRepository.findByDeletedFalse();
 
         List<AmenitiesDTO> amenitiesDTOS = amenities.stream()
                 .map(AmenitiesMapper::toDTO)
@@ -40,7 +40,7 @@ public class AmenitiesServiceImpl implements AmenitiesService {
             throw new IllegalArgumentException("Amenity id is required");
         }
 
-        Amenities amenity = amenitiesRepository.findById(id)
+        Amenities amenity = amenitiesRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new IllegalArgumentException("Amenity not found for id " + id));
 
         AmenitiesDTO amenityDTO = AmenitiesMapper.toDTO(amenity);
@@ -82,6 +82,7 @@ public class AmenitiesServiceImpl implements AmenitiesService {
                         .name(amenityDTO.getName().trim())
                         .description(amenityDTO.getDescription().trim())
                         .imageUrl(amenityDTO.getImageUrl().trim())
+                        .deleted(false)
                         .build())
                 .collect(Collectors.toList());
 
@@ -106,7 +107,7 @@ public class AmenitiesServiceImpl implements AmenitiesService {
             throw new IllegalArgumentException("Amenity DTO is required");
         }
 
-        Amenities amenity = amenitiesRepository.findById(id)
+        Amenities amenity = amenitiesRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Amenity not found with id: " + id));
 
         // Cập nhật name nếu có
@@ -146,7 +147,9 @@ public class AmenitiesServiceImpl implements AmenitiesService {
                     amenity.getListHomestay().size() + " homestay(s)");
         }
 
-        amenitiesRepository.delete(amenity);
+        // Soft delete: set deleted = true
+        amenity.setDeleted(true);
+        amenitiesRepository.save(amenity);
 
         return new ApiResponse<>(200, "Amenity deleted successfully", null);
     }

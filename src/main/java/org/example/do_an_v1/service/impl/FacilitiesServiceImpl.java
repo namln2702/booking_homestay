@@ -24,7 +24,7 @@ public class FacilitiesServiceImpl implements FacilitiesService {
     @Override
     @Transactional(readOnly = true)
     public ApiResponse<List<FacilitiesDTO>> getAllFacilities() {
-        List<Facilities> facilities = facilitiesRepository.findAll();
+        List<Facilities> facilities = facilitiesRepository.findByDeletedFalse();
 
         List<FacilitiesDTO> facilitiesDTOS = facilities.stream()
                 .map(FacilitiesMapper::toDTO)
@@ -40,12 +40,46 @@ public class FacilitiesServiceImpl implements FacilitiesService {
             throw new IllegalArgumentException("Facility id is required");
         }
 
-        Facilities facility = facilitiesRepository.findById(id)
+        Facilities facility = facilitiesRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new IllegalArgumentException("Facility not found for id " + id));
 
         FacilitiesDTO facilityDTO = FacilitiesMapper.toDTO(facility);
 
         return new ApiResponse<>(200, "Facility retrieved successfully", facilityDTO);
+    }
+
+    @Override
+    @Transactional
+    public ApiResponse<FacilitiesDTO> createFacility(FacilitiesDTO facilitiesDTO) {
+        if (facilitiesDTO == null) {
+            throw new IllegalArgumentException("Facility DTO is required");
+        }
+        if (facilitiesDTO.getName() == null || facilitiesDTO.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Facility name is required");
+        }
+        if (facilitiesDTO.getCategory() == null || facilitiesDTO.getCategory().trim().isEmpty()) {
+            throw new IllegalArgumentException("Facility category is required");
+        }
+
+        // Kiểm tra xem đã tồn tại facility với tên này chưa (chỉ check những cái chưa bị xóa)
+        List<Facilities> existingFacilities = facilitiesRepository.findByDeletedFalse();
+        boolean nameExists = existingFacilities.stream()
+                .anyMatch(f -> f.getName().equalsIgnoreCase(facilitiesDTO.getName().trim()));
+        
+        if (nameExists) {
+            throw new IllegalArgumentException("Facility with name '" + facilitiesDTO.getName() + "' already exists");
+        }
+
+        Facilities facility = Facilities.builder()
+                .name(facilitiesDTO.getName().trim())
+                .category(facilitiesDTO.getCategory().trim())
+                .deleted(false)
+                .build();
+
+        Facilities savedFacility = facilitiesRepository.save(facility);
+        FacilitiesDTO responseDTO = FacilitiesMapper.toDTO(savedFacility);
+
+        return new ApiResponse<>(201, "Facility created successfully", responseDTO);
     }
 
     @Override
@@ -73,11 +107,36 @@ public class FacilitiesServiceImpl implements FacilitiesService {
             }
         }
 
+        // Lấy danh sách facilities hiện có để kiểm tra trùng tên (chỉ check những cái chưa bị xóa)
+        List<Facilities> existingFacilities = facilitiesRepository.findByDeletedFalse();
+        java.util.Set<String> existingNames = existingFacilities.stream()
+                .map(f -> f.getName().toLowerCase())
+                .collect(Collectors.toSet());
+
+        // Validate từng facility trong list và kiểm tra trùng tên trong request
+        java.util.Set<String> requestNames = new java.util.HashSet<>();
+        for (int i = 0; i < request.getFacilities().size(); i++) {
+            FacilitiesDTO facilityDTO = request.getFacilities().get(i);
+            String normalizedName = facilityDTO.getName().trim().toLowerCase();
+            
+            // Kiểm tra trùng tên trong request
+            if (requestNames.contains(normalizedName)) {
+                throw new IllegalArgumentException("Duplicate facility name '" + facilityDTO.getName() + "' in request at index " + i);
+            }
+            requestNames.add(normalizedName);
+
+            // Kiểm tra trùng tên với facilities đã tồn tại
+            if (existingNames.contains(normalizedName)) {
+                throw new IllegalArgumentException("Facility with name '" + facilityDTO.getName() + "' already exists (at index " + i + ")");
+            }
+        }
+
         // Tạo danh sách Facilities entities
         List<Facilities> facilitiesToSave = request.getFacilities().stream()
                 .map(facilityDTO -> Facilities.builder()
                         .name(facilityDTO.getName().trim())
                         .category(facilityDTO.getCategory().trim())
+                        .deleted(false)
                         .build())
                 .collect(Collectors.toList());
 
@@ -102,11 +161,20 @@ public class FacilitiesServiceImpl implements FacilitiesService {
             throw new IllegalArgumentException("Facility DTO is required");
         }
 
-        Facilities facility = facilitiesRepository.findById(id)
+        Facilities facility = facilitiesRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Facility not found with id: " + id));
 
         // Cập nhật name nếu có
         if (facilitiesDTO.getName() != null && !facilitiesDTO.getName().trim().isEmpty()) {
+            // Kiểm tra xem tên mới có trùng với facility khác không (chỉ check những cái chưa bị xóa)
+            List<Facilities> existingFacilities = facilitiesRepository.findByDeletedFalse();
+            boolean nameExists = existingFacilities.stream()
+                    .anyMatch(f -> !f.getId().equals(id) && f.getName().equalsIgnoreCase(facilitiesDTO.getName().trim()));
+            
+            if (nameExists) {
+                throw new IllegalArgumentException("Facility with name '" + facilitiesDTO.getName() + "' already exists");
+            }
+            
             facility.setName(facilitiesDTO.getName().trim());
         }
 
@@ -137,7 +205,9 @@ public class FacilitiesServiceImpl implements FacilitiesService {
                     facility.getListHomestay().size() + " homestay(s)");
         }
 
-        facilitiesRepository.delete(facility);
+        // Soft delete: set deleted = true
+        facility.setDeleted(true);
+        facilitiesRepository.save(facility);
 
         return new ApiResponse<>(200, "Facility deleted successfully", null);
     }

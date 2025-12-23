@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
+import org.example.do_an_v1.dto.request.PricePerDayRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
@@ -140,14 +141,37 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public ApiResponse<?> booking(Long userId, BookingDTO bookingDTO) {
-
+        
+        // ========== VALIDATION CHECKS - TẤT CẢ CHECKS LỖI ĐƯỢC THỰC HIỆN TRƯỚC KHI TẠO BILL ==========
+        
+        // 1. Check homestay exists
         Homestay homestay = homestayRepository.findById(bookingDTO.getHomestayId()).orElse(null);
         if (homestay == null) {
             return new ApiResponse<>(404, "Homestay not exists", null);
         }
 
+        // 2. Check user exists
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(404, "User not found with id: " + userId, null);
+        }
 
-        // Convert Date sang LocalDate để xử lý
+        // 3. Check customer exists
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for user id: " + userId, null);
+        }
+
+        // 4. Check admin user exists
+        User adminUser = userRepository.findAll().stream()
+                .filter(u -> u.getAdmin() != null)
+                .findFirst()
+                .orElse(null);
+        if (adminUser == null) {
+            return new ApiResponse<>(500, "No admin user found for transaction", null);
+        }
+
+        // 5. Convert Date sang LocalDate để xử lý
         Date checkInDate = bookingDTO.getCheckIn();
         Date checkOutDate = bookingDTO.getCheckOut();
         
@@ -158,7 +182,6 @@ public class CustomerServiceImpl implements CustomerService {
         LocalDate checkOutLocalDate = checkOutDate.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
-
 
         // Convert sang java.sql.Date để query
         java.sql.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
@@ -172,41 +195,14 @@ public class CustomerServiceImpl implements CustomerService {
                 .atZone(ZoneId.systemDefault())
                 .toLocalDateTime();
 
-        // Check homestay availability
-        if(Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate)))
-            return new ApiResponse<>(422, "Room has been booked", null );
-
-        // Lấy User từ userId
-        User user = userRepository.findById(userId).orElse(null);
-        if (user == null) {
-            return new ApiResponse<>(404, "User not found with id: " + userId, null);
+        // 6. Check homestay availability
+        if(Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate))) {
+            return new ApiResponse<>(422, "Room has been booked", null);
         }
 
-        // Lấy Customer từ User
-        Customer customer = customerRepository.findByUser(user);
-        if (customer == null) {
-            return new ApiResponse<>(404, "Customer profile not found for user id: " + userId, null);
-        }
-
-        // Save bill - tạo Bill entity từ BookingDTO
-        Bill bill = new Bill();
-        bill.setCheckIn(checkInDateTime);
-        bill.setCheckOut(checkOutDateTime);
-        bill.setActualCheckinTime(null); // actualCheckin sẽ được set khi check-in thực tế
-        bill.setHomestay(homestay);
-        bill.setCustomer(customer);
-        bill.setCode(GenNumber.secureRandomNumbers());
-        bill.setStatus(StatusBill.DEPOSIT_PENDING);
-
-        Bill billResult = billRepository.save(bill);
-
-        // Validation đã được xử lý ở Controller layer bằng @Valid
-        // Lấy danh sách HomestayDailyPrice để khóa
+        // 7. Validate và check dates trong pricePerDays list
         List<HomestayDailyPrice> finalDailyPricesToLock = new ArrayList<>();
-        
-        // Xử lý từng pricePerDay trong danh sách
-        // Validation đã được xử lý ở Controller layer bằng @Valid
-        for (org.example.do_an_v1.dto.request.PricePerDayRequest pricePerDayRequest : bookingDTO.getPricePerDays()) {
+        for (PricePerDayRequest pricePerDayRequest : bookingDTO.getPricePerDays()) {
             Date day = pricePerDayRequest.getDay();
             Float price = pricePerDayRequest.getPrice();
 
@@ -223,9 +219,7 @@ public class CustomerServiceImpl implements CustomerService {
                 pricePerDay = pricePerDayRepository.save(pricePerDay);
             } else {
                 // Đã có thì lấy ra (có thể cập nhật giá nếu cần)
-                // Nếu giá khác nhau, có thể cập nhật hoặc giữ nguyên giá cũ
-                // Ở đây ta giữ nguyên giá đã có trong database
-               pricePerDay.setPrice(pricePerDayRequest.getPrice());
+                pricePerDay.setPrice(pricePerDayRequest.getPrice());
                 pricePerDay = pricePerDayRepository.save(pricePerDay);
             }
 
@@ -250,38 +244,43 @@ public class CustomerServiceImpl implements CustomerService {
                 }
             }
 
+            // Check lại một lần nữa trước khi add vào list (double check)
+            if (Boolean.TRUE.equals(homestayDailyPrice.getIsBooked())) {
+                return new ApiResponse<>(409, "Some dates are already booked", null);
+            }
+
             finalDailyPricesToLock.add(homestayDailyPrice);
         }
 
+        // ========== SAU KHI TẤT CẢ VALIDATION PASS, MỚI TẠO BILL ==========
+
+        // Tạo Bill entity từ BookingDTO
+        Bill bill = new Bill();
+        bill.setCheckIn(checkInDateTime);
+        bill.setCheckOut(checkOutDateTime);
+        bill.setActualCheckinTime(null); // actualCheckin sẽ được set khi check-in thực tế
+        bill.setHomestay(homestay);
+        bill.setCustomer(customer);
+        bill.setCode(GenNumber.secureRandomNumbers());
+        bill.setStatus(StatusBill.DEPOSIT_PENDING);
+
+        Bill billResult = billRepository.save(bill);
+
         // Khóa các daily prices (set isBooked = true và gán bill)
+        // Tất cả validation đã được check ở trên, giờ chỉ cần lock
         Bill finalBillResult = billResult;
         for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
-            if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-                return new ApiResponse<>(409, "Some dates are already booked", null);
-            }
             dailyPrice.setIsBooked(true);
             dailyPrice.setBill(finalBillResult);
             homestayDailyPricesRepository.save(dailyPrice);
         }
 
 
-        // luu thong tin CustomerBookingInfo neu la nguoi moi
+        // Lưu thông tin CustomerBookingInfo nếu là người mới
         if(!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())){
             CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingDTO.getCustomerBookingInfoDTO());
             customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
             billResult.setCustomerBookingInfo(customerBookingInfo);
-        }
-
-
-        // Lấy admin user (giả sử có một admin mặc định hoặc lấy từ config)
-        // Tạm thời để null, sẽ cần xử lý sau
-        User adminUser = userRepository.findAll().stream()
-                .filter(u -> u.getAdmin() != null)
-                .findFirst()
-                .orElse(null);
-
-        if (adminUser == null) {
-            return new ApiResponse<>(500, "No admin user found for transaction", null);
         }
 
 
@@ -365,7 +364,7 @@ public class CustomerServiceImpl implements CustomerService {
                 if (preferenceDTO == null || preferenceDTO.getId() == null) {
                     continue; // Bỏ qua null values
                 }
-                Preference preference = preferenceRepository.findById(preferenceDTO.getId()).orElse(null);
+                Preference preference = preferenceRepository.findByIdAndDeletedFalse(preferenceDTO.getId()).orElse(null);
                 if (preference == null) {
                     return new ApiResponse<>(404, "Preference not found with id: " + preferenceDTO.getId(), null);
                 }

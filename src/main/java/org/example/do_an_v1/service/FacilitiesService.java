@@ -22,6 +22,13 @@ public interface FacilitiesService {
     ApiResponse<FacilitiesDTO> getFacilityById(Long id);
 
     /**
+     * Tạo mới Facility
+     * @param facilitiesDTO DTO chứa thông tin Facility cần tạo
+     * @return ApiResponse chứa FacilitiesDTO đã tạo
+     */
+    ApiResponse<FacilitiesDTO> createFacility(FacilitiesDTO facilitiesDTO);
+
+    /**
      * Tạo nhiều Facilities cùng lúc (batch create)
      * @param request Danh sách Facilities cần tạo
      * @return ApiResponse chứa danh sách FacilitiesDTO đã tạo

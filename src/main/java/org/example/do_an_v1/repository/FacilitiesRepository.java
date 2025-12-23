@@ -11,4 +11,19 @@ import java.util.List;
 public interface FacilitiesRepository extends JpaRepository<Facilities, Long> {
 
     List<Facilities> findByIdIn(Collection<Long> ids);
+    
+    /**
+     * Tìm tất cả facilities chưa bị xóa
+     */
+    List<Facilities> findByDeletedFalse();
+    
+    /**
+     * Tìm facilities theo IDs và chưa bị xóa
+     */
+    List<Facilities> findByIdInAndDeletedFalse(Collection<Long> ids);
+    
+    /**
+     * Tìm facility theo ID và chưa bị xóa
+     */
+    java.util.Optional<Facilities> findByIdAndDeletedFalse(Long id);
 }

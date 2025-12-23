@@ -226,7 +226,7 @@ public class HomestayServiceImpl implements HomestayService {
             return;
         }
 
-        List<Facilities> facilities = facilitiesRepository.findByIdIn(facilitiesIds);
+        List<Facilities> facilities = facilitiesRepository.findByIdInAndDeletedFalse(facilitiesIds);
         if (facilities.size() != facilitiesIds.size()) {
             Set<Long> foundIds = facilities.stream()
                     .map(Facilities::getId)
@@ -251,6 +251,7 @@ public class HomestayServiceImpl implements HomestayService {
                         .name(amenityRequest.getName())
                         .description(amenityRequest.getDescription())
                         .imageUrl(amenityRequest.getImageUrl())
+                        .deleted(false)
                         .build())
                 .toList();
 
