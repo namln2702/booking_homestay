@@ -983,7 +983,7 @@ public class CustomerServiceImpl implements CustomerService {
                 : null;
     }
 
-    private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
+   private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
         List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
         StatusBill status = bill.getStatus();
         BigDecimal depositAmount = resolveDepositAmount(bill);
@@ -1011,7 +1011,7 @@ public class CustomerServiceImpl implements CustomerService {
         boolean remainingRequired = status != null && REMAINING_PAYMENT_REQUIRED_STATUSES.contains(status);
         boolean awaitingRemaining = remainingRequired && !remainingPaid;
 
-        boolean awaitingRefund = status == StatusBill.PENDING_REFUNDED || refundPendingTransaction != null;
+        boolean awaitingRefund = status == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
         boolean refunded = status == StatusBill.REFUNDED
                 || status == StatusBill.CANCELLED_REFUNDED
                 || refundSuccessTransaction != null;
@@ -1046,7 +1046,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.COMPLAINT_PENDING,
             StatusBill.HOST_COMPLAINT_PROCESSING,
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
             StatusBill.REJECTED,
             StatusBill.SUCCEED,
@@ -1062,7 +1062,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.COMPLAINT_PENDING,
             StatusBill.HOST_COMPLAINT_PROCESSING,
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
             StatusBill.REJECTED,
             StatusBill.SUCCEED,
@@ -1075,7 +1075,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.COMPLAINT_PENDING,
             StatusBill.HOST_COMPLAINT_PROCESSING,
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
             StatusBill.REJECTED,
             StatusBill.SUCCEED
@@ -1096,14 +1096,14 @@ public class CustomerServiceImpl implements CustomerService {
         boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
         boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
         boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
-        boolean refundInProgress = status == StatusBill.PENDING_REFUNDED;
+        boolean refundInProgress = status == StatusBill.REFUNDED;
         boolean resolvedWithRefund = status == StatusBill.REFUNDED;
         boolean resolvedWithoutRefund = status == StatusBill.REJECTED;
 
         boolean complaintRelated = status == StatusBill.COMPLAINT_PENDING
                 || status == StatusBill.HOST_COMPLAINT_PROCESSING
                 || status == StatusBill.ADMIN_COMPLAINT_PROCESSING
-                || status == StatusBill.PENDING_REFUNDED
+                || status == StatusBill.REFUNDED_PENDING
                 || status == StatusBill.REFUNDED
                 || status == StatusBill.REJECTED;
 
@@ -1162,7 +1162,7 @@ public class CustomerServiceImpl implements CustomerService {
             case COMPLAINT_PENDING -> "COMPLAINT_WINDOW";
             case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
             case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
-            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED_PENDING -> "REFUND_PENDING";
             case REFUNDED -> "REFUNDED";
             case REJECTED -> "COMPLAINT_REJECTED";
             case SUCCEED -> "COMPLETED";
@@ -1179,7 +1179,7 @@ public class CustomerServiceImpl implements CustomerService {
             case COMPLAINT_PENDING -> "WINDOW";
             case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
             case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
-            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED_PENDING -> "REFUNDED_PENDING";
             case REFUNDED, CANCELLED_REFUNDED -> "RESOLVED_REFUNDED";
             case REJECTED, SUCCEED, CANCELLED -> "RESOLVED";
             default -> "NONE";

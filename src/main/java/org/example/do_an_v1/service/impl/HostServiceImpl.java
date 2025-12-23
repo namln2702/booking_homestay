@@ -386,7 +386,7 @@ public class HostServiceImpl implements HostService {
         // Xử lý theo quyết định của host
         if (request.getApproved()) {
             // Host đồng ý -> chuyển thành REFUNDED và tạo transaction REFUND
-            bill.setStatus(StatusBill.REFUNDED);
+            bill.setStatus(StatusBill.REFUNDED_PENDING);
             billRepository.save(bill);
 
             // Tạo transaction REFUND (admin -> customer)
