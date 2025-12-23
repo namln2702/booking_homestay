@@ -561,10 +561,8 @@ public class CustomerServiceImpl implements CustomerService {
         Bill bill = billOptional.get();
         // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
         StatusBill billStatus = bill.getStatus();
-        if (billStatus != StatusBill.COMPLAINT_PENDING
-                && billStatus != StatusBill.REMAINING_PAYMENT_PENDING
-//                && billStatus != StatusBill.COMPLAINT_EXPIRED
-                && billStatus != StatusBill.SUCCEED) {
+        if (billStatus != StatusBill.SUCCEED
+                && billStatus != StatusBill.REFUNDED) {
             return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
         }
 
@@ -730,6 +728,29 @@ public class CustomerServiceImpl implements CustomerService {
         ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
 
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<ReviewDTO>> getCustomerReviews(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        List<Review> reviews = reviewRepository.findByCustomerOrderByCreatedAtDesc(customer);
+        List<ReviewDTO> reviewDTOS = reviews.stream()
+                .map(ReviewMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Customer reviews retrieved successfully", reviewDTOS);
     }
 
 

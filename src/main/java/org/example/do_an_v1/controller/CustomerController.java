@@ -15,6 +15,8 @@ import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/customers")
@@ -74,6 +76,13 @@ public class CustomerController {
     ){
         Long effectiveUserId = identityResolver.requireUserId(null);
         return customerService.updateReviewHomestay(effectiveUserId, reviewId, reviewDTO);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+    @GetMapping("/user/reviews")
+    public ApiResponse<List<ReviewDTO>> getMyReviews() {
+        Long effectiveUserId = identityResolver.requireUserId(null);
+        return customerService.getCustomerReviews(effectiveUserId);
     }
 
     //update Preference for Customer

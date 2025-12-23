@@ -8,6 +8,8 @@ import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 
+import java.util.List;
+
 public interface CustomerService {
 
 
@@ -20,6 +22,8 @@ public interface CustomerService {
     ApiResponse<?> reviewHomestay(Long userId, ReviewDTO reviewDTO);
 
     ApiResponse<?> updateReviewHomestay(Long userId, Long reviewId, ReviewDTO reviewDTO);
+
+    ApiResponse<List<ReviewDTO>> getCustomerReviews(Long userId);
 
     /**
      * Thống kê các bill đã đặt của Customer
