@@ -3,7 +3,6 @@ package org.example.do_an_v1.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.do_an_v1.enums.Status;
 
 import java.util.Set;
 
@@ -25,6 +24,10 @@ public class Amenities extends BaseEntity{
 
     @Column(name = "image_url", nullable = false)
     private String imageUrl;
+
+    @Column(name = "deleted", columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean deleted = false;
 
     @ManyToMany
     Set<Homestay> listHomestay;

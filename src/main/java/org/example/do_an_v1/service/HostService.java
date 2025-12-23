@@ -86,4 +86,15 @@ public interface HostService {
      * - INACTIVE -> ACTIVE: chỉ cập nhật status
      */
     ApiResponse<?> updateHomestayStatus(Long hostUserId, UpdateHomestayStatusRequest request);
+
+    /**
+     * Host lấy chi tiết bill theo billId
+     * Kiểm tra bill có thuộc về homestay của host không
+     */
+    ApiResponse<?> getBillDetail(Long hostUserId, Long billId);
+
+    /**
+     * Host lấy tất cả các khiếu nại (complaints) của các homestay thuộc về host
+     */
+    ApiResponse<?> getAllComplaints(Long hostUserId);
 }

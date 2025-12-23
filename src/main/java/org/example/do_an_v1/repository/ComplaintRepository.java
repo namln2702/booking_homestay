@@ -27,4 +27,10 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Long> {
      */
     @Query("SELECT COUNT(c) FROM Complaint c WHERE c.bill.homestay = :homestay")
     long countByHomestay(@Param("homestay") Homestay homestay);
+
+    /**
+     * Lấy tất cả complaints của một host (qua bills và homestays)
+     */
+    @Query("SELECT c FROM Complaint c WHERE c.bill.homestay.host.id = :hostId ORDER BY c.createdAt DESC")
+    List<Complaint> findByHostId(@Param("hostId") Long hostId);
 }

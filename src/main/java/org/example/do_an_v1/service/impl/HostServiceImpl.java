@@ -962,4 +962,61 @@ public class HostServiceImpl implements HostService {
         homestayRepository.save(homestay);
         return new ApiResponse<>(200, "Homestay status updated successfully", null);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getBillDetail(Long hostUserId, Long billId) {
+        if (hostUserId == null) {
+            return new ApiResponse<>(400, "Host user ID is required", null);
+        }
+        if (billId == null) {
+            return new ApiResponse<>(400, "Bill ID is required", null);
+        }
+
+        // Validate host
+        Host host = hostRepository.findById(hostUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Host not found for user id " + hostUserId));
+
+        // Tìm bill
+        Bill bill = billRepository.findById(billId)
+                .orElse(null);
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
+        }
+
+        // Kiểm tra bill có thuộc về homestay của host này không
+        if (bill.getHomestay() == null || bill.getHomestay().getHost() == null ) {
+            return new ApiResponse<>(403, "Bill does not belong to any homestay", null);
+        }
+
+        if (!Objects.equals(bill.getHomestay().getHost().getId(), host.getId())) {
+            return new ApiResponse<>(403, "You can only view bills for your own homestays", null);
+        }
+
+        // Map sang DTO
+        BillDTO billDTO = BillMapper.toDTO(bill);
+
+        return new ApiResponse<>(200, "Bill detail retrieved successfully", billDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> getAllComplaints(Long hostUserId) {
+        if (hostUserId == null) {
+            throw new IllegalArgumentException("Host user ID is required");
+        }
+
+        Host host = hostRepository.findById(hostUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Host profile not found for user id " + hostUserId));
+
+        // Lấy tất cả complaints của host (qua bills và homestays)
+        List<Complaint> complaints = complaintRepository.findByHostId(host.getId());
+
+        // Map sang DTO
+        List<ComplaintDTO> complaintDTOs = complaints.stream()
+                .map(ComplaintMapper::toDTO)
+                .toList();
+
+        return new ApiResponse<>(200, "Host complaints retrieved successfully", complaintDTOs);
+    }
 }

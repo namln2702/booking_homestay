@@ -183,6 +183,29 @@ public class HostController {
         return hostService.updateHomestayStatus(hostUserId, request);
     }
 
+    /**
+     * Host lấy chi tiết bill theo billId
+     * Kiểm tra bill có thuộc về homestay của host không
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/{billId}")
+    public ApiResponse<?> getBillDetail(@PathVariable Long billId) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getBillDetail(hostUserId, billId);
+    }
+
+    /**
+     * Host lấy tất cả các khiếu nại (complaints) của các homestay thuộc về host
+     * Yêu cầu quyền HOST
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/complaints")
+    public ApiResponse<?> getAllComplaints() {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getAllComplaints(hostUserId);
+    }
+
     //  Cap nhap lai token host
     // @PreAuthorize("hasAuthority('ROLE_HOST')")
     // @PostMapping("/me/refresh-token")

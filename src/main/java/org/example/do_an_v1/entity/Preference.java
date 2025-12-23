@@ -24,6 +24,10 @@ public class Preference extends BaseEntity {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "deleted", columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean deleted = false;
+
     @ManyToMany
     Set<Customer> listCustomer;
 
