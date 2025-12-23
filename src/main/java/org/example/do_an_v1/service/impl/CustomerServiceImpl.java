@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
-import org.example.do_an_v1.dto.request.UserRegistrationRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.*;
@@ -27,9 +27,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,15 +64,23 @@ public class CustomerServiceImpl implements CustomerService {
     private final EmailService emailService;
     private final AdminRepository adminRepository;
 
+    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO dto) throws RuntimeException {
-        if (dto == null || dto.getIdUser() == null) {
-            throw new IllegalArgumentException("Customer DTO must include idUser");
+    public ApiResponse<?> upsertCustomerProfile(Long userId, CustomerProfileUpdateRequest request) throws RuntimeException {
+        if (userId == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "userId", "message", "Thiếu thông tin người dùng")))
+            );
+        }
+        if (request == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "request", "message", "Payload is required")))
+            );
         }
 
-        User user = userRegistrationSupport.getUserOrThrow(dto.getIdUser());
-
+        User user = userRegistrationSupport.getUserOrThrow(userId);
         Customer customer = customerRepository.findById(user.getId()).orElse(null);
         boolean isNew = false;
 
@@ -79,52 +92,172 @@ public class CustomerServiceImpl implements CustomerService {
             isNew = true;
         }
 
-        boolean hasChanges = isNew;
+        List<Map<String, String>> errors = new ArrayList<>();
 
-        UserRegistrationRequest userRequest = new UserRegistrationRequest(
-                dto.getIdUser(),
-                dto.getUsername(),
-                dto.getName(),
-                dto.getPhone(),
-                dto.getAge(),
-                dto.getAvatarUrl()
-        );
-
-        if (userRegistrationSupport.applyUserAttributes(user, userRequest)) {
-            hasChanges = true;
+        String requestedName = request.isNameProvided() ? trimToNull(request.getName()) : null;
+        if (request.isNameProvided()) {
+            if (requestedName == null) {
+                errors.add(fieldError("name", "Tên không được để trống"));
+            } else if (requestedName.length() > 100) {
+                errors.add(fieldError("name", "Tên tối đa 100 ký tự"));
+            }
+        }
+        String effectiveName = requestedName != null ? requestedName : trimToNull(user.getName());
+        if (effectiveName == null) {
+            errors.add(fieldError("name", "Tên là bắt buộc"));
         }
 
-        if (dto.getStatus() != null && !Objects.equals(dto.getStatus(), customer.getStatus())) {
-            customer.setStatus(dto.getStatus());
-            hasChanges = true;
+        String requestedPhone = request.isPhoneProvided() ? trimToNull(request.getPhone()) : null;
+        if (request.isPhoneProvided()) {
+            if (requestedPhone == null) {
+                errors.add(fieldError("phone", "Số điện thoại không được để trống"));
+            } else if (requestedPhone.length() > 20) {
+                errors.add(fieldError("phone", "Số điện thoại tối đa 20 ký tự"));
+            } else if (!isValidPhone(requestedPhone)) {
+                errors.add(fieldError("phone", "Định dạng số điện thoại không hợp lệ"));
+            }
+        }
+        String effectivePhone = requestedPhone != null ? requestedPhone : trimToNull(user.getPhone());
+        if (effectivePhone == null) {
+            errors.add(fieldError("phone", "Số điện thoại là bắt buộc"));
         }
 
-        if (dto.getDateOfBirth() != null && !Objects.equals(dto.getDateOfBirth(), customer.getDateOfBirth())) {
-            customer.setDateOfBirth(dto.getDateOfBirth());
-            hasChanges = true;
+        String requestedDobRaw = request.isDateOfBirthProvided() ? trimToNull(request.getDateOfBirth()) : null;
+        LocalDate requestedDob = null;
+        if (request.isDateOfBirthProvided()) {
+            if (requestedDobRaw == null) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh không được để trống"));
+            } else {
+                requestedDob = parseDob(requestedDobRaw);
+                if (requestedDob == null) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh phải theo định dạng DD/MM/YYYY"));
+                } else if (requestedDob.isAfter(LocalDate.now())) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh không được ở tương lai"));
+                }
+            }
         }
 
-        if (dto.getQrCodeUrl() != null && !Objects.equals(dto.getQrCodeUrl(), customer.getQrCodeUrl())) {
-            customer.setQrCodeUrl(dto.getQrCodeUrl());
-            hasChanges = true;
+        LocalDate existingDob = null;
+        String storedDob = trimToNull(customer.getDateOfBirth());
+        if (storedDob != null) {
+            existingDob = parseDob(storedDob);
+            if (existingDob == null && !request.isDateOfBirthProvided()) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh hiện tại không hợp lệ, vui lòng cập nhật lại"));
+            }
         }
 
-        // lastBooking will be maintained by booking workflows; ignore incoming value for now
+        LocalDate effectiveDob = requestedDob != null ? requestedDob : existingDob;
+        if (effectiveDob == null) {
+            errors.add(fieldError("dateOfBirth", "Ngày sinh là bắt buộc"));
+        }
+
+        Integer computedAge = effectiveDob != null ? calculateAge(effectiveDob) : null;
+        if (computedAge != null && (computedAge < 0 || computedAge > 150)) {
+            errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+        }
+
+        if (request.isAgeProvided() && request.getAge() != null) {
+            Integer requestedAge = request.getAge();
+            if (requestedAge < 0 || requestedAge > 150) {
+                errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+            } else if (computedAge != null && !Objects.equals(requestedAge, computedAge)) {
+                errors.add(fieldError("age", "Tuổi không khớp với ngày sinh"));
+            }
+        }
+
+        String requestedAvatar = request.isAvatarUrlProvided() ? trimToNull(request.getAvatarUrl()) : null;
+        if (request.isAvatarUrlProvided() && requestedAvatar != null && !isValidUrl(requestedAvatar)) {
+            errors.add(fieldError("avatarUrl", "Avatar URL không hợp lệ"));
+        }
+
+        String requestedQr = request.isQrCodeUrlProvided() ? trimToNull(request.getQrCodeUrl()) : null;
+        if (request.isQrCodeUrlProvided() && requestedQr != null && !isValidUrl(requestedQr)) {
+            errors.add(fieldError("qrCodeUrl", "QR code URL không hợp lệ"));
+        }
+
+        Set<Preference> resolvedPreferences = null;
+        if (request.isListPreferenceProvided()) {
+            List<Long> ids = request.getListPreference() != null ? request.getListPreference() : List.of();
+            if (ids.stream().anyMatch(Objects::isNull)) {
+                errors.add(fieldError("listPreference", "Preference IDs không được chứa giá trị null"));
+            } else {
+                List<Long> distinctIds = ids.stream().distinct().toList();
+                if (distinctIds.isEmpty()) {
+                    resolvedPreferences = new HashSet<>();
+                } else {
+                    List<Preference> preferences = preferenceRepository.findAllById(distinctIds);
+                    Set<Long> foundIds = preferences.stream()
+                            .map(Preference::getId)
+                            .collect(Collectors.toSet());
+                    List<Long> missing = distinctIds.stream()
+                            .filter(id -> !foundIds.contains(id))
+                            .toList();
+                    if (!missing.isEmpty()) {
+                        errors.add(fieldError("listPreference", "Preference IDs " + missing + " không tồn tại"));
+                    } else {
+                        resolvedPreferences = new HashSet<>(preferences);
+                    }
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of("errors", errors));
+        }
+
+        boolean customerChanged = isNew;
+
+        if (request.isNameProvided() && !Objects.equals(user.getName(), requestedName)) {
+            user.setName(requestedName);
+        } else if (user.getName() == null && effectiveName != null) {
+            user.setName(effectiveName);
+        }
+
+        if (request.isPhoneProvided() && !Objects.equals(user.getPhone(), requestedPhone)) {
+            user.setPhone(requestedPhone);
+        } else if (user.getPhone() == null && effectivePhone != null) {
+            user.setPhone(effectivePhone);
+        }
+
+        if (computedAge != null && !Objects.equals(user.getAge(), computedAge)) {
+            user.setAge(computedAge);
+        }
+
+        if (request.isAvatarUrlProvided() && !Objects.equals(user.getAvatarUrl(), requestedAvatar)) {
+            user.setAvatarUrl(requestedAvatar);
+        }
+
+        String normalizedDob = effectiveDob != null ? DOB_FORMATTER.format(effectiveDob) : null;
+        if (!Objects.equals(customer.getDateOfBirth(), normalizedDob)) {
+            customer.setDateOfBirth(normalizedDob);
+            customerChanged = true;
+        }
+
+        if (request.isQrCodeUrlProvided() && !Objects.equals(customer.getQrCodeUrl(), requestedQr)) {
+            customer.setQrCodeUrl(requestedQr);
+            customerChanged = true;
+        }
+
+        if (resolvedPreferences != null) {
+            Set<Preference> currentPreferences = customer.getListPreferences() != null
+                    ? new HashSet<>(customer.getListPreferences())
+                    : new HashSet<>();
+            if (!currentPreferences.equals(resolvedPreferences)) {
+                customer.setListPreferences(resolvedPreferences);
+                customerChanged = true;
+            }
+        }
 
         if (customer.getRole() != RoleUser.CUSTOMER) {
             customer.setRole(RoleUser.CUSTOMER);
-            hasChanges = true;
+            customerChanged = true;
         }
 
-        if (!hasChanges) {
-            return new ApiResponse<>(200, "Customer information already up to date", profileMapper.toCustomerDTO(customer));
-        }
+        Customer savedCustomer = customerChanged
+                ? customerRepository.save(customer)
+                : customer;
 
-        // createdAt/updatedAt live on BaseEntity and are populated through auditing, never via the request payload
-        Customer savedCustomer = customerRepository.save(customer);
-        String message = isNew ? "Customer profile created successfully" : "Customer information updated successfully";
-
-        return new ApiResponse<>(200, message, profileMapper.toCustomerDTO(savedCustomer));
+        return new ApiResponse<>(200, "Cập nhật hồ sơ thành công", profileMapper.toCustomerDTO(savedCustomer));
     }
 
     @Override
@@ -1049,6 +1182,47 @@ public class CustomerServiceImpl implements CustomerService {
             return false;
         }
         return currentIndex <= targetIndex;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isValidPhone(String phone) {
+        return phone.matches("^[0-9+()\\-\\s]{6,20}$");
+    }
+
+    private static boolean isValidUrl(String value) {
+        try {
+            URI uri = new URI(value);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return false;
+            }
+            String scheme = uri.getScheme().toLowerCase();
+            return scheme.equals("http") || scheme.equals("https");
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    private static LocalDate parseDob(String value) {
+        try {
+            return LocalDate.parse(value, DOB_FORMATTER);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static int calculateAge(LocalDate dob) {
+        return Period.between(dob, LocalDate.now()).getYears();
+    }
+
+    private static Map<String, String> fieldError(String field, String message) {
+        return Map.of("field", field, "message", message);
     }
 
 
