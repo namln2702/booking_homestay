@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 import org.example.do_an_v1.dto.request.PricePerDayRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
@@ -28,9 +29,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -60,15 +66,23 @@ public class CustomerServiceImpl implements CustomerService {
     private final EmailService emailService;
     private final AdminRepository adminRepository;
 
+    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO dto) throws RuntimeException {
-        if (dto == null || dto.getIdUser() == null) {
-            throw new IllegalArgumentException("Customer DTO must include idUser");
+    public ApiResponse<?> upsertCustomerProfile(Long userId, CustomerProfileUpdateRequest request) throws RuntimeException {
+        if (userId == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "userId", "message", "Thiếu thông tin người dùng")))
+            );
+        }
+        if (request == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "request", "message", "Payload is required")))
+            );
         }
 
-        User user = userRegistrationSupport.getUserOrThrow(dto.getIdUser());
-
+        User user = userRegistrationSupport.getUserOrThrow(userId);
         Customer customer = customerRepository.findById(user.getId()).orElse(null);
         boolean isNew = false;
 
@@ -80,52 +94,172 @@ public class CustomerServiceImpl implements CustomerService {
             isNew = true;
         }
 
-        boolean hasChanges = isNew;
+        List<Map<String, String>> errors = new ArrayList<>();
 
-        UserRegistrationRequest userRequest = new UserRegistrationRequest(
-                dto.getIdUser(),
-                dto.getUsername(),
-                dto.getName(),
-                dto.getPhone(),
-                dto.getAge(),
-                dto.getAvatarUrl()
-        );
-
-        if (userRegistrationSupport.applyUserAttributes(user, userRequest)) {
-            hasChanges = true;
+        String requestedName = request.isNameProvided() ? trimToNull(request.getName()) : null;
+        if (request.isNameProvided()) {
+            if (requestedName == null) {
+                errors.add(fieldError("name", "Tên không được để trống"));
+            } else if (requestedName.length() > 100) {
+                errors.add(fieldError("name", "Tên tối đa 100 ký tự"));
+            }
+        }
+        String effectiveName = requestedName != null ? requestedName : trimToNull(user.getName());
+        if (effectiveName == null) {
+            errors.add(fieldError("name", "Tên là bắt buộc"));
         }
 
-        if (dto.getStatus() != null && !Objects.equals(dto.getStatus(), customer.getStatus())) {
-            customer.setStatus(dto.getStatus());
-            hasChanges = true;
+        String requestedPhone = request.isPhoneProvided() ? trimToNull(request.getPhone()) : null;
+        if (request.isPhoneProvided()) {
+            if (requestedPhone == null) {
+                errors.add(fieldError("phone", "Số điện thoại không được để trống"));
+            } else if (requestedPhone.length() > 20) {
+                errors.add(fieldError("phone", "Số điện thoại tối đa 20 ký tự"));
+            } else if (!isValidPhone(requestedPhone)) {
+                errors.add(fieldError("phone", "Định dạng số điện thoại không hợp lệ"));
+            }
+        }
+        String effectivePhone = requestedPhone != null ? requestedPhone : trimToNull(user.getPhone());
+        if (effectivePhone == null) {
+            errors.add(fieldError("phone", "Số điện thoại là bắt buộc"));
         }
 
-        if (dto.getDateOfBirth() != null && !Objects.equals(dto.getDateOfBirth(), customer.getDateOfBirth())) {
-            customer.setDateOfBirth(dto.getDateOfBirth());
-            hasChanges = true;
+        String requestedDobRaw = request.isDateOfBirthProvided() ? trimToNull(request.getDateOfBirth()) : null;
+        LocalDate requestedDob = null;
+        if (request.isDateOfBirthProvided()) {
+            if (requestedDobRaw == null) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh không được để trống"));
+            } else {
+                requestedDob = parseDob(requestedDobRaw);
+                if (requestedDob == null) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh phải theo định dạng DD/MM/YYYY"));
+                } else if (requestedDob.isAfter(LocalDate.now())) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh không được ở tương lai"));
+                }
+            }
         }
 
-        if (dto.getQrCodeUrl() != null && !Objects.equals(dto.getQrCodeUrl(), customer.getQrCodeUrl())) {
-            customer.setQrCodeUrl(dto.getQrCodeUrl());
-            hasChanges = true;
+        LocalDate existingDob = null;
+        String storedDob = trimToNull(customer.getDateOfBirth());
+        if (storedDob != null) {
+            existingDob = parseDob(storedDob);
+            if (existingDob == null && !request.isDateOfBirthProvided()) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh hiện tại không hợp lệ, vui lòng cập nhật lại"));
+            }
         }
 
-        // lastBooking will be maintained by booking workflows; ignore incoming value for now
+        LocalDate effectiveDob = requestedDob != null ? requestedDob : existingDob;
+        if (effectiveDob == null) {
+            errors.add(fieldError("dateOfBirth", "Ngày sinh là bắt buộc"));
+        }
+
+        Integer computedAge = effectiveDob != null ? calculateAge(effectiveDob) : null;
+        if (computedAge != null && (computedAge < 0 || computedAge > 150)) {
+            errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+        }
+
+        if (request.isAgeProvided() && request.getAge() != null) {
+            Integer requestedAge = request.getAge();
+            if (requestedAge < 0 || requestedAge > 150) {
+                errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+            } else if (computedAge != null && !Objects.equals(requestedAge, computedAge)) {
+                errors.add(fieldError("age", "Tuổi không khớp với ngày sinh"));
+            }
+        }
+
+        String requestedAvatar = request.isAvatarUrlProvided() ? trimToNull(request.getAvatarUrl()) : null;
+        if (request.isAvatarUrlProvided() && requestedAvatar != null && !isValidUrl(requestedAvatar)) {
+            errors.add(fieldError("avatarUrl", "Avatar URL không hợp lệ"));
+        }
+
+        String requestedQr = request.isQrCodeUrlProvided() ? trimToNull(request.getQrCodeUrl()) : null;
+        if (request.isQrCodeUrlProvided() && requestedQr != null && !isValidUrl(requestedQr)) {
+            errors.add(fieldError("qrCodeUrl", "QR code URL không hợp lệ"));
+        }
+
+        Set<Preference> resolvedPreferences = null;
+        if (request.isListPreferenceProvided()) {
+            List<Long> ids = request.getListPreference() != null ? request.getListPreference() : List.of();
+            if (ids.stream().anyMatch(Objects::isNull)) {
+                errors.add(fieldError("listPreference", "Preference IDs không được chứa giá trị null"));
+            } else {
+                List<Long> distinctIds = ids.stream().distinct().toList();
+                if (distinctIds.isEmpty()) {
+                    resolvedPreferences = new HashSet<>();
+                } else {
+                    List<Preference> preferences = preferenceRepository.findAllById(distinctIds);
+                    Set<Long> foundIds = preferences.stream()
+                            .map(Preference::getId)
+                            .collect(Collectors.toSet());
+                    List<Long> missing = distinctIds.stream()
+                            .filter(id -> !foundIds.contains(id))
+                            .toList();
+                    if (!missing.isEmpty()) {
+                        errors.add(fieldError("listPreference", "Preference IDs " + missing + " không tồn tại"));
+                    } else {
+                        resolvedPreferences = new HashSet<>(preferences);
+                    }
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of("errors", errors));
+        }
+
+        boolean customerChanged = isNew;
+
+        if (request.isNameProvided() && !Objects.equals(user.getName(), requestedName)) {
+            user.setName(requestedName);
+        } else if (user.getName() == null && effectiveName != null) {
+            user.setName(effectiveName);
+        }
+
+        if (request.isPhoneProvided() && !Objects.equals(user.getPhone(), requestedPhone)) {
+            user.setPhone(requestedPhone);
+        } else if (user.getPhone() == null && effectivePhone != null) {
+            user.setPhone(effectivePhone);
+        }
+
+        if (computedAge != null && !Objects.equals(user.getAge(), computedAge)) {
+            user.setAge(computedAge);
+        }
+
+        if (request.isAvatarUrlProvided() && !Objects.equals(user.getAvatarUrl(), requestedAvatar)) {
+            user.setAvatarUrl(requestedAvatar);
+        }
+
+        String normalizedDob = effectiveDob != null ? DOB_FORMATTER.format(effectiveDob) : null;
+        if (!Objects.equals(customer.getDateOfBirth(), normalizedDob)) {
+            customer.setDateOfBirth(normalizedDob);
+            customerChanged = true;
+        }
+
+        if (request.isQrCodeUrlProvided() && !Objects.equals(customer.getQrCodeUrl(), requestedQr)) {
+            customer.setQrCodeUrl(requestedQr);
+            customerChanged = true;
+        }
+
+        if (resolvedPreferences != null) {
+            Set<Preference> currentPreferences = customer.getListPreferences() != null
+                    ? new HashSet<>(customer.getListPreferences())
+                    : new HashSet<>();
+            if (!currentPreferences.equals(resolvedPreferences)) {
+                customer.setListPreferences(resolvedPreferences);
+                customerChanged = true;
+            }
+        }
 
         if (customer.getRole() != RoleUser.CUSTOMER) {
             customer.setRole(RoleUser.CUSTOMER);
-            hasChanges = true;
+            customerChanged = true;
         }
 
-        if (!hasChanges) {
-            return new ApiResponse<>(200, "Customer information already up to date", profileMapper.toCustomerDTO(customer));
-        }
+        Customer savedCustomer = customerChanged
+                ? customerRepository.save(customer)
+                : customer;
 
-        // createdAt/updatedAt live on BaseEntity and are populated through auditing, never via the request payload
-        Customer savedCustomer = customerRepository.save(customer);
-        String message = isNew ? "Customer profile created successfully" : "Customer information updated successfully";
-
-        return new ApiResponse<>(200, message, profileMapper.toCustomerDTO(savedCustomer));
+        return new ApiResponse<>(200, "Cập nhật hồ sơ thành công", profileMapper.toCustomerDTO(savedCustomer));
     }
 
     @Override
@@ -427,10 +561,8 @@ public class CustomerServiceImpl implements CustomerService {
         Bill bill = billOptional.get();
         // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
         StatusBill billStatus = bill.getStatus();
-        if (billStatus != StatusBill.COMPLAINT_PENDING
-                && billStatus != StatusBill.REMAINING_PAYMENT_PENDING
-//                && billStatus != StatusBill.COMPLAINT_EXPIRED
-                && billStatus != StatusBill.SUCCEED) {
+        if (billStatus != StatusBill.SUCCEED
+                && billStatus != StatusBill.REFUNDED) {
             return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
         }
 
@@ -596,6 +728,29 @@ public class CustomerServiceImpl implements CustomerService {
         ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
 
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<ReviewDTO>> getCustomerReviews(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        List<Review> reviews = reviewRepository.findByCustomerOrderByCreatedAtDesc(customer);
+        List<ReviewDTO> reviewDTOS = reviews.stream()
+                .map(ReviewMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Customer reviews retrieved successfully", reviewDTOS);
     }
 
 
@@ -828,8 +983,9 @@ public class CustomerServiceImpl implements CustomerService {
                 : null;
     }
 
-    private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
+   private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
         List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
+        StatusBill status = bill.getStatus();
         BigDecimal depositAmount = resolveDepositAmount(bill);
         BigDecimal totalAmount = bill.getTotalAmount();
         BigDecimal remainingAmount = null;
@@ -846,19 +1002,22 @@ public class CustomerServiceImpl implements CustomerService {
         Transaction refundSuccessTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.SUCCESS);
         Transaction refundPendingTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.PENDING);
 
-        boolean depositPaid = depositTransaction != null;
-        boolean remainingPaid = remainingTransaction != null;
-        boolean awaitingDeposit = bill.getStatus() == StatusBill.DEPOSIT_PENDING;
-        boolean remainingRequired = bill.getStatus() == StatusBill.DEPOSIT_PAID
-                || bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING;
-        boolean awaitingRemaining = remainingRequired && !remainingPaid;
-        boolean awaitingRefund = bill.getStatus() == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
-        boolean refunded = bill.getStatus() == StatusBill.REFUNDED
-                || bill.getStatus() == StatusBill.CANCELLED_REFUNDED
-                || refundSuccessTransaction != null;
-        boolean paymentFailed = bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED;
+        boolean depositSettledByStatus = status != null && DEPOSIT_COMPLETED_STATUSES.contains(status);
+        boolean depositPaid = depositSettledByStatus || depositTransaction != null;
+        boolean awaitingDeposit = status == StatusBill.DEPOSIT_PENDING && !depositPaid;
 
-        String phase = determinePaymentPhase(bill.getStatus());
+        boolean remainingSettledByStatus = status != null && REMAINING_PAYMENT_COMPLETED_STATUSES.contains(status);
+        boolean remainingPaid = remainingSettledByStatus || remainingTransaction != null;
+        boolean remainingRequired = status != null && REMAINING_PAYMENT_REQUIRED_STATUSES.contains(status);
+        boolean awaitingRemaining = remainingRequired && !remainingPaid;
+
+        boolean awaitingRefund = status == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
+        boolean refunded = status == StatusBill.REFUNDED
+                || status == StatusBill.CANCELLED_REFUNDED
+                || refundSuccessTransaction != null;
+        boolean paymentFailed = status == StatusBill.REMAINING_PAYMENT_FAILED;
+
+        String phase = determinePaymentPhase(status);
 
         return CustomerOrderPaymentStatusResponse.builder()
                 .phase(phase)
@@ -893,6 +1052,38 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.SUCCEED,
             StatusBill.CANCELLED_REFUNDED,
             StatusBill.CANCELLED
+    );
+
+    private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED
+    );
+
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING
     );
 
     private CustomerOrderComplaintStatusResponse buildComplaintStatusSnapshot(Bill bill) {
@@ -1048,6 +1239,47 @@ public class CustomerServiceImpl implements CustomerService {
             return false;
         }
         return currentIndex <= targetIndex;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isValidPhone(String phone) {
+        return phone.matches("^[0-9+()\\-\\s]{6,20}$");
+    }
+
+    private static boolean isValidUrl(String value) {
+        try {
+            URI uri = new URI(value);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return false;
+            }
+            String scheme = uri.getScheme().toLowerCase();
+            return scheme.equals("http") || scheme.equals("https");
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    private static LocalDate parseDob(String value) {
+        try {
+            return LocalDate.parse(value, DOB_FORMATTER);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static int calculateAge(LocalDate dob) {
+        return Period.between(dob, LocalDate.now()).getYears();
+    }
+
+    private static Map<String, String> fieldError(String field, String message) {
+        return Map.of("field", field, "message", message);
     }
 
 
