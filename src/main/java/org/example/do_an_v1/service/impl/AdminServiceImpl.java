@@ -521,8 +521,32 @@ public class AdminServiceImpl implements AdminService {
             return new ApiResponse<>(400, "Transaction is not in PENDING status. Current status: " + transaction.getStatus(), null);
         }
 
-        // Cập nhật transaction: thêm proof image và chuyển status sang SUCCESS
+        // Lấy bill từ transaction để lấy customer
+        Bill bill = transaction.getBill();
+        if (bill == null) {
+            return new ApiResponse<>(404, "Bill not found for this transaction", null);
+        }
+
+        Customer customer = bill.getCustomer();
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer not found for this bill", null);
+        }
+
+        User customerUser = customer.getUser();
+        if (customerUser == null) {
+            return new ApiResponse<>(404, "Customer user not found", null);
+        }
+
+        // Lấy admin user
+        User adminUser = admin.getUser();
+        if (adminUser == null) {
+            return new ApiResponse<>(500, "Admin user not found", null);
+        }
+
+        // Cập nhật transaction: thêm proof image, set fromUser/toUser và chuyển status sang SUCCESS
         transaction.setProofImageUrl(request.getProofImageUrl());
+        transaction.setFromUser(adminUser); // Admin là người gửi (hoàn tiền)
+        transaction.setToUser(customerUser); // Customer là người nhận (nhận tiền hoàn lại)
         transaction.setStatus(StatusTransaction.SUCCESS);
         transaction.setCompletedAt(LocalDateTime.now());
         transactionRepository.save(transaction);

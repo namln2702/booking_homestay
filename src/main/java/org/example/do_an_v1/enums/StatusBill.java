@@ -61,7 +61,7 @@ public enum StatusBill {
     /*
        * Chờ được admin thanh toán
      */
-    PENDING_REFUNDED(14),
+    REFUNDED_PENDING(14),
     /**
      * Khiếu nại được xử lý thành công.
      * Admin hoàn tiền cho Customer (admin → customer).

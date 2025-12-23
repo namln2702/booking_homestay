@@ -852,7 +852,7 @@ public class CustomerServiceImpl implements CustomerService {
         boolean remainingRequired = bill.getStatus() == StatusBill.DEPOSIT_PAID
                 || bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING;
         boolean awaitingRemaining = remainingRequired && !remainingPaid;
-        boolean awaitingRefund = bill.getStatus() == StatusBill.PENDING_REFUNDED || refundPendingTransaction != null;
+        boolean awaitingRefund = bill.getStatus() == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
         boolean refunded = bill.getStatus() == StatusBill.REFUNDED
                 || bill.getStatus() == StatusBill.CANCELLED_REFUNDED
                 || refundSuccessTransaction != null;
@@ -887,7 +887,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.COMPLAINT_PENDING,
             StatusBill.HOST_COMPLAINT_PROCESSING,
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.PENDING_REFUNDED,
+            StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
             StatusBill.REJECTED,
             StatusBill.SUCCEED,
@@ -905,14 +905,14 @@ public class CustomerServiceImpl implements CustomerService {
         boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
         boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
         boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
-        boolean refundInProgress = status == StatusBill.PENDING_REFUNDED;
+        boolean refundInProgress = status == StatusBill.REFUNDED;
         boolean resolvedWithRefund = status == StatusBill.REFUNDED;
         boolean resolvedWithoutRefund = status == StatusBill.REJECTED;
 
         boolean complaintRelated = status == StatusBill.COMPLAINT_PENDING
                 || status == StatusBill.HOST_COMPLAINT_PROCESSING
                 || status == StatusBill.ADMIN_COMPLAINT_PROCESSING
-                || status == StatusBill.PENDING_REFUNDED
+                || status == StatusBill.REFUNDED_PENDING
                 || status == StatusBill.REFUNDED
                 || status == StatusBill.REJECTED;
 
@@ -971,7 +971,7 @@ public class CustomerServiceImpl implements CustomerService {
             case COMPLAINT_PENDING -> "COMPLAINT_WINDOW";
             case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
             case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
-            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED_PENDING -> "REFUND_PENDING";
             case REFUNDED -> "REFUNDED";
             case REJECTED -> "COMPLAINT_REJECTED";
             case SUCCEED -> "COMPLETED";
@@ -988,7 +988,7 @@ public class CustomerServiceImpl implements CustomerService {
             case COMPLAINT_PENDING -> "WINDOW";
             case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
             case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
-            case PENDING_REFUNDED -> "REFUND_PENDING";
+            case REFUNDED_PENDING -> "REFUNDED_PENDING";
             case REFUNDED, CANCELLED_REFUNDED -> "RESOLVED_REFUNDED";
             case REJECTED, SUCCEED, CANCELLED -> "RESOLVED";
             default -> "NONE";
