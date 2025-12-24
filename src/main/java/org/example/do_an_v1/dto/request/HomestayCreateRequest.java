@@ -1,5 +1,7 @@
 package org.example.do_an_v1.dto.request;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,4 +32,7 @@ public class HomestayCreateRequest {
     private List<HomestayImageRequest> imageUrls;
     private List<HomestayRuleRequest> rules;
     private List<HomestayDailyPriceRequest> dailyPrices;
+    @Valid
+    @NotEmpty(message = "listPersonHomestay is required")
+    private List<PersonCapacityRequest> listPersonHomestay;
 }

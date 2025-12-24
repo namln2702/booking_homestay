@@ -5,6 +5,7 @@ import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.PersonCapacityRequest;
 import org.example.do_an_v1.dto.request.PricePerDayRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
@@ -16,6 +17,7 @@ import org.example.do_an_v1.dto.response.CustomerOrderActionPermissionResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderComplaintStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderDailyPriceResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderDetailResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderGuestCapacityResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderPaymentStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderResponse;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -394,6 +396,11 @@ public class CustomerServiceImpl implements CustomerService {
         // 5. Convert Date sang LocalDate để xử lý
         Date checkInDate = bookingDTO.getCheckIn();
         Date checkOutDate = bookingDTO.getCheckOut();
+
+        ApiResponse<?> guestValidation = validateGuestDistribution(homestay, bookingDTO.getListPersonHomestay());
+        if (guestValidation != null) {
+            return guestValidation;
+        }
 
         // Convert Date sang LocalDate
         LocalDate checkInLocalDate = checkInDate.toInstant()
@@ -943,6 +950,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .paymentStatus(paymentStatus)
                 .complaintStatus(complaintStatus)
                 .actions(actions)
+                .guestCapacity(mapGuestCapacity(bill.getHomestay()))
                 .build();
 
         return new ApiResponse<>(200, "Customer order detail retrieved successfully", response);
@@ -991,7 +999,24 @@ public class CustomerServiceImpl implements CustomerService {
                 .createdAt(bill.getCreatedAt())
                 .basePrice(homestay != null ? homestay.getBasePrice() : null)
                 .dailyPrices(mapDailyPrices(bill))
+                .guestCapacity(mapGuestCapacity(homestay))
                 .build();
+    }
+
+    private List<CustomerOrderGuestCapacityResponse> mapGuestCapacity(Homestay homestay) {
+        if (homestay == null || homestay.getListPersonHomestay() == null) {
+            return List.of();
+        }
+
+        return homestay.getListPersonHomestay().stream()
+                .filter(Objects::nonNull)
+                .filter(entry -> entry.getPerson() != null && entry.getPerson().getType() != null)
+                .map(entry -> CustomerOrderGuestCapacityResponse.builder()
+                        .type(entry.getPerson().getType())
+                        .quantity(entry.getQuantity())
+                        .build())
+                .sorted(Comparator.comparing(response -> response.getType().ordinal()))
+                .collect(Collectors.toList());
     }
 
     private CustomerComplaintResponse mapToCustomerComplaint(Complaint complaint) {
@@ -1245,6 +1270,63 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         return bill.getCheckOut().plusDays(1);
+    }
+
+    private ApiResponse<?> validateGuestDistribution(Homestay homestay, List<PersonCapacityRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return new ApiResponse<>(400, "listPersonHomestay is required", null);
+        }
+
+        EnumMap<TypePerson, Integer> requestedMap = new EnumMap<>(TypePerson.class);
+        for (PersonCapacityRequest request : requests) {
+            if (request == null || request.getType() == null) {
+                return new ApiResponse<>(400, "Each entry in listPersonHomestay must include a type", null);
+            }
+            Integer qty = request.getQuantity();
+            if (qty == null || qty < 0) {
+                return new ApiResponse<>(400, "Quantity for " + request.getType() + " must be >= 0", null);
+            }
+            requestedMap.merge(request.getType(), qty, Integer::sum);
+        }
+
+        if (requestedMap.isEmpty()) {
+            return new ApiResponse<>(400, "listPersonHomestay must contain at least one entry", null);
+        }
+
+        Set<PersonHomestay> capacityConfig = homestay.getListPersonHomestay();
+        if (capacityConfig == null || capacityConfig.isEmpty()) {
+            return new ApiResponse<>(422, "Homestay has no capacity configuration", null);
+        }
+
+        EnumMap<TypePerson, Integer> capacityMap = new EnumMap<>(TypePerson.class);
+        for (PersonHomestay config : capacityConfig) {
+            if (config == null || config.getPerson() == null || config.getPerson().getType() == null) {
+                continue;
+            }
+            capacityMap.put(config.getPerson().getType(), config.getQuantity());
+        }
+
+        for (Map.Entry<TypePerson, Integer> entry : requestedMap.entrySet()) {
+            Integer allowed = capacityMap.get(entry.getKey());
+            if (allowed == null) {
+                return new ApiResponse<>(422, "Homestay does not accept " + entry.getKey().name().toLowerCase(), null);
+            }
+            if (entry.getValue() > allowed) {
+                return new ApiResponse<>(422,
+                        "Requested " + entry.getKey().name().toLowerCase() + " exceeds capacity (" + entry.getValue() + "/" + allowed + ")",
+                        null);
+            }
+        }
+
+        int totalGuests = requestedMap.values().stream().mapToInt(Integer::intValue).sum();
+        if (homestay.getMaxGuest() != null && totalGuests > homestay.getMaxGuest()) {
+            return new ApiResponse<>(422, "Total guests exceed allowed maximum (" + homestay.getMaxGuest() + ")", null);
+        }
+        if (homestay.getMinGuest() != null && totalGuests < homestay.getMinGuest()) {
+            return new ApiResponse<>(422, "Total guests must be at least " + homestay.getMinGuest(), null);
+        }
+
+        return null;
     }
 
     private Transaction findLatestTransaction(List<Transaction> transactions, TypeTransaction type, StatusTransaction status) {

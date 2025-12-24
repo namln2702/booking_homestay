@@ -44,6 +44,11 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
           "date": "2024-08-05",
           "price": 1400000.0
         }
+      ],
+      "guestCapacity": [
+        { "type": "ADULTS", "quantity": 4 },
+        { "type": "CHILDREN", "quantity": 2 },
+        { "type": "BABY", "quantity": 1 }
       ]
     },
     "paymentStatus": {
@@ -83,7 +88,12 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
       "canPayRemaining": false,
       "canCheckIn": false,
       "canFileComplaint": false
-    }
+    },
+    "guestCapacity": [
+      { "type": "ADULTS", "quantity": 4 },
+      { "type": "CHILDREN", "quantity": 2 },
+      { "type": "BABY", "quantity": 1 }
+    ]
   },
   "timestamp": 1714728000000
 }
@@ -101,6 +111,7 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
 | `totalAmount` | 100% cost of the stay. |
 | `depositAmount` | Calculated via `resolveDepositAmount` (`CustomerServiceImpl.java:832-858`), preferring actual transactions but falling back to 30% of `totalAmount`. |
 | `basePrice`, `dailyPrices` | Optional nightly pricing breakdown; omitted fields return `null`/`[]`. |
+| `guestCapacity[]` | Homestay-configured limits for each traveler type; mirrors the data hosts submit via `listPersonHomestay`. |
 
 #### `summary.status` Situations
 Frontends can rely on `StatusBill` for end-to-end context. The table below lists every state and its meaning.
@@ -184,6 +195,12 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `canPayRemaining` | True only when `summary.status == REMAINING_PAYMENT_PENDING`. |
 | `canCheckIn` | Requires `REMAINING_PAYMENT_PENDING` **and** `paymentStatus.depositPaid == true`. |
 | `canFileComplaint` | Mirrors `complaintStatus.canFileComplaint`. |
+
+### `data.guestCapacity` (`CustomerOrderGuestCapacityResponse`, `CustomerServiceImpl.mapGuestCapacity`)
+| Field | Description |
+| --- | --- |
+| `type` | One of `ADULTS`, `CHILDREN`, `BABY`. |
+| `quantity` | Maximum number accepted for the homestay configuration. Use this to render badges or booking reminders. |
 
 ## Error Cases
 - `400` when `billId` is missing or invalid (`CustomerServiceImpl.java:669-674`).
