@@ -68,10 +68,10 @@ Use this to pre-fill host UIs or to inform customers about capacity limits on de
 ```
 
 ### Response
-Success responses are unchanged, but FE can reuse the `personCapacities` block from `HomestayDTO/HomestayDetailDTO` to build client-side pickers and validation before calling the API.
+Success responses are unchanged, but FE can reuse the `personCapacities` block from `HomestayDTO/HomestayDetailDTO` to build client-side pickers and validation before calling the API. When a booking succeeds, the backend now persists the submitted guest distribution into `BillGuest` rows so every bill keeps a snapshot of how many adults/children/babies were included.
 
 ### Order Detail Surface
-`GET /customers/me/orders/{billId}` now echoes the homestay’s configured capacity so customers can review the constraints after booking:
+`GET /customers/me/orders/{billId}` returns the exact guest distribution captured on the bill:
 
 ```json
 "guestCapacity": [
@@ -80,7 +80,7 @@ Success responses are unchanged, but FE can reuse the `personCapacities` block f
 ]
 ```
 
-This list mirrors the homestay’s configuration (it does not track the exact number of guests booked per order).
+These values come from the stored `BillGuest` snapshot, so they always reflect what the customer entered—even if the host later updates the homestay capacity.
 
 ---
 
@@ -96,6 +96,6 @@ This list mirrors the homestay’s configuration (it does not track the exact nu
    - Surface backend error messages verbatim for edge cases (e.g., concurrent updates).
 
 3. **Homestay Detail & Order Pages**
-   - Display the configured capacity breakdown so guests understand restrictions at a glance, both before and after booking.
+   - Show the configured capacity breakdown on detail pages and the actual booked distribution from `guestCapacity` on order detail screens so guests understand both the limits and what they submitted.
 
 With these changes, FE can provide a consistent guest-capacity experience from discovery all the way to booking confirmation.

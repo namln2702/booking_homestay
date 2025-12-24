@@ -490,6 +490,7 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setCustomer(customer);
         bill.setCode(GenNumber.secureRandomNumbers());
         bill.setStatus(StatusBill.DEPOSIT_PENDING);
+        bill.setGuestAllocations(buildGuestAllocations(bookingDTO.getListPersonHomestay(), bill));
 
         Bill billResult = billRepository.save(bill);
 
@@ -950,7 +951,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .paymentStatus(paymentStatus)
                 .complaintStatus(complaintStatus)
                 .actions(actions)
-                .guestCapacity(mapGuestCapacity(bill.getHomestay()))
+                .guestCapacity(mapGuestAllocations(bill))
                 .build();
 
         return new ApiResponse<>(200, "Customer order detail retrieved successfully", response);
@@ -999,20 +1000,20 @@ public class CustomerServiceImpl implements CustomerService {
                 .createdAt(bill.getCreatedAt())
                 .basePrice(homestay != null ? homestay.getBasePrice() : null)
                 .dailyPrices(mapDailyPrices(bill))
-                .guestCapacity(mapGuestCapacity(homestay))
+                .guestCapacity(mapGuestAllocations(bill))
                 .build();
     }
 
-    private List<CustomerOrderGuestCapacityResponse> mapGuestCapacity(Homestay homestay) {
-        if (homestay == null || homestay.getListPersonHomestay() == null) {
+    private List<CustomerOrderGuestCapacityResponse> mapGuestAllocations(Bill bill) {
+        if (bill == null || bill.getGuestAllocations() == null || bill.getGuestAllocations().isEmpty()) {
             return List.of();
         }
 
-        return homestay.getListPersonHomestay().stream()
+        return bill.getGuestAllocations().stream()
                 .filter(Objects::nonNull)
-                .filter(entry -> entry.getPerson() != null && entry.getPerson().getType() != null)
+                .filter(entry -> entry.getType() != null)
                 .map(entry -> CustomerOrderGuestCapacityResponse.builder()
-                        .type(entry.getPerson().getType())
+                        .type(entry.getType())
                         .quantity(entry.getQuantity())
                         .build())
                 .sorted(Comparator.comparing(response -> response.getType().ordinal()))
@@ -1270,6 +1271,25 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         return bill.getCheckOut().plusDays(1);
+    }
+
+    private Set<BillGuest> buildGuestAllocations(List<PersonCapacityRequest> requests, Bill bill) {
+        if (bill == null || requests == null || requests.isEmpty()) {
+            return Set.of();
+        }
+        EnumMap<TypePerson, Integer> totals = new EnumMap<>(TypePerson.class);
+        requests.stream()
+                .filter(Objects::nonNull)
+                .filter(req -> req.getType() != null && req.getQuantity() != null)
+                .forEach(req -> totals.merge(req.getType(), req.getQuantity(), Integer::sum));
+
+        return totals.entrySet().stream()
+                .map(entry -> BillGuest.builder()
+                        .bill(bill)
+                        .type(entry.getKey())
+                        .quantity(entry.getValue())
+                        .build())
+                .collect(Collectors.toSet());
     }
 
     private ApiResponse<?> validateGuestDistribution(Homestay homestay, List<PersonCapacityRequest> requests) {

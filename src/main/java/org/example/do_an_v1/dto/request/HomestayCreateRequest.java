@@ -32,7 +32,5 @@ public class HomestayCreateRequest {
     private List<HomestayImageRequest> imageUrls;
     private List<HomestayRuleRequest> rules;
     private List<HomestayDailyPriceRequest> dailyPrices;
-    @Valid
-    @NotEmpty(message = "listPersonHomestay is required")
     private List<PersonCapacityRequest> listPersonHomestay;
 }
