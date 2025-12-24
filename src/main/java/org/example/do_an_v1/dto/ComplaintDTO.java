@@ -25,4 +25,6 @@ public class ComplaintDTO {
     private String homestayTitle;   // Tên homestay được khiếu nại
 
     private List<String> imageUrls; // Danh sách URL hoặc tên ảnh (listImage)
+
+    private TransactionDTO transaction; // Transaction REFUND liên quan đến complaint
 }

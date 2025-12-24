@@ -10,16 +10,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/complaint")
-public class ComplaintController {
-
-
-    private final ComplaintService complaintService;
-
-    @PostMapping("/complaint")
-    ApiResponse<?> userComplaint(@RequestBody ComplaintDTO complaintDTO){
-        return complaintService.userComplaint(complaintDTO);
-    }
-}
+//@RestController
+//@RequiredArgsConstructor
+//@RequestMapping("/complaint")
+//public class ComplaintController {
+//
+//
+//    private final ComplaintService complaintService;
+//
+//    @PostMapping("/complaint")
+//    ApiResponse<?> userComplaint(@RequestBody ComplaintDTO complaintDTO){
+//        return complaintService.userComplaint(complaintDTO);
+//    }
+//}

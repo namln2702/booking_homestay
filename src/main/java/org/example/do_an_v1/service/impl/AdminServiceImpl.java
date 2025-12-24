@@ -741,8 +741,27 @@ public class AdminServiceImpl implements AdminService {
         Pageable pageable = PageRequest.of(safePage, safeSize);
         Page<Complaint> complaintPage = complaintRepository.findAll(pageable);
 
+        // Map complaints với transaction REFUND liên quan đến complaint
         List<ComplaintDTO> complaints = complaintPage.getContent().stream()
-                .map(ComplaintMapper::toDTO)
+                .map(complaint -> {
+                    // Chỉ lấy transaction REFUND của bill liên quan đến complaint này
+                    Bill bill = complaint.getBill();
+                    Transaction refundTransaction = null;
+                    if (bill != null) {
+                        // Lấy tất cả transactions của bill
+                        List<Transaction> allTransactions = transactionRepository.findByBill(bill);
+                        // Lọc chỉ lấy transaction REFUND và lấy transaction mới nhất (nếu có nhiều)
+                        refundTransaction = allTransactions.stream()
+                                .filter(t -> t.getTransactionType() == TypeTransaction.REFUND)
+                                .max(Comparator.comparing(
+                                        Transaction::getCreatedAt,
+                                        Comparator.nullsLast(Comparator.naturalOrder())
+                                ))
+                                .orElse(null);
+                    }
+                    // Map complaint với transaction REFUND (chỉ 1 transaction)
+                    return ComplaintMapper.toDTO(complaint, refundTransaction);
+                })
                 .toList();
 
         PageResponse<List<ComplaintDTO>> response = PageResponse.<List<ComplaintDTO>>builder()

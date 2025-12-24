@@ -18,7 +18,7 @@ public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDai
                 JOIN hdp.pricePerDay ppd
                 WHERE ppd.day >= :startDate
                   AND ppd.day < :endDate
-                  AND hdp.isBooked = FALSE
+                  AND hdp.isBooked = TRUE 
                   AND hdp.homestay.id = :idHomestay
         ) THEN TRUE ELSE FALSE END
 """)

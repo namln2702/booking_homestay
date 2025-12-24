@@ -43,4 +43,9 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
      * Tìm tất cả bills của một homestay
      */
     List<Bill> findByHomestay(Homestay homestay);
+
+    /**
+     * Tìm tất cả bills với status cụ thể
+     */
+    List<Bill> findByStatus(StatusBill status);
 }
