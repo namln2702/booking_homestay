@@ -75,7 +75,7 @@ Although `ComplaintDTO.billStatus` is unused, submitting a complaint affects the
 | --- | --- |
 | `COMPLAINT_PENDING` | Set immediately when this endpoint is invoked, signalling that a complaint has been logged and the host review window should open. |
 | `HOST_COMPLAINT_PROCESSING` | Achieved when the more recent `/customers/complaints` API is used, or when additional logic promotes the bill after validation (not handled here). |
-| `ADMIN_COMPLAINT_PROCESSING`, `PENDING_REFUNDED`, `REFUNDED`, `REJECTED` | Managed by host/admin services; this endpoint only seeds the initial complaint record. |
+| `ADMIN_COMPLAINT_PROCESSING`, `REFUNDED_PENDING`, `REFUNDED`, `REJECTED` | Managed by host/admin services; this endpoint only seeds the initial complaint record. |
 
 Frontends that invoke `/complaint/complaint` should therefore refresh the customer’s order/complaint summaries via `/customers/me/orders` and `/customers/me/complaints` to pick up the updated bill status.
 

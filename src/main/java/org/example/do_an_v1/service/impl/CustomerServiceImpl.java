@@ -41,6 +41,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.time.temporal.ChronoUnit.DAYS;
+
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -48,6 +49,52 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
 
+    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final List<StatusBill> STATUS_TIMELINE = List.of(
+            StatusBill.DEPOSIT_PENDING,
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+    private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED
+    );
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING
+    );
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
@@ -66,7 +113,46 @@ public class CustomerServiceImpl implements CustomerService {
     private final EmailService emailService;
     private final AdminRepository adminRepository;
 
-    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isValidPhone(String phone) {
+        return phone.matches("^[0-9+()\\-\\s]{6,20}$");
+    }
+
+    private static boolean isValidUrl(String value) {
+        try {
+            URI uri = new URI(value);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return false;
+            }
+            String scheme = uri.getScheme().toLowerCase();
+            return scheme.equals("http") || scheme.equals("https");
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    private static LocalDate parseDob(String value) {
+        try {
+            return LocalDate.parse(value, DOB_FORMATTER);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static int calculateAge(LocalDate dob) {
+        return Period.between(dob, LocalDate.now()).getYears();
+    }
+
+    private static Map<String, String> fieldError(String field, String message) {
+        return Map.of("field", field, "message", message);
+    }
 
     @Override
     @Transactional
@@ -275,9 +361,9 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public ApiResponse<?> booking(Long userId, BookingDTO bookingDTO) {
-        
+
         // ========== VALIDATION CHECKS - TẤT CẢ CHECKS LỖI ĐƯỢC THỰC HIỆN TRƯỚC KHI TẠO BILL ==========
-        
+
         // 1. Check homestay exists
         Homestay homestay = homestayRepository.findById(bookingDTO.getHomestayId()).orElse(null);
         if (homestay == null) {
@@ -308,7 +394,7 @@ public class CustomerServiceImpl implements CustomerService {
         // 5. Convert Date sang LocalDate để xử lý
         Date checkInDate = bookingDTO.getCheckIn();
         Date checkOutDate = bookingDTO.getCheckOut();
-        
+
         // Convert Date sang LocalDate
         LocalDate checkInLocalDate = checkInDate.toInstant()
                 .atZone(ZoneId.systemDefault())
@@ -320,7 +406,7 @@ public class CustomerServiceImpl implements CustomerService {
         // Convert sang java.sql.Date để query
         java.sql.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
         java.sql.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
-        
+
         // Convert Date sang LocalDateTime cho Bill entity
         LocalDateTime checkInDateTime = checkInDate.toInstant()
                 .atZone(ZoneId.systemDefault())
@@ -330,7 +416,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .toLocalDateTime();
 
         // 6. Check homestay availability
-        if(Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate))) {
+        if (Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate))) {
             return new ApiResponse<>(422, "Room has been booked", null);
         }
 
@@ -411,7 +497,7 @@ public class CustomerServiceImpl implements CustomerService {
 
 
         // Lưu thông tin CustomerBookingInfo nếu là người mới
-        if(!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())){
+        if (!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())) {
             CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingDTO.getCustomerBookingInfoDTO());
             customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
             billResult.setCustomerBookingInfo(customerBookingInfo);
@@ -422,13 +508,13 @@ public class CustomerServiceImpl implements CustomerService {
         double totalAmount = finalDailyPricesToLock.stream()
                 .mapToDouble(HomestayDailyPrice::getPrice)
                 .sum();
-        
+
         // Lưu tổng giá trị vào bill
         billResult.setTotalAmount(java.math.BigDecimal.valueOf(totalAmount));
-        
+
         // Tính 30% cho thanh toán cọc
         double depositAmount = totalAmount * 0.3;
-        
+
         Set<Transaction> transactions = new HashSet<>();
         // Create transaction cho thanh toán cọc (30%)
         Transaction transaction = Transaction.builder()
@@ -440,7 +526,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .toUser(adminUser)
                 .amount(java.math.BigDecimal.valueOf(depositAmount))
                 .build();
-        
+
         transactions.add(transactionRepository.save(transaction));
 
 
@@ -463,7 +549,7 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Save bill success", billDTO);
     }
 
-    public ApiResponse<?> payment(PaymentDTO paymentDTO){
+    public ApiResponse<?> payment(PaymentDTO paymentDTO) {
         return null;
     }
 
@@ -509,16 +595,15 @@ public class CustomerServiceImpl implements CustomerService {
         // Cập nhật preferences cho customer (thay thế toàn bộ)
         customer.setListPreferences(newPreferences);
         customer.setStatus(Status.ACTIVE);
-        
+
         // Lưu customer
         Customer savedCustomer = customerRepository.save(customer);
-        
+
         // Map sang DTO để trả về
         CustomerDTO responseDTO = profileMapper.toCustomerDTO(savedCustomer);
-        
+
         return new ApiResponse<>(200, "Customer preferences updated successfully", responseDTO);
     }
-
 
     @Override
     @Transactional
@@ -753,7 +838,6 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Customer reviews retrieved successfully", reviewDTOS);
     }
 
-
     @Override
     @Transactional(readOnly = true)
     public ApiResponse<?> getCustomerBills(Long userId) {
@@ -772,7 +856,7 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Lấy tất cả bills của customer, chỉ lấy những bills đã được thanh toán hoặc hoàn tất
         List<Bill> bills = billRepository.findByCustomer(customer);
-        
+
         // Filter chỉ lấy các bills đã hoàn tất hoặc đã check-in (có thể review được)
         List<Bill> completedBills = bills.stream()
 //                .filter(bill -> {
@@ -983,7 +1067,7 @@ public class CustomerServiceImpl implements CustomerService {
                 : null;
     }
 
-   private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
+    private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
         List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
         StatusBill status = bill.getStatus();
         BigDecimal depositAmount = resolveDepositAmount(bill);
@@ -1037,55 +1121,6 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
     }
 
-    private static final List<StatusBill> STATUS_TIMELINE = List.of(
-            StatusBill.DEPOSIT_PENDING,
-            StatusBill.DEPOSIT_PAID,
-            StatusBill.REMAINING_PAYMENT_PENDING,
-            StatusBill.REMAINING_PAYMENT_FAILED,
-            StatusBill.CHECKIN_EXPIRED,
-            StatusBill.COMPLAINT_PENDING,
-            StatusBill.HOST_COMPLAINT_PROCESSING,
-            StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.REFUNDED_PENDING,
-            StatusBill.REFUNDED,
-            StatusBill.REJECTED,
-            StatusBill.SUCCEED,
-            StatusBill.CANCELLED_REFUNDED,
-            StatusBill.CANCELLED
-    );
-
-    private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_PAID,
-            StatusBill.REMAINING_PAYMENT_PENDING,
-            StatusBill.REMAINING_PAYMENT_FAILED,
-            StatusBill.CHECKIN_EXPIRED,
-            StatusBill.COMPLAINT_PENDING,
-            StatusBill.HOST_COMPLAINT_PROCESSING,
-            StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.REFUNDED_PENDING,
-            StatusBill.REFUNDED,
-            StatusBill.REJECTED,
-            StatusBill.SUCCEED,
-            StatusBill.CANCELLED_REFUNDED,
-            StatusBill.CANCELLED
-    );
-
-    private static final EnumSet<StatusBill> REMAINING_PAYMENT_COMPLETED_STATUSES = EnumSet.of(
-            StatusBill.CHECKIN_EXPIRED,
-            StatusBill.COMPLAINT_PENDING,
-            StatusBill.HOST_COMPLAINT_PROCESSING,
-            StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.REFUNDED_PENDING,
-            StatusBill.REFUNDED,
-            StatusBill.REJECTED,
-            StatusBill.SUCCEED
-    );
-
-    private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_PAID,
-            StatusBill.REMAINING_PAYMENT_PENDING
-    );
-
     private CustomerOrderComplaintStatusResponse buildComplaintStatusSnapshot(Bill bill) {
         StatusBill status = bill.getStatus();
         LocalDateTime complaintDeadline = calculateComplaintDeadline(bill);
@@ -1096,9 +1131,11 @@ public class CustomerServiceImpl implements CustomerService {
         boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
         boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
         boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
-        boolean refundInProgress = status == StatusBill.REFUNDED;
-        boolean resolvedWithRefund = status == StatusBill.REFUNDED;
-        boolean resolvedWithoutRefund = status == StatusBill.REJECTED;
+        boolean refundInProgress = status == StatusBill.REFUNDED_PENDING;
+        boolean resolvedWithRefund = status == StatusBill.REFUNDED
+                || status == StatusBill.CANCELLED_REFUNDED;
+        boolean resolvedWithoutRefund = status == StatusBill.REJECTED
+                || status == StatusBill.CANCELLED;
 
         boolean complaintRelated = status == StatusBill.COMPLAINT_PENDING
                 || status == StatusBill.HOST_COMPLAINT_PROCESSING
@@ -1207,7 +1244,7 @@ public class CustomerServiceImpl implements CustomerService {
             nights = 0;
         }
 
-        return bill.getCheckOut().plusDays( 1);
+        return bill.getCheckOut().plusDays(1);
     }
 
     private Transaction findLatestTransaction(List<Transaction> transactions, TypeTransaction type, StatusTransaction status) {
@@ -1241,48 +1278,6 @@ public class CustomerServiceImpl implements CustomerService {
         return currentIndex <= targetIndex;
     }
 
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static boolean isValidPhone(String phone) {
-        return phone.matches("^[0-9+()\\-\\s]{6,20}$");
-    }
-
-    private static boolean isValidUrl(String value) {
-        try {
-            URI uri = new URI(value);
-            if (uri.getScheme() == null || uri.getHost() == null) {
-                return false;
-            }
-            String scheme = uri.getScheme().toLowerCase();
-            return scheme.equals("http") || scheme.equals("https");
-        } catch (URISyntaxException e) {
-            return false;
-        }
-    }
-
-    private static LocalDate parseDob(String value) {
-        try {
-            return LocalDate.parse(value, DOB_FORMATTER);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    private static int calculateAge(LocalDate dob) {
-        return Period.between(dob, LocalDate.now()).getYears();
-    }
-
-    private static Map<String, String> fieldError(String field, String message) {
-        return Map.of("field", field, "message", message);
-    }
-
-
     // Chưa checkin đúng hạn nên bị hủy
     @Override
     @Transactional
@@ -1303,8 +1298,8 @@ public class CustomerServiceImpl implements CustomerService {
         /* TODO
         Kiểm tra xem những trạng thái nào thì được cancel bill
          */
-        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING 
-                && bill.getStatus() != StatusBill.DEPOSIT_PAID 
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING
+                && bill.getStatus() != StatusBill.DEPOSIT_PAID
                 && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
@@ -1358,14 +1353,13 @@ public class CustomerServiceImpl implements CustomerService {
             }
 
             bill.setStatus(StatusBill.CANCELLED_REFUNDED);
-        }
-        else
+        } else
             // Cập nhật status bill thành CANCELLED do khong duoc hoang tien
             bill.setStatus(StatusBill.CANCELLED);
         billRepository.save(bill);
 
-        String message = canRefund 
-                ? "Bill cancelled successfully. Refund will be processed." 
+        String message = canRefund
+                ? "Bill cancelled successfully. Refund will be processed."
                 : "Bill cancelled successfully. No refund as cancellation is less than 2 days before check-in.";
 
         return new ApiResponse<>(200, message, null);
@@ -1409,7 +1403,7 @@ public class CustomerServiceImpl implements CustomerService {
         LocalDateTime checkIn = bill.getCheckIn();
         LocalDateTime checkOut = bill.getCheckOut();
         long numberOfDays = DAYS.between(checkIn.toLocalDate(), checkOut.toLocalDate());
-        
+
         // Thời gian cho phép khiếu nại: (N + 1) ngày sau checkout
         LocalDateTime checkoutTime = bill.getCheckOut();
         LocalDateTime complaintDeadline = checkoutTime.plusDays(numberOfDays + 1);
@@ -1417,9 +1411,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Kiểm tra xem có trong thời gian cho phép khiếu nại không
         if (now.isAfter(complaintDeadline)) {
-            return new ApiResponse<>(422, 
-                    String.format("Complaint deadline has passed. You can only file a complaint within %d days after checkout. Deadline: %s", 
-                            numberOfDays + 1, complaintDeadline), 
+            return new ApiResponse<>(422,
+                    String.format("Complaint deadline has passed. You can only file a complaint within %d days after checkout. Deadline: %s",
+                            numberOfDays + 1, complaintDeadline),
                     null);
         }
 
@@ -1464,7 +1458,7 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setStatus(StatusBill.HOST_COMPLAINT_PROCESSING);
         billRepository.save(bill);
 
-        log.info("Complaint created successfully for bill {} by customer {}. Days allowed: {}, Deadline: {}", 
+        log.info("Complaint created successfully for bill {} by customer {}. Days allowed: {}, Deadline: {}",
                 bill.getId(), userId, numberOfDays + 1, complaintDeadline);
 
         // Map entity sang DTO để tránh circular reference

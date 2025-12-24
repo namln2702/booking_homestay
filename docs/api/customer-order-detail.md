@@ -115,7 +115,7 @@ Frontends can rely on `StatusBill` for end-to-end context. The table below lists
 | `COMPLAINT_PENDING` | Guest can raise complaints (N+1 days window). |
 | `HOST_COMPLAINT_PROCESSING` | Host is reviewing an active complaint. |
 | `ADMIN_COMPLAINT_PROCESSING` | Complaint escalated to admins. |
-| `PENDING_REFUNDED` | Approved refund awaits admin transfer. |
+| `REFUNDED_PENDING` | Approved refund awaits admin transfer. |
 | `REFUNDED` | Complaint resolved with refund. |
 | `REJECTED` | Complaint resolved without refund. |
 | `SUCCEED` | Stay completed, no complaints/refunds outstanding. |
@@ -129,7 +129,7 @@ Frontends can rely on `StatusBill` for end-to-end context. The table below lists
 | `awaitingDeposit` / `depositPaid` / `depositPaidAt` / `depositAmount` | Deposit collection state. |
 | `awaitingRemainingPayment` / `remainingPaymentRequired` / `remainingPaid` / `remainingPaidAt` / `remainingAmount` | Remaining 70% settlement state. |
 | `paymentFailed` | True when bill status equals `REMAINING_PAYMENT_FAILED`. |
-| `awaitingRefund` | True when bill is `PENDING_REFUNDED` or when a refund transaction is still pending. |
+| `awaitingRefund` | True when bill is `REFUNDED_PENDING` or when a refund transaction is still pending. |
 | `refunded` / `refundCompletedAt` | Reflect either `StatusBill.REFUNDED`, `CANCELLED_REFUNDED`, or a successful refund transaction timestamp. |
 
 #### All `paymentStatus.phase` Variants
@@ -145,7 +145,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `COMPLAINT_WINDOW` | `COMPLAINT_PENDING` |
 | `HOST_REVIEW` | `HOST_COMPLAINT_PROCESSING` |
 | `ADMIN_REVIEW` | `ADMIN_COMPLAINT_PROCESSING` |
-| `REFUND_PENDING` | `PENDING_REFUNDED` |
+| `REFUND_PENDING` | `REFUNDED_PENDING` |
 | `REFUNDED` | `REFUNDED` |
 | `COMPLAINT_REJECTED` | `REJECTED` |
 | `COMPLETED` | `SUCCEED` |
@@ -159,7 +159,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `phase` | Complaint lifecycle marker (see table below). |
 | `complaintRelated` | True whenever the bill is inside any complaint-processing status. |
 | `inComplaintWindow` | True only when the bill status is `COMPLAINT_PENDING`. |
-| `underHostReview`, `underAdminReview`, `refundInProgress`, `resolvedWithRefund`, `resolvedWithoutRefund` | Convenience booleans mirroring the bill status buckets. |
+| `underHostReview`, `underAdminReview`, `refundInProgress`, `resolvedWithRefund`, `resolvedWithoutRefund` | Convenience booleans mirroring `StatusBill`. `refundInProgress` flips on for `REFUNDED_PENDING`; `resolvedWithRefund` is true for `REFUNDED` or `CANCELLED_REFUNDED`; `resolvedWithoutRefund` is true for `REJECTED` or `CANCELLED`. |
 | `complaintDeadline` | Calculated via `calculateComplaintDeadline` (`CustomerServiceImpl.java:1004-1018`) as checkout + (N+1) days. |
 | `withinComplaintDeadline` | Tells the UI whether the window remains open. |
 | `latestComplaintId` | Null when no complaint exists; otherwise the newest complaint ID for deep links. |
@@ -172,7 +172,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `WINDOW` | Bill status `COMPLAINT_PENDING`. |
 | `HOST_REVIEW` | `HOST_COMPLAINT_PROCESSING`. |
 | `ADMIN_REVIEW` | `ADMIN_COMPLAINT_PROCESSING`. |
-| `REFUND_PENDING` | `PENDING_REFUNDED`. |
+| `REFUND_PENDING` | `REFUNDED_PENDING`. |
 | `RESOLVED_REFUNDED` | `REFUNDED` or `CANCELLED_REFUNDED`. |
 | `RESOLVED` | `REJECTED`, `SUCCEED`, or `CANCELLED`. |
 | `NONE` | Any status outside complaint-related flows (includes null safety fallback). |
