@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
+import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
+import org.example.do_an_v1.dto.request.PersonCapacityRequest;
 import org.example.do_an_v1.dto.request.PricePerDayRequest;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
@@ -15,6 +17,7 @@ import org.example.do_an_v1.dto.response.CustomerOrderActionPermissionResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderComplaintStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderDailyPriceResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderDetailResponse;
+import org.example.do_an_v1.dto.response.CustomerOrderGuestCapacityResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderPaymentStatusResponse;
 import org.example.do_an_v1.dto.response.CustomerOrderResponse;
 import org.example.do_an_v1.payload.ApiResponse;
@@ -28,13 +31,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.time.temporal.ChronoUnit.DAYS;
+
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -42,6 +51,52 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
 
+    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final List<StatusBill> STATUS_TIMELINE = List.of(
+            StatusBill.DEPOSIT_PENDING,
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+    private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_COMPLETED_STATUSES = EnumSet.of(
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED
+    );
+    private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING
+    );
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
@@ -60,15 +115,62 @@ public class CustomerServiceImpl implements CustomerService {
     private final EmailService emailService;
     private final AdminRepository adminRepository;
 
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isValidPhone(String phone) {
+        return phone.matches("^[0-9+()\\-\\s]{6,20}$");
+    }
+
+    private static boolean isValidUrl(String value) {
+        try {
+            URI uri = new URI(value);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return false;
+            }
+            String scheme = uri.getScheme().toLowerCase();
+            return scheme.equals("http") || scheme.equals("https");
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    private static LocalDate parseDob(String value) {
+        try {
+            return LocalDate.parse(value, DOB_FORMATTER);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static int calculateAge(LocalDate dob) {
+        return Period.between(dob, LocalDate.now()).getYears();
+    }
+
+    private static Map<String, String> fieldError(String field, String message) {
+        return Map.of("field", field, "message", message);
+    }
+
     @Override
     @Transactional
-    public ApiResponse<CustomerDTO> upsertCustomerProfile(CustomerDTO dto) throws RuntimeException {
-        if (dto == null || dto.getIdUser() == null) {
-            throw new IllegalArgumentException("Customer DTO must include idUser");
+    public ApiResponse<?> upsertCustomerProfile(Long userId, CustomerProfileUpdateRequest request) throws RuntimeException {
+        if (userId == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "userId", "message", "Thiếu thông tin người dùng")))
+            );
+        }
+        if (request == null) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of(
+                    "errors", List.of(Map.of("field", "request", "message", "Payload is required")))
+            );
         }
 
-        User user = userRegistrationSupport.getUserOrThrow(dto.getIdUser());
-
+        User user = userRegistrationSupport.getUserOrThrow(userId);
         Customer customer = customerRepository.findById(user.getId()).orElse(null);
         boolean isNew = false;
 
@@ -80,52 +182,172 @@ public class CustomerServiceImpl implements CustomerService {
             isNew = true;
         }
 
-        boolean hasChanges = isNew;
+        List<Map<String, String>> errors = new ArrayList<>();
 
-        UserRegistrationRequest userRequest = new UserRegistrationRequest(
-                dto.getIdUser(),
-                dto.getUsername(),
-                dto.getName(),
-                dto.getPhone(),
-                dto.getAge(),
-                dto.getAvatarUrl()
-        );
-
-        if (userRegistrationSupport.applyUserAttributes(user, userRequest)) {
-            hasChanges = true;
+        String requestedName = request.isNameProvided() ? trimToNull(request.getName()) : null;
+        if (request.isNameProvided()) {
+            if (requestedName == null) {
+                errors.add(fieldError("name", "Tên không được để trống"));
+            } else if (requestedName.length() > 100) {
+                errors.add(fieldError("name", "Tên tối đa 100 ký tự"));
+            }
+        }
+        String effectiveName = requestedName != null ? requestedName : trimToNull(user.getName());
+        if (effectiveName == null) {
+            errors.add(fieldError("name", "Tên là bắt buộc"));
         }
 
-        if (dto.getStatus() != null && !Objects.equals(dto.getStatus(), customer.getStatus())) {
-            customer.setStatus(dto.getStatus());
-            hasChanges = true;
+        String requestedPhone = request.isPhoneProvided() ? trimToNull(request.getPhone()) : null;
+        if (request.isPhoneProvided()) {
+            if (requestedPhone == null) {
+                errors.add(fieldError("phone", "Số điện thoại không được để trống"));
+            } else if (requestedPhone.length() > 20) {
+                errors.add(fieldError("phone", "Số điện thoại tối đa 20 ký tự"));
+            } else if (!isValidPhone(requestedPhone)) {
+                errors.add(fieldError("phone", "Định dạng số điện thoại không hợp lệ"));
+            }
+        }
+        String effectivePhone = requestedPhone != null ? requestedPhone : trimToNull(user.getPhone());
+        if (effectivePhone == null) {
+            errors.add(fieldError("phone", "Số điện thoại là bắt buộc"));
         }
 
-        if (dto.getDateOfBirth() != null && !Objects.equals(dto.getDateOfBirth(), customer.getDateOfBirth())) {
-            customer.setDateOfBirth(dto.getDateOfBirth());
-            hasChanges = true;
+        String requestedDobRaw = request.isDateOfBirthProvided() ? trimToNull(request.getDateOfBirth()) : null;
+        LocalDate requestedDob = null;
+        if (request.isDateOfBirthProvided()) {
+            if (requestedDobRaw == null) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh không được để trống"));
+            } else {
+                requestedDob = parseDob(requestedDobRaw);
+                if (requestedDob == null) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh phải theo định dạng DD/MM/YYYY"));
+                } else if (requestedDob.isAfter(LocalDate.now())) {
+                    errors.add(fieldError("dateOfBirth", "Ngày sinh không được ở tương lai"));
+                }
+            }
         }
 
-        if (dto.getQrCodeUrl() != null && !Objects.equals(dto.getQrCodeUrl(), customer.getQrCodeUrl())) {
-            customer.setQrCodeUrl(dto.getQrCodeUrl());
-            hasChanges = true;
+        LocalDate existingDob = null;
+        String storedDob = trimToNull(customer.getDateOfBirth());
+        if (storedDob != null) {
+            existingDob = parseDob(storedDob);
+            if (existingDob == null && !request.isDateOfBirthProvided()) {
+                errors.add(fieldError("dateOfBirth", "Ngày sinh hiện tại không hợp lệ, vui lòng cập nhật lại"));
+            }
         }
 
-        // lastBooking will be maintained by booking workflows; ignore incoming value for now
+        LocalDate effectiveDob = requestedDob != null ? requestedDob : existingDob;
+        if (effectiveDob == null) {
+            errors.add(fieldError("dateOfBirth", "Ngày sinh là bắt buộc"));
+        }
+
+        Integer computedAge = effectiveDob != null ? calculateAge(effectiveDob) : null;
+        if (computedAge != null && (computedAge < 0 || computedAge > 150)) {
+            errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+        }
+
+        if (request.isAgeProvided() && request.getAge() != null) {
+            Integer requestedAge = request.getAge();
+            if (requestedAge < 0 || requestedAge > 150) {
+                errors.add(fieldError("age", "Tuổi phải nằm trong khoảng 0 - 150"));
+            } else if (computedAge != null && !Objects.equals(requestedAge, computedAge)) {
+                errors.add(fieldError("age", "Tuổi không khớp với ngày sinh"));
+            }
+        }
+
+        String requestedAvatar = request.isAvatarUrlProvided() ? trimToNull(request.getAvatarUrl()) : null;
+        if (request.isAvatarUrlProvided() && requestedAvatar != null && !isValidUrl(requestedAvatar)) {
+            errors.add(fieldError("avatarUrl", "Avatar URL không hợp lệ"));
+        }
+
+        String requestedQr = request.isQrCodeUrlProvided() ? trimToNull(request.getQrCodeUrl()) : null;
+        if (request.isQrCodeUrlProvided() && requestedQr != null && !isValidUrl(requestedQr)) {
+            errors.add(fieldError("qrCodeUrl", "QR code URL không hợp lệ"));
+        }
+
+        Set<Preference> resolvedPreferences = null;
+        if (request.isListPreferenceProvided()) {
+            List<Long> ids = request.getListPreference() != null ? request.getListPreference() : List.of();
+            if (ids.stream().anyMatch(Objects::isNull)) {
+                errors.add(fieldError("listPreference", "Preference IDs không được chứa giá trị null"));
+            } else {
+                List<Long> distinctIds = ids.stream().distinct().toList();
+                if (distinctIds.isEmpty()) {
+                    resolvedPreferences = new HashSet<>();
+                } else {
+                    List<Preference> preferences = preferenceRepository.findAllById(distinctIds);
+                    Set<Long> foundIds = preferences.stream()
+                            .map(Preference::getId)
+                            .collect(Collectors.toSet());
+                    List<Long> missing = distinctIds.stream()
+                            .filter(id -> !foundIds.contains(id))
+                            .toList();
+                    if (!missing.isEmpty()) {
+                        errors.add(fieldError("listPreference", "Preference IDs " + missing + " không tồn tại"));
+                    } else {
+                        resolvedPreferences = new HashSet<>(preferences);
+                    }
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return new ApiResponse<>(400, "Dữ liệu không hợp lệ", Map.of("errors", errors));
+        }
+
+        boolean customerChanged = isNew;
+
+        if (request.isNameProvided() && !Objects.equals(user.getName(), requestedName)) {
+            user.setName(requestedName);
+        } else if (user.getName() == null && effectiveName != null) {
+            user.setName(effectiveName);
+        }
+
+        if (request.isPhoneProvided() && !Objects.equals(user.getPhone(), requestedPhone)) {
+            user.setPhone(requestedPhone);
+        } else if (user.getPhone() == null && effectivePhone != null) {
+            user.setPhone(effectivePhone);
+        }
+
+        if (computedAge != null && !Objects.equals(user.getAge(), computedAge)) {
+            user.setAge(computedAge);
+        }
+
+        if (request.isAvatarUrlProvided() && !Objects.equals(user.getAvatarUrl(), requestedAvatar)) {
+            user.setAvatarUrl(requestedAvatar);
+        }
+
+        String normalizedDob = effectiveDob != null ? DOB_FORMATTER.format(effectiveDob) : null;
+        if (!Objects.equals(customer.getDateOfBirth(), normalizedDob)) {
+            customer.setDateOfBirth(normalizedDob);
+            customerChanged = true;
+        }
+
+        if (request.isQrCodeUrlProvided() && !Objects.equals(customer.getQrCodeUrl(), requestedQr)) {
+            customer.setQrCodeUrl(requestedQr);
+            customerChanged = true;
+        }
+
+        if (resolvedPreferences != null) {
+            Set<Preference> currentPreferences = customer.getListPreferences() != null
+                    ? new HashSet<>(customer.getListPreferences())
+                    : new HashSet<>();
+            if (!currentPreferences.equals(resolvedPreferences)) {
+                customer.setListPreferences(resolvedPreferences);
+                customerChanged = true;
+            }
+        }
 
         if (customer.getRole() != RoleUser.CUSTOMER) {
             customer.setRole(RoleUser.CUSTOMER);
-            hasChanges = true;
+            customerChanged = true;
         }
 
-        if (!hasChanges) {
-            return new ApiResponse<>(200, "Customer information already up to date", profileMapper.toCustomerDTO(customer));
-        }
+        Customer savedCustomer = customerChanged
+                ? customerRepository.save(customer)
+                : customer;
 
-        // createdAt/updatedAt live on BaseEntity and are populated through auditing, never via the request payload
-        Customer savedCustomer = customerRepository.save(customer);
-        String message = isNew ? "Customer profile created successfully" : "Customer information updated successfully";
-
-        return new ApiResponse<>(200, message, profileMapper.toCustomerDTO(savedCustomer));
+        return new ApiResponse<>(200, "Cập nhật hồ sơ thành công", profileMapper.toCustomerDTO(savedCustomer));
     }
 
     @Override
@@ -141,9 +363,9 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public ApiResponse<?> booking(Long userId, BookingDTO bookingDTO) {
-        
+
         // ========== VALIDATION CHECKS - TẤT CẢ CHECKS LỖI ĐƯỢC THỰC HIỆN TRƯỚC KHI TẠO BILL ==========
-        
+
         // 1. Check homestay exists
         Homestay homestay = homestayRepository.findById(bookingDTO.getHomestayId()).orElse(null);
         if (homestay == null) {
@@ -174,7 +396,12 @@ public class CustomerServiceImpl implements CustomerService {
         // 5. Convert Date sang LocalDate để xử lý
         Date checkInDate = bookingDTO.getCheckIn();
         Date checkOutDate = bookingDTO.getCheckOut();
-        
+
+        ApiResponse<?> guestValidation = validateGuestDistribution(homestay, bookingDTO.getListPersonHomestay());
+        if (guestValidation != null) {
+            return guestValidation;
+        }
+
         // Convert Date sang LocalDate
         LocalDate checkInLocalDate = checkInDate.toInstant()
                 .atZone(ZoneId.systemDefault())
@@ -186,7 +413,7 @@ public class CustomerServiceImpl implements CustomerService {
         // Convert sang java.sql.Date để query
         java.sql.Date startDate = java.sql.Date.valueOf(checkInLocalDate);
         java.sql.Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
-        
+
         // Convert Date sang LocalDateTime cho Bill entity
         LocalDateTime checkInDateTime = checkInDate.toInstant()
                 .atZone(ZoneId.systemDefault())
@@ -196,7 +423,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .toLocalDateTime();
 
         // 6. Check homestay availability
-        if(Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate))) {
+        if (Boolean.TRUE.equals(homestayDailyPricesRepository.checkHomestayAvailability(homestay.getId(), startDate, endDate))) {
             return new ApiResponse<>(422, "Room has been booked", null);
         }
 
@@ -263,6 +490,7 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setCustomer(customer);
         bill.setCode(GenNumber.secureRandomNumbers());
         bill.setStatus(StatusBill.DEPOSIT_PENDING);
+        bill.setGuestAllocations(buildGuestAllocations(bookingDTO.getListPersonHomestay(), bill));
 
         Bill billResult = billRepository.save(bill);
 
@@ -277,7 +505,7 @@ public class CustomerServiceImpl implements CustomerService {
 
 
         // Lưu thông tin CustomerBookingInfo nếu là người mới
-        if(!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())){
+        if (!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())) {
             CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingDTO.getCustomerBookingInfoDTO());
             customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
             billResult.setCustomerBookingInfo(customerBookingInfo);
@@ -288,13 +516,13 @@ public class CustomerServiceImpl implements CustomerService {
         double totalAmount = finalDailyPricesToLock.stream()
                 .mapToDouble(HomestayDailyPrice::getPrice)
                 .sum();
-        
+
         // Lưu tổng giá trị vào bill
         billResult.setTotalAmount(java.math.BigDecimal.valueOf(totalAmount));
-        
+
         // Tính 30% cho thanh toán cọc
         double depositAmount = totalAmount * 0.3;
-        
+
         Set<Transaction> transactions = new HashSet<>();
         // Create transaction cho thanh toán cọc (30%)
         Transaction transaction = Transaction.builder()
@@ -306,7 +534,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .toUser(adminUser)
                 .amount(java.math.BigDecimal.valueOf(depositAmount))
                 .build();
-        
+
         transactions.add(transactionRepository.save(transaction));
 
 
@@ -329,7 +557,7 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Save bill success", billDTO);
     }
 
-    public ApiResponse<?> payment(PaymentDTO paymentDTO){
+    public ApiResponse<?> payment(PaymentDTO paymentDTO) {
         return null;
     }
 
@@ -375,16 +603,15 @@ public class CustomerServiceImpl implements CustomerService {
         // Cập nhật preferences cho customer (thay thế toàn bộ)
         customer.setListPreferences(newPreferences);
         customer.setStatus(Status.ACTIVE);
-        
+
         // Lưu customer
         Customer savedCustomer = customerRepository.save(customer);
-        
+
         // Map sang DTO để trả về
         CustomerDTO responseDTO = profileMapper.toCustomerDTO(savedCustomer);
-        
+
         return new ApiResponse<>(200, "Customer preferences updated successfully", responseDTO);
     }
-
 
     @Override
     @Transactional
@@ -427,10 +654,8 @@ public class CustomerServiceImpl implements CustomerService {
         Bill bill = billOptional.get();
         // Chỉ cho phép review nếu đã check-in hoặc đã hoàn tất
         StatusBill billStatus = bill.getStatus();
-        if (billStatus != StatusBill.COMPLAINT_PENDING
-                && billStatus != StatusBill.REMAINING_PAYMENT_PENDING
-//                && billStatus != StatusBill.COMPLAINT_EXPIRED
-                && billStatus != StatusBill.SUCCEED) {
+        if (billStatus != StatusBill.SUCCEED
+                && billStatus != StatusBill.REFUNDED) {
             return new ApiResponse<>(403, "You can only review homestays you have stayed at", null);
         }
 
@@ -598,6 +823,28 @@ public class CustomerServiceImpl implements CustomerService {
         return new ApiResponse<>(200, "Review updated successfully", responseDTO);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<ReviewDTO>> getCustomerReviews(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id is required");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found for id " + userId));
+
+        Customer customer = customerRepository.findByUser(user);
+        if (customer == null) {
+            return new ApiResponse<>(404, "Customer profile not found for this user", null);
+        }
+
+        List<Review> reviews = reviewRepository.findByCustomerOrderByCreatedAtDesc(customer);
+        List<ReviewDTO> reviewDTOS = reviews.stream()
+                .map(ReviewMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Customer reviews retrieved successfully", reviewDTOS);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -617,7 +864,7 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Lấy tất cả bills của customer, chỉ lấy những bills đã được thanh toán hoặc hoàn tất
         List<Bill> bills = billRepository.findByCustomer(customer);
-        
+
         // Filter chỉ lấy các bills đã hoàn tất hoặc đã check-in (có thể review được)
         List<Bill> completedBills = bills.stream()
 //                .filter(bill -> {
@@ -704,6 +951,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .paymentStatus(paymentStatus)
                 .complaintStatus(complaintStatus)
                 .actions(actions)
+                .guestCapacity(mapGuestAllocations(bill))
                 .build();
 
         return new ApiResponse<>(200, "Customer order detail retrieved successfully", response);
@@ -752,7 +1000,24 @@ public class CustomerServiceImpl implements CustomerService {
                 .createdAt(bill.getCreatedAt())
                 .basePrice(homestay != null ? homestay.getBasePrice() : null)
                 .dailyPrices(mapDailyPrices(bill))
+                .guestCapacity(mapGuestAllocations(bill))
                 .build();
+    }
+
+    private List<CustomerOrderGuestCapacityResponse> mapGuestAllocations(Bill bill) {
+        if (bill == null || bill.getGuestAllocations() == null || bill.getGuestAllocations().isEmpty()) {
+            return List.of();
+        }
+
+        return bill.getGuestAllocations().stream()
+                .filter(Objects::nonNull)
+                .filter(entry -> entry.getType() != null)
+                .map(entry -> CustomerOrderGuestCapacityResponse.builder()
+                        .type(entry.getType())
+                        .quantity(entry.getQuantity())
+                        .build())
+                .sorted(Comparator.comparing(response -> response.getType().ordinal()))
+                .collect(Collectors.toList());
     }
 
     private CustomerComplaintResponse mapToCustomerComplaint(Complaint complaint) {
@@ -830,6 +1095,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     private CustomerOrderPaymentStatusResponse buildPaymentStatusSnapshot(Bill bill, List<Transaction> transactions) {
         List<Transaction> safeTransactions = transactions != null ? transactions : List.of();
+        StatusBill status = bill.getStatus();
         BigDecimal depositAmount = resolveDepositAmount(bill);
         BigDecimal totalAmount = bill.getTotalAmount();
         BigDecimal remainingAmount = null;
@@ -846,19 +1112,22 @@ public class CustomerServiceImpl implements CustomerService {
         Transaction refundSuccessTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.SUCCESS);
         Transaction refundPendingTransaction = findLatestTransaction(safeTransactions, TypeTransaction.REFUND, StatusTransaction.PENDING);
 
-        boolean depositPaid = depositTransaction != null;
-        boolean remainingPaid = remainingTransaction != null;
-        boolean awaitingDeposit = bill.getStatus() == StatusBill.DEPOSIT_PENDING;
-        boolean remainingRequired = bill.getStatus() == StatusBill.DEPOSIT_PAID
-                || bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING;
-        boolean awaitingRemaining = remainingRequired && !remainingPaid;
-        boolean awaitingRefund = bill.getStatus() == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
-        boolean refunded = bill.getStatus() == StatusBill.REFUNDED
-                || bill.getStatus() == StatusBill.CANCELLED_REFUNDED
-                || refundSuccessTransaction != null;
-        boolean paymentFailed = bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED;
+        boolean depositSettledByStatus = status != null && DEPOSIT_COMPLETED_STATUSES.contains(status);
+        boolean depositPaid = depositSettledByStatus || depositTransaction != null;
+        boolean awaitingDeposit = status == StatusBill.DEPOSIT_PENDING && !depositPaid;
 
-        String phase = determinePaymentPhase(bill.getStatus());
+        boolean remainingSettledByStatus = status != null && REMAINING_PAYMENT_COMPLETED_STATUSES.contains(status);
+        boolean remainingPaid = remainingSettledByStatus || remainingTransaction != null;
+        boolean remainingRequired = status != null && REMAINING_PAYMENT_REQUIRED_STATUSES.contains(status);
+        boolean awaitingRemaining = remainingRequired && !remainingPaid;
+
+        boolean awaitingRefund = status == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
+        boolean refunded = status == StatusBill.REFUNDED
+                || status == StatusBill.CANCELLED_REFUNDED
+                || refundSuccessTransaction != null;
+        boolean paymentFailed = status == StatusBill.REMAINING_PAYMENT_FAILED;
+
+        String phase = determinePaymentPhase(status);
 
         return CustomerOrderPaymentStatusResponse.builder()
                 .phase(phase)
@@ -878,23 +1147,6 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
     }
 
-    private static final List<StatusBill> STATUS_TIMELINE = List.of(
-            StatusBill.DEPOSIT_PENDING,
-            StatusBill.DEPOSIT_PAID,
-            StatusBill.REMAINING_PAYMENT_PENDING,
-            StatusBill.REMAINING_PAYMENT_FAILED,
-            StatusBill.CHECKIN_EXPIRED,
-            StatusBill.COMPLAINT_PENDING,
-            StatusBill.HOST_COMPLAINT_PROCESSING,
-            StatusBill.ADMIN_COMPLAINT_PROCESSING,
-            StatusBill.REFUNDED_PENDING,
-            StatusBill.REFUNDED,
-            StatusBill.REJECTED,
-            StatusBill.SUCCEED,
-            StatusBill.CANCELLED_REFUNDED,
-            StatusBill.CANCELLED
-    );
-
     private CustomerOrderComplaintStatusResponse buildComplaintStatusSnapshot(Bill bill) {
         StatusBill status = bill.getStatus();
         LocalDateTime complaintDeadline = calculateComplaintDeadline(bill);
@@ -905,9 +1157,11 @@ public class CustomerServiceImpl implements CustomerService {
         boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
         boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
         boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
-        boolean refundInProgress = status == StatusBill.REFUNDED;
-        boolean resolvedWithRefund = status == StatusBill.REFUNDED;
-        boolean resolvedWithoutRefund = status == StatusBill.REJECTED;
+        boolean refundInProgress = status == StatusBill.REFUNDED_PENDING;
+        boolean resolvedWithRefund = status == StatusBill.REFUNDED
+                || status == StatusBill.CANCELLED_REFUNDED;
+        boolean resolvedWithoutRefund = status == StatusBill.REJECTED
+                || status == StatusBill.CANCELLED;
 
         boolean complaintRelated = status == StatusBill.COMPLAINT_PENDING
                 || status == StatusBill.HOST_COMPLAINT_PROCESSING
@@ -1016,7 +1270,83 @@ public class CustomerServiceImpl implements CustomerService {
             nights = 0;
         }
 
-        return bill.getCheckOut().plusDays( 1);
+        return bill.getCheckOut().plusDays(1);
+    }
+
+    private Set<BillGuest> buildGuestAllocations(List<PersonCapacityRequest> requests, Bill bill) {
+        if (bill == null || requests == null || requests.isEmpty()) {
+            return Set.of();
+        }
+        EnumMap<TypePerson, Integer> totals = new EnumMap<>(TypePerson.class);
+        requests.stream()
+                .filter(Objects::nonNull)
+                .filter(req -> req.getType() != null && req.getQuantity() != null)
+                .forEach(req -> totals.merge(req.getType(), req.getQuantity(), Integer::sum));
+
+        return totals.entrySet().stream()
+                .map(entry -> BillGuest.builder()
+                        .bill(bill)
+                        .type(entry.getKey())
+                        .quantity(entry.getValue())
+                        .build())
+                .collect(Collectors.toSet());
+    }
+
+    private ApiResponse<?> validateGuestDistribution(Homestay homestay, List<PersonCapacityRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return new ApiResponse<>(400, "listPersonHomestay is required", null);
+        }
+
+        EnumMap<TypePerson, Integer> requestedMap = new EnumMap<>(TypePerson.class);
+        for (PersonCapacityRequest request : requests) {
+            if (request == null || request.getType() == null) {
+                return new ApiResponse<>(400, "Each entry in listPersonHomestay must include a type", null);
+            }
+            Integer qty = request.getQuantity();
+            if (qty == null || qty < 0) {
+                return new ApiResponse<>(400, "Quantity for " + request.getType() + " must be >= 0", null);
+            }
+            requestedMap.merge(request.getType(), qty, Integer::sum);
+        }
+
+        if (requestedMap.isEmpty()) {
+            return new ApiResponse<>(400, "listPersonHomestay must contain at least one entry", null);
+        }
+
+        Set<PersonHomestay> capacityConfig = homestay.getListPersonHomestay();
+        if (capacityConfig == null || capacityConfig.isEmpty()) {
+            return new ApiResponse<>(422, "Homestay has no capacity configuration", null);
+        }
+
+        EnumMap<TypePerson, Integer> capacityMap = new EnumMap<>(TypePerson.class);
+        for (PersonHomestay config : capacityConfig) {
+            if (config == null || config.getPerson() == null || config.getPerson().getType() == null) {
+                continue;
+            }
+            capacityMap.put(config.getPerson().getType(), config.getQuantity());
+        }
+
+        for (Map.Entry<TypePerson, Integer> entry : requestedMap.entrySet()) {
+            Integer allowed = capacityMap.get(entry.getKey());
+            if (allowed == null) {
+                return new ApiResponse<>(422, "Homestay does not accept " + entry.getKey().name().toLowerCase(), null);
+            }
+            if (entry.getValue() > allowed) {
+                return new ApiResponse<>(422,
+                        "Requested " + entry.getKey().name().toLowerCase() + " exceeds capacity (" + entry.getValue() + "/" + allowed + ")",
+                        null);
+            }
+        }
+
+        int totalGuests = requestedMap.values().stream().mapToInt(Integer::intValue).sum();
+        if (homestay.getMaxGuest() != null && totalGuests > homestay.getMaxGuest()) {
+            return new ApiResponse<>(422, "Total guests exceed allowed maximum (" + homestay.getMaxGuest() + ")", null);
+        }
+        if (homestay.getMinGuest() != null && totalGuests < homestay.getMinGuest()) {
+            return new ApiResponse<>(422, "Total guests must be at least " + homestay.getMinGuest(), null);
+        }
+
+        return null;
     }
 
     private Transaction findLatestTransaction(List<Transaction> transactions, TypeTransaction type, StatusTransaction status) {
@@ -1050,7 +1380,6 @@ public class CustomerServiceImpl implements CustomerService {
         return currentIndex <= targetIndex;
     }
 
-
     // Chưa checkin đúng hạn nên bị hủy
     @Override
     @Transactional
@@ -1071,8 +1400,8 @@ public class CustomerServiceImpl implements CustomerService {
         /* TODO
         Kiểm tra xem những trạng thái nào thì được cancel bill
          */
-        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING 
-                && bill.getStatus() != StatusBill.DEPOSIT_PAID 
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING
+                && bill.getStatus() != StatusBill.DEPOSIT_PAID
                 && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
@@ -1126,14 +1455,13 @@ public class CustomerServiceImpl implements CustomerService {
             }
 
             bill.setStatus(StatusBill.CANCELLED_REFUNDED);
-        }
-        else
+        } else
             // Cập nhật status bill thành CANCELLED do khong duoc hoang tien
             bill.setStatus(StatusBill.CANCELLED);
         billRepository.save(bill);
 
-        String message = canRefund 
-                ? "Bill cancelled successfully. Refund will be processed." 
+        String message = canRefund
+                ? "Bill cancelled successfully. Refund will be processed."
                 : "Bill cancelled successfully. No refund as cancellation is less than 2 days before check-in.";
 
         return new ApiResponse<>(200, message, null);
@@ -1177,7 +1505,7 @@ public class CustomerServiceImpl implements CustomerService {
         LocalDateTime checkIn = bill.getCheckIn();
         LocalDateTime checkOut = bill.getCheckOut();
         long numberOfDays = DAYS.between(checkIn.toLocalDate(), checkOut.toLocalDate());
-        
+
         // Thời gian cho phép khiếu nại: (N + 1) ngày sau checkout
         LocalDateTime checkoutTime = bill.getCheckOut();
         LocalDateTime complaintDeadline = checkoutTime.plusDays(numberOfDays + 1);
@@ -1185,9 +1513,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Kiểm tra xem có trong thời gian cho phép khiếu nại không
         if (now.isAfter(complaintDeadline)) {
-            return new ApiResponse<>(422, 
-                    String.format("Complaint deadline has passed. You can only file a complaint within %d days after checkout. Deadline: %s", 
-                            numberOfDays + 1, complaintDeadline), 
+            return new ApiResponse<>(422,
+                    String.format("Complaint deadline has passed. You can only file a complaint within %d days after checkout. Deadline: %s",
+                            numberOfDays + 1, complaintDeadline),
                     null);
         }
 
@@ -1232,7 +1560,7 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setStatus(StatusBill.HOST_COMPLAINT_PROCESSING);
         billRepository.save(bill);
 
-        log.info("Complaint created successfully for bill {} by customer {}. Days allowed: {}, Deadline: {}", 
+        log.info("Complaint created successfully for bill {} by customer {}. Days allowed: {}, Deadline: {}",
                 bill.getId(), userId, numberOfDays + 1, complaintDeadline);
 
         // Map entity sang DTO để tránh circular reference

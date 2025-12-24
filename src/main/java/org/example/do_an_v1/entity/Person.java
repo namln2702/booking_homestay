@@ -4,7 +4,6 @@ package org.example.do_an_v1.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.do_an_v1.enums.TypePerson;
-import org.springframework.format.annotation.NumberFormat;
 
 import java.util.Set;
 
@@ -22,6 +21,6 @@ public class Person extends BaseEntity{
     private TypePerson type;
 
     @OneToMany(mappedBy = "person")
-    Set<PersonHomestay> lisPersonHomestay;
+    Set<PersonHomestay> listPersonHomestay;
 
 }

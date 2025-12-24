@@ -1,29 +1,72 @@
 package org.example.do_an_v1.dto.request;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import lombok.Getter;
-import lombok.Setter;
 
+import java.util.List;
+
+/**
+ * Request payload to update the authenticated customer's profile.
+ * Booleans track whether a field is explicitly provided so we can support partial updates.
+ */
 @Getter
-@Setter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CustomerProfileUpdateRequest {
 
-    @Size(max = 255, message = "Name must be at most 255 characters")
     private String name;
+    private boolean nameProvided;
+    @JsonSetter("name")
+    public void setName(String name) {
+        this.name = name;
+        this.nameProvided = true;
+    }
 
-    @Size(max = 20, message = "Phone must be at most 20 characters")
-    private String phone; // TODO: need to check Vietnamese phone number
+    private String phone;
+    private boolean phoneProvided;
+    @JsonSetter("phone")
+    public void setPhone(String phone) {
+        this.phone = phone;
+        this.phoneProvided = true;
+    }
 
-    @Min(value = 0, message = "Age must be positive")
-    private Integer age;
-
-    @Size(max = 512, message = "Avatar URL must be at most 512 characters")
-    private String avatarUrl;
-
-    @Size(max = 255, message = "Date of birth must be at most 255 characters")
     private String dateOfBirth;
+    private boolean dateOfBirthProvided;
+    @JsonSetter("dateOfBirth")
+    public void setDateOfBirth(String dateOfBirth) {
+        this.dateOfBirth = dateOfBirth;
+        this.dateOfBirthProvided = true;
+    }
 
-    @Size(max = 512, message = "QR code URL must be at most 512 characters")
+    private Integer age;
+    private boolean ageProvided;
+    @JsonSetter("age")
+    public void setAge(Integer age) {
+        this.age = age;
+        this.ageProvided = true;
+    }
+
+    private String avatarUrl;
+    private boolean avatarUrlProvided;
+    @JsonSetter("avatarUrl")
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+        this.avatarUrlProvided = true;
+    }
+
     private String qrCodeUrl;
+    private boolean qrCodeUrlProvided;
+    @JsonSetter("qrCodeUrl")
+    public void setQrCodeUrl(String qrCodeUrl) {
+        this.qrCodeUrl = qrCodeUrl;
+        this.qrCodeUrlProvided = true;
+    }
+
+    private List<Long> listPreference;
+    private boolean listPreferenceProvided;
+    @JsonSetter("listPreference")
+    public void setListPreference(List<Long> listPreference) {
+        this.listPreference = listPreference;
+        this.listPreferenceProvided = true;
+    }
 }

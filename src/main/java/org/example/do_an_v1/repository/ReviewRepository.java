@@ -22,4 +22,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
      * Lấy tất cả reviews của một homestay
      */
     List<Review> findByHomestay(Homestay homestay);
+
+    /**
+     * Lấy tất cả reviews của một customer (mới nhất trước)
+     */
+    List<Review> findByCustomerOrderByCreatedAtDesc(Customer customer);
 }

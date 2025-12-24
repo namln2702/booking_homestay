@@ -30,4 +30,5 @@ public class CustomerOrderResponse {
     private LocalDateTime createdAt;
     private Float basePrice;
     private List<CustomerOrderDailyPriceResponse> dailyPrices;
+    private List<CustomerOrderGuestCapacityResponse> guestCapacity;
 }

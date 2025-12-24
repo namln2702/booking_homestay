@@ -18,29 +18,35 @@ Content-Type: application/json
 {
   "homestayId": 1,
   "checkIn": "2024-12-25T14:00:00",
-  "checkOut": "2024-12-28T11:00:00"
+  "checkOut": "2024-12-28T11:00:00",
+  "pricePerDays": [
+    { "day": "2024-12-25", "price": 1400000 },
+    { "day": "2024-12-26", "price": 1400000 },
+    { "day": "2024-12-27", "price": 1500000 }
+  ],
+  "listPersonHomestay": [
+    { "type": "ADULTS", "quantity": 2 },
+    { "type": "CHILDREN", "quantity": 1 }
+  ]
 }
 ```
-**Lưu ý:** Nếu không có `homestayDailyPriceIds`, hệ thống sẽ tự động tìm các HomestayDailyPrice trong khoảng thời gian check-in đến check-out.
 
-### 2. Request với danh sách ID giá
+### 2. Request đầy đủ (với thông tin người đặt)
 ```json
 {
   "homestayId": 1,
   "checkIn": "2024-12-25T14:00:00",
   "checkOut": "2024-12-28T11:00:00",
-  "homestayDailyPriceIds": [1, 2, 3]
-}
-```
-
-### 3. Request đầy đủ (với thông tin người đặt)
-```json
-{
-  "homestayId": 1,
-  "checkIn": "2024-12-25T14:00:00",
-  "checkOut": "2024-12-28T11:00:00",
-  "actualCheckin": null,
-  "homestayDailyPriceIds": [1, 2, 3],
+  "pricePerDays": [
+    { "day": "2024-12-25", "price": 1400000 },
+    { "day": "2024-12-26", "price": 1400000 },
+    { "day": "2024-12-27", "price": 1500000 }
+  ],
+  "listPersonHomestay": [
+    { "type": "ADULTS", "quantity": 2 },
+    { "type": "CHILDREN", "quantity": 1 },
+    { "type": "BABY", "quantity": 1 }
+  ],
   "customerBookingInfoDTO": {
     "name": "Trần Thị B",
     "email": "booking@example.com",
@@ -57,9 +63,23 @@ Content-Type: application/json
 | `homestayId` | Long | ✅ | ID của homestay muốn đặt |
 | `checkIn` | LocalDateTime | ✅ | Ngày giờ check-in (format: ISO-8601) |
 | `checkOut` | LocalDateTime | ✅ | Ngày giờ check-out (format: ISO-8601) |
-| `actualCheckin` | LocalDateTime | ❌ | Thời gian check-in thực tế (thường null khi booking) |
-| `homestayDailyPriceIds` | List<Long> | ❌ | Danh sách ID của HomestayDailyPrice. Nếu không có, hệ thống tự động tìm theo date range |
+| `pricePerDays` | List<Object> | ✅ | Danh sách ngày và giá áp dụng cho từng ngày lưu trú |
+| `listPersonHomestay` | List<Object> | ✅ | Phân bổ số lượng khách theo từng loại (ADULTS/CHILDREN/BABY) để kiểm tra sức chứa |
 | `customerBookingInfoDTO` | Object | ❌ | Thông tin người đặt (nếu khác với customer đăng nhập) |
+
+### pricePerDays
+
+| Trường | Loại | Bắt buộc | Mô tả |
+| --- | --- | --- | --- |
+| `day` | Date (yyyy-MM-dd) | ✅ | Ngày áp dụng giá |
+| `price` | Float | ✅ | Giá cho ngày tương ứng |
+
+### listPersonHomestay
+
+| Trường | Loại | Bắt buộc | Mô tả |
+| --- | --- | --- | --- |
+| `type` | Enum (`ADULTS`, `CHILDREN`, `BABY`) | ✅ | Loại khách |
+| `quantity` | Integer | ✅ | Số lượng khách cho loại tương ứng (>= 0) |
 
 ### customerBookingInfoDTO
 
@@ -123,7 +143,8 @@ Content-Type: application/json
 3. **Homestay Status**: Homestay phải có status `ACTIVE` để có thể booking
 4. **Date Format**: Sử dụng format ISO-8601 cho LocalDateTime (ví dụ: `2024-12-25T14:00:00`)
 5. **Check-in/Check-out**: `checkOut` phải sau `checkIn`
-6. **HomestayDailyPriceIds**: Nếu truyền danh sách ID, các ID phải thuộc về homestay đang booking
+6. **pricePerDays**: Danh sách ngày phải liên tục từ check-in đến check-out và chưa bị đặt trước
+7. **listPersonHomestay**: Bắt buộc khai báo, hệ thống sẽ kiểm tra tổng khách nằm trong khoảng `minGuest`-`maxGuest` và không vượt quá cấu hình của homestay
 
 ## Test với cURL
 
@@ -143,7 +164,6 @@ curl -X POST http://localhost:8080/customers/booking \
 5. Chọn body type: `raw` -> `JSON`
 6. Paste nội dung từ file JSON
 7. Click Send
-
 
 
 

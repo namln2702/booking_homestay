@@ -9,6 +9,7 @@ import org.example.do_an_v1.entity.Homestay;
 import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.HomestayImage;
 import org.example.do_an_v1.entity.HomestayRule;
+import org.example.do_an_v1.entity.PersonHomestay;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -31,6 +32,7 @@ public class HomestayMapper {
         List<HomestayDTO.HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
         List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
         List<HomestayDTO.HomestayImageDTO> imageDtos = mapImages(images);
+        List<HomestayDTO.PersonCapacityDTO> personCapacities = mapPersonCapacities(homestay.getListPersonHomestay());
 
         int reviewCount = homestay.getListReview() != null ? homestay.getListReview().size() : 0;
 
@@ -58,6 +60,7 @@ public class HomestayMapper {
                 .rules(rules)
                 .dailyPrices(dailyPrices)
                 .images(imageDtos)
+                .personCapacities(personCapacities)
                 .build();
     }
 
@@ -164,6 +167,21 @@ public class HomestayMapper {
                         .primary(image.getIsPrimary())
                         .build())
                 .sorted(Comparator.comparing(HomestayDTO.HomestayImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .collect(Collectors.toList());
+    }
+
+    private List<HomestayDTO.PersonCapacityDTO> mapPersonCapacities(Set<PersonHomestay> capacities) {
+        if (capacities == null) {
+            return List.of();
+        }
+        return capacities.stream()
+                .filter(capacity -> capacity != null && capacity.getPerson() != null)
+                .map(capacity -> HomestayDTO.PersonCapacityDTO.builder()
+                        .type(capacity.getPerson().getType())
+                        .quantity(capacity.getQuantity())
+                        .build())
+                .filter(dto -> dto.getType() != null)
+                .sorted(Comparator.comparing(dto -> dto.getType().ordinal()))
                 .collect(Collectors.toList());
     }
 }
