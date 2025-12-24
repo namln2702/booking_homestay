@@ -18,7 +18,7 @@ public class Homestay extends BaseEntity{
     @Column(name = "title")
     private String title;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "text")
     private String description;
 
     @Column(name = "category")

@@ -11,12 +11,14 @@ import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.request.HomestayDailyPriceRequest;
 import org.example.do_an_v1.dto.request.HomestayRuleRequest;
+import org.example.do_an_v1.dto.request.PersonCapacityRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusHomestay;
+import org.example.do_an_v1.enums.TypePerson;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.ImageMapper;
@@ -63,6 +65,7 @@ public class HomestayServiceImpl implements HomestayService {
     private final CustomerRepository customerRepository;
     private final BillRepository billRepository;
     private final HomestayDailyPricesRepository homestayDailyPricesRepository;
+    private final PersonRepository personRepository;
 
     @Override
     @Transactional
@@ -103,6 +106,7 @@ public class HomestayServiceImpl implements HomestayService {
         applyAmenities(homestay, request);
         applyRules(homestay, request);
         applyDailyPrices(homestay, request);
+        applyPersonCapacities(homestay, request);
 
         Homestay savedHomestay = homestayRepository.save(homestay);
 
@@ -192,6 +196,19 @@ public class HomestayServiceImpl implements HomestayService {
         }
         if (request.getAddress() == null) {
             throw new IllegalArgumentException("Homestay address is required");
+        }
+        if (request.getListPersonHomestay() == null || request.getListPersonHomestay().isEmpty()) {
+            throw new IllegalArgumentException("listPersonHomestay is required");
+        }
+        boolean invalidPersonEntry = request.getListPersonHomestay().stream()
+                .anyMatch(entry ->
+                        entry == null
+                                || entry.getType() == null
+                                || entry.getQuantity() == null
+                                || entry.getQuantity() < 0
+                );
+        if (invalidPersonEntry) {
+            throw new IllegalArgumentException("Each entry in listPersonHomestay must have type and non-negative quantity");
         }
         if (request.getMinGuest() != null && request.getMaxGuest() != null
                 && request.getMinGuest() > request.getMaxGuest()) {
@@ -340,6 +357,37 @@ public class HomestayServiceImpl implements HomestayService {
         }
 
         return homestayImageRepository.saveAll(images);
+    }
+
+    private void applyPersonCapacities(Homestay homestay, HomestayCreateRequest request) {
+        List<PersonCapacityRequest> personRequests = request.getListPersonHomestay();
+        if (personRequests == null || personRequests.isEmpty()) {
+            throw new IllegalArgumentException("listPersonHomestay is required");
+        }
+
+        Set<PersonHomestay> capacities = personRequests.stream()
+                .map(req -> {
+                    if (req == null || req.getType() == null) {
+                        throw new IllegalArgumentException("Each entry in listPersonHomestay must have a type");
+                    }
+                    if (req.getQuantity() == null || req.getQuantity() < 0) {
+                        throw new IllegalArgumentException("Quantity for " + req.getType() + " must be >= 0");
+                    }
+                    Person person = resolvePerson(req.getType());
+                    return PersonHomestay.builder()
+                            .homestay(homestay)
+                            .person(person)
+                            .quantity(req.getQuantity())
+                            .build();
+                })
+                .collect(Collectors.toSet());
+
+        homestay.setListPersonHomestay(capacities);
+    }
+
+    private Person resolvePerson(TypePerson type) {
+        return personRepository.findByType(type)
+                .orElseGet(() -> personRepository.save(Person.builder().type(type).build()));
     }
 
     @Override
@@ -498,6 +546,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .rules(baseDto.getRules())
                 .dailyPrices(baseDto.getDailyPrices())
                 .images(baseDto.getImages())
+                .personCapacities(baseDto.getPersonCapacities())
                 .host(mapHostSummary(homestay.getHost()))
                 .priceInsight(buildPriceInsight(homestay))
                 .reviews(mapReviewDetails(reviews))

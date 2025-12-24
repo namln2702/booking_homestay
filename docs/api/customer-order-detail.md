@@ -44,6 +44,11 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
           "date": "2024-08-05",
           "price": 1400000.0
         }
+      ],
+      "guestCapacity": [
+        { "type": "ADULTS", "quantity": 4 },
+        { "type": "CHILDREN", "quantity": 2 },
+        { "type": "BABY", "quantity": 1 }
       ]
     },
     "paymentStatus": {
@@ -83,7 +88,12 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
       "canPayRemaining": false,
       "canCheckIn": false,
       "canFileComplaint": false
-    }
+    },
+    "guestCapacity": [
+      { "type": "ADULTS", "quantity": 4 },
+      { "type": "CHILDREN", "quantity": 2 },
+      { "type": "BABY", "quantity": 1 }
+    ]
   },
   "timestamp": 1714728000000
 }
@@ -101,6 +111,7 @@ All controllers share the `ApiResponse<T>` envelope (`src/main/java/org/example/
 | `totalAmount` | 100% cost of the stay. |
 | `depositAmount` | Calculated via `resolveDepositAmount` (`CustomerServiceImpl.java:832-858`), preferring actual transactions but falling back to 30% of `totalAmount`. |
 | `basePrice`, `dailyPrices` | Optional nightly pricing breakdown; omitted fields return `null`/`[]`. |
+| `guestCapacity[]` | Guest distribution captured on the bill (counts per traveler type submitted during booking). |
 
 #### `summary.status` Situations
 Frontends can rely on `StatusBill` for end-to-end context. The table below lists every state and its meaning.
@@ -115,7 +126,7 @@ Frontends can rely on `StatusBill` for end-to-end context. The table below lists
 | `COMPLAINT_PENDING` | Guest can raise complaints (N+1 days window). |
 | `HOST_COMPLAINT_PROCESSING` | Host is reviewing an active complaint. |
 | `ADMIN_COMPLAINT_PROCESSING` | Complaint escalated to admins. |
-| `PENDING_REFUNDED` | Approved refund awaits admin transfer. |
+| `REFUNDED_PENDING` | Approved refund awaits admin transfer. |
 | `REFUNDED` | Complaint resolved with refund. |
 | `REJECTED` | Complaint resolved without refund. |
 | `SUCCEED` | Stay completed, no complaints/refunds outstanding. |
@@ -129,7 +140,7 @@ Frontends can rely on `StatusBill` for end-to-end context. The table below lists
 | `awaitingDeposit` / `depositPaid` / `depositPaidAt` / `depositAmount` | Deposit collection state. |
 | `awaitingRemainingPayment` / `remainingPaymentRequired` / `remainingPaid` / `remainingPaidAt` / `remainingAmount` | Remaining 70% settlement state. |
 | `paymentFailed` | True when bill status equals `REMAINING_PAYMENT_FAILED`. |
-| `awaitingRefund` | True when bill is `PENDING_REFUNDED` or when a refund transaction is still pending. |
+| `awaitingRefund` | True when bill is `REFUNDED_PENDING` or when a refund transaction is still pending. |
 | `refunded` / `refundCompletedAt` | Reflect either `StatusBill.REFUNDED`, `CANCELLED_REFUNDED`, or a successful refund transaction timestamp. |
 
 #### All `paymentStatus.phase` Variants
@@ -145,7 +156,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `COMPLAINT_WINDOW` | `COMPLAINT_PENDING` |
 | `HOST_REVIEW` | `HOST_COMPLAINT_PROCESSING` |
 | `ADMIN_REVIEW` | `ADMIN_COMPLAINT_PROCESSING` |
-| `REFUND_PENDING` | `PENDING_REFUNDED` |
+| `REFUND_PENDING` | `REFUNDED_PENDING` |
 | `REFUNDED` | `REFUNDED` |
 | `COMPLAINT_REJECTED` | `REJECTED` |
 | `COMPLETED` | `SUCCEED` |
@@ -159,7 +170,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `phase` | Complaint lifecycle marker (see table below). |
 | `complaintRelated` | True whenever the bill is inside any complaint-processing status. |
 | `inComplaintWindow` | True only when the bill status is `COMPLAINT_PENDING`. |
-| `underHostReview`, `underAdminReview`, `refundInProgress`, `resolvedWithRefund`, `resolvedWithoutRefund` | Convenience booleans mirroring the bill status buckets. |
+| `underHostReview`, `underAdminReview`, `refundInProgress`, `resolvedWithRefund`, `resolvedWithoutRefund` | Convenience booleans mirroring `StatusBill`. `refundInProgress` flips on for `REFUNDED_PENDING`; `resolvedWithRefund` is true for `REFUNDED` or `CANCELLED_REFUNDED`; `resolvedWithoutRefund` is true for `REJECTED` or `CANCELLED`. |
 | `complaintDeadline` | Calculated via `calculateComplaintDeadline` (`CustomerServiceImpl.java:1004-1018`) as checkout + (N+1) days. |
 | `withinComplaintDeadline` | Tells the UI whether the window remains open. |
 | `latestComplaintId` | Null when no complaint exists; otherwise the newest complaint ID for deep links. |
@@ -172,7 +183,7 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `WINDOW` | Bill status `COMPLAINT_PENDING`. |
 | `HOST_REVIEW` | `HOST_COMPLAINT_PROCESSING`. |
 | `ADMIN_REVIEW` | `ADMIN_COMPLAINT_PROCESSING`. |
-| `REFUND_PENDING` | `PENDING_REFUNDED`. |
+| `REFUND_PENDING` | `REFUNDED_PENDING`. |
 | `RESOLVED_REFUNDED` | `REFUNDED` or `CANCELLED_REFUNDED`. |
 | `RESOLVED` | `REJECTED`, `SUCCEED`, or `CANCELLED`. |
 | `NONE` | Any status outside complaint-related flows (includes null safety fallback). |
@@ -184,6 +195,12 @@ Derived from a single enum-to-string mapping so the frontend can render determin
 | `canPayRemaining` | True only when `summary.status == REMAINING_PAYMENT_PENDING`. |
 | `canCheckIn` | Requires `REMAINING_PAYMENT_PENDING` **and** `paymentStatus.depositPaid == true`. |
 | `canFileComplaint` | Mirrors `complaintStatus.canFileComplaint`. |
+
+### `data.guestCapacity` (`CustomerOrderGuestCapacityResponse`, `CustomerServiceImpl.mapGuestAllocations`)
+| Field | Description |
+| --- | --- |
+| `type` | One of `ADULTS`, `CHILDREN`, `BABY`. |
+| `quantity` | Number of guests recorded for the bill for the corresponding `type`. Mirrors what the customer submitted during booking. |
 
 ## Error Cases
 - `400` when `billId` is missing or invalid (`CustomerServiceImpl.java:669-674`).

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,4 +16,5 @@ public class CustomerOrderDetailResponse {
     private CustomerOrderPaymentStatusResponse paymentStatus;
     private CustomerOrderComplaintStatusResponse complaintStatus;
     private CustomerOrderActionPermissionResponse actions;
+    private List<CustomerOrderGuestCapacityResponse> guestCapacity;
 }

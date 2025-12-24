@@ -50,6 +50,9 @@ public class Bill extends BaseEntity{
     @JoinColumn(name = "customer_booking_info_id")
     CustomerBookingInfo customerBookingInfo;
 
+    @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL, orphanRemoval = true)
+    Set<BillGuest> guestAllocations;
+
     @OneToMany(mappedBy = "bill")
     Set<Transaction> listTransaction;
 

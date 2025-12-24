@@ -52,6 +52,7 @@ public class HomestayDetailDTO {
     private List<HomestayRuleDTO> rules;
     private List<DailyPriceDTO> dailyPrices;
     private List<HomestayImageDTO> images;
+    private List<HomestayDTO.PersonCapacityDTO> personCapacities;
     private PriceInsightDTO priceInsight;
     private List<ReviewDetailDTO> reviews;
 

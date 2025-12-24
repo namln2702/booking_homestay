@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.do_an_v1.enums.RuleTypeHomestay;
 import org.example.do_an_v1.enums.StatusHomestay;
+import org.example.do_an_v1.enums.TypePerson;
 
 import java.util.Date;
 import java.util.List;
@@ -42,6 +43,7 @@ public class HomestayDTO {
     private List<HomestayRuleDTO> rules;
     private List<DailyPriceDTO> dailyPrices;
     private List<HomestayImageDTO> images;
+    private List<PersonCapacityDTO> personCapacities;
 
     @Getter
     @Setter
@@ -111,5 +113,15 @@ public class HomestayDTO {
         private Long id;
         private String imageUrl;
         private Boolean primary;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class PersonCapacityDTO {
+        private TypePerson type;
+        private Integer quantity;
     }
 }

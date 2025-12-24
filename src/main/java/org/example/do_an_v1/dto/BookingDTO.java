@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.example.do_an_v1.dto.request.PersonCapacityRequest;
 import org.example.do_an_v1.dto.request.PricePerDayRequest;
 
 import java.util.Date;
@@ -36,8 +37,12 @@ public class BookingDTO {
     @Valid
     private List<PricePerDayRequest> pricePerDays;
 
+    @NotNull(message = "listPersonHomestay is required")
+    @NotEmpty(message = "listPersonHomestay cannot be empty")
+    @Valid
+    private List<PersonCapacityRequest> listPersonHomestay;
+
     // --- Thông tin người đặt (Booking contact info - nếu khác với customer) ---
     @Valid
     private CustomerBookingInfoDTO customerBookingInfoDTO;
 }
-

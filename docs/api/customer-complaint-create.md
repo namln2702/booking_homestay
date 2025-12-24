@@ -1,89 +1,87 @@
-# Customer Complaint Creation API – `POST /complaint/complaint`
+# Customer Complaint Create API – `POST /customers/complaints`
 
 ## Location & Purpose
-- **Controller**: `ComplaintController.userComplaint` (`src/main/java/org/example/do_an_v1/controller/ComplaintController.java:21-24`) exposes the endpoint under the `/complaint` base path.
-- **Service flow**: `ComplaintServiceImpl.userComplaint` (`src/main/java/org/example/do_an_v1/service/impl/ComplaintServiceImpl.java:35-73`) performs all validations, status updates, and persistence.
-- **Use case**: Allow a customer to submit a complaint for one of their bills during the allowed time window. This is a legacy entry-point that pre-dates the richer `/customers/complaints` flow and still operates on `ComplaintDTO`.
+- **Controller**: `CustomerController` wires the route and protects it with `ROLE_CUSTOMER` (`src/main/java/org/example/do_an_v1/controller/CustomerController.java:142-150`). The incoming request body is validated with `@Valid` and the authenticated user ID is resolved via `RequestIdentityResolver`.
+- **Service flow**: `CustomerServiceImpl.createComplaint` (`src/main/java/org/example/do_an_v1/service/impl/CustomerServiceImpl.java:1472-1541`) performs all ownership, status, and deadline checks, persists complaint details and images, assigns an admin reviewer, and transitions the bill to the complaint-processing state.
+- **Use case**: Allow a guest to raise a complaint about one of their completed stays within the allowed timeframe so hosts/admins can review and resolve it.
 
-## Authentication / Security
-The controller currently lacks `@PreAuthorize` annotations, so routing alone does not restrict callers. Deployments must ensure the endpoint is protected at the gateway layer (e.g., by routing it behind authenticated contexts) or add method-level security before exposing publicly.
+---
 
 ## Request
 
 ```
-POST /complaint/complaint
+POST /customers/complaints
 Headers:
-  Content-Type: application/json
-Body: ComplaintDTO payload (see below)
+  Authorization: Bearer <JWT with ROLE_CUSTOMER>
+Body: application/json
 ```
 
-`ComplaintDTO` (`src/main/java/org/example/do_an_v1/dto/ComplaintDTO.java:13-27`) fields:
+### Payload (`ComplaintDTO`)
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `billId` | `Long` | Yes | Identifier of the bill/order the complaint relates to. Must belong to the caller. |
+| `description` | `String` | Yes | Complaint details. Blank strings are rejected. |
+| `imageUrls[]` | `List<String>` | No | Optional evidence images. Each non-empty URL becomes an `Image` entity linked to the complaint. |
 
-| Field | Required? | Description |
-| --- | --- | --- |
-| `id` | No | Ignored on create. |
-| `description` | **Yes** | Complaint content. Saved directly to `Complaint.description`. |
-| `createdAt` | **Yes** | Timestamp of complaint creation. Used to verify expiration window. |
-| `billId` | **Yes** | Target bill identifier. Bill must exist; otherwise `RuntimeException("Bill not exits")` bubbles up. |
-| `billStatus` | No | Not used during creation. |
-| `homestayTitle` | No | Not used. |
-| `imageUrls` | Optional | List of image URLs to attach. Each entry results in a persisted `Image` row via `ImageRepository.save`. |
+Validation happens both via Bean Validation (`@Valid`) and in `CustomerServiceImpl` (null/blank checks with specific error messages).
 
-### Time Window Validation
-- Application property: `claim-expiration-date` (`ComplaintServiceImpl.java:30-31`). The service compares `bill.createdAt.plusDays(claimExpirationDate)` with the `createdAt` supplied in the payload using `Date.compareDate`.
-- If the deadline is exceeded (`checkExpired == 1`), the service returns `ApiResponse<>(422, "Expired for complaint", null)`.
+---
 
-### Bill Status Update
-Before validation completes, the bill status is set to `StatusBill.COMPLAINT_PENDING` (`ComplaintServiceImpl.java:37-44`), ensuring any subsequent workflows treat the order as complaint-related.
+## Behaviour & Rules
 
-## Successful Response (`200`)
+1. **Ownership** – The bill retrieved via `billId` must belong to the authenticated customer (`CustomerServiceImpl.java:1487-1496`). Otherwise a `403` is returned.
+2. **Status guard** – Only bills in `COMPLAINT_PENDING` or `SUCCEED` may accept a new complaint (`CustomerServiceImpl.java:1498-1501`).
+3. **Deadline window** – Guests can file a complaint for `N + 1` days after checkout, where `N` equals the number of nights between check-in and check-out (`CustomerServiceImpl.java:1503-1520`). Requests past that window return `422`.
+4. **Images** – Optional `imageUrls` entries are persisted as `Image` rows and attached to the complaint (`CustomerServiceImpl.java:1529-1536`). Empty/null strings are ignored.
+5. **Admin assignment** – The first available admin is assigned to the new complaint (`CustomerServiceImpl.java:1522-1527`). If no admin exists, the service returns `500`.
+6. **Bill status update** – After saving the complaint, the bill status is set to `HOST_COMPLAINT_PROCESSING` to move it along the lifecycle (`CustomerServiceImpl.java:1538-1540`).
 
-On success, the service persists:
-1. Optional `Image` rows for every non-null/non-empty `imageUrls` entry (images are saved standalone without the `complaint` relation populated yet).
-2. The `Complaint` entity with fields: `bill`, `description`, `listImage` (assigned as the saved images). The `admin` field is **not** set in this code path; downstream logic must ensure DB constraints are satisfied.
+---
 
-It then returns:
+## Success Response (200)
+
+All APIs return the common `ApiResponse<T>` envelope (`src/main/java/org/example/do_an_v1/payload/ApiResponse.java`). Example:
 
 ```json
 {
   "status": 200,
-  "message": "Create complaint success",
+  "message": "Complaint created successfully",
   "data": {
-    "id": 123,
-    "description": "Room was not cleaned",
-    "createdAt": "2024-08-10T08:15:00",
-    "bill": {
-      "...": "Standard Complaint entity serialization"
-    },
-    "listImage": [
-      {
-        "id": 501,
-        "image_url": "https://cdn.example.com/complaints/123/photo-1.jpg"
-      }
-    ]
+    "id": 42,
+    "billId": 98,
+    "adminId": 3,
+    "description": "The room was not cleaned when we arrived.",
+    "imageUrls": [
+      "https://cdn.example.com/evidence/photo-1.jpg",
+      "https://cdn.example.com/evidence/photo-2.jpg"
+    ],
+    "createdAt": "2024-08-09T10:32:00",
+    "updatedAt": "2024-08-09T10:32:00"
   },
-  "timestamp": 1714728000000
+  "timestamp": 1723199520000
 }
 ```
 
-> Note: Because the `data` payload is the raw `Complaint` entity (`ComplaintServiceImpl.java:70-72`), the JSON shape depends on Jackson’s serialization of the entity graph (Bill, Images, Admin). Expect circular-reference-safe views if Jackson is configured for LAZY-loaded associations; otherwise, FE should only rely on fields defined in `ComplaintDTO`.
+The `data` block mirrors `ComplaintDTO` as mapped by `ComplaintMapper.toDTO`, enriched with generated identifiers and timestamps.
 
-## Field Situations – `StatusBill` Transitions Triggered Here
-Although `ComplaintDTO.billStatus` is unused, submitting a complaint affects the parent bill’s `status`. The backend strictly writes `StatusBill.COMPLAINT_PENDING` during this workflow. Downstream automations or host/admin actions may later move the bill through the complaint lifecycle:
+---
 
-| Status | How it’s reached (relative to this endpoint) |
-| --- | --- |
-| `COMPLAINT_PENDING` | Set immediately when this endpoint is invoked, signalling that a complaint has been logged and the host review window should open. |
-| `HOST_COMPLAINT_PROCESSING` | Achieved when the more recent `/customers/complaints` API is used, or when additional logic promotes the bill after validation (not handled here). |
-| `ADMIN_COMPLAINT_PROCESSING`, `PENDING_REFUNDED`, `REFUNDED`, `REJECTED` | Managed by host/admin services; this endpoint only seeds the initial complaint record. |
-
-Frontends that invoke `/complaint/complaint` should therefore refresh the customer’s order/complaint summaries via `/customers/me/orders` and `/customers/me/complaints` to pick up the updated bill status.
-
-## Error Responses
-| HTTP | Message | Cause |
+## Error Cases
+| Status | When it happens | Message source |
 | --- | --- | --- |
-| `422` | `Expired for complaint` | Complaint submitted after `claim-expiration-date` days have elapsed since bill creation. |
-| `500` (Runtime) | `Bill not exits` | Bill ID not found (uncaught `RuntimeException`). |
-| `500` | Hibernate/JPA validation errors (e.g., missing required fields on `Complaint` or `Image`). |
+| `400` | Missing `billId`, missing/blank `description`, or null payload | Explicit checks in `CustomerServiceImpl.createComplaint`. |
+| `403` | Bill does not belong to the caller | Ownership validation (`CustomerServiceImpl.java:1489-1496`). |
+| `404` | Bill ID not found | `billRepository.findById`. |
+| `422` | Complaint window expired (`now > checkout + (N+1) days`) | Deadline guard (`CustomerServiceImpl.java:1511-1520`). |
+| `400` | Bill not in `COMPLAINT_PENDING`/`SUCCEED` | Status guard (`CustomerServiceImpl.java:1498-1501`). |
+| `500` | No admin exists to assign | Admin lookup fails (`CustomerServiceImpl.java:1522-1527`). |
 
-Because validation exceptions propagate as generic 500 responses, client applications should defensively handle unexpected `status` codes and parse the `message` field whenever available.
+Return payloads follow the `ApiResponse` structure with `data = null` for errors.
+
+---
+
+## Frontend Tips
+1. Fetch order details via `GET /customers/me/orders/{billId}` to ensure `actions.canFileComplaint` is true before enabling the CTA.
+2. Pre-fill the complaint form with the bill code or homestay info retrieved from the order detail response for clarity.
+3. When uploading supporting images, host them externally (S3, CDN, etc.) and pass the resulting URLs in `imageUrls`. The backend simply stores the URLs; it does not handle binary uploads.
+4. Surface backend error messages verbatim to the user—they already include the deadline and allowed window when applicable.
