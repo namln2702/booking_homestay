@@ -11,6 +11,7 @@ import org.example.do_an_v1.dto.request.HostProfileUpdateRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.ProfileService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,6 +43,8 @@ public class ProfileController {
     }
 
     // Update or create the admin profile tied to the given user
+    // Chỉ admin mới có thể cập nhật profile admin
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @PutMapping("/admins/{userId}")
     public ApiResponse<AdminDTO> updateAdminProfile(@PathVariable Long userId,
                                                     @RequestBody @Valid AdminProfileUpdateRequest request) {

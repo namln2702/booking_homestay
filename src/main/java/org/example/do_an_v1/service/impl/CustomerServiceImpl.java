@@ -496,12 +496,12 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Khóa các daily prices (set isBooked = true và gán bill)
         // Tất cả validation đã được check ở trên, giờ chỉ cần lock
-        Bill finalBillResult = billResult;
-        for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
-            dailyPrice.setIsBooked(true);
-            dailyPrice.setBill(finalBillResult);
-            homestayDailyPricesRepository.save(dailyPrice);
-        }
+//        Bill finalBillResult = billResult;
+//        for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
+//            dailyPrice.setIsBooked(true);
+//            dailyPrice.setBill(finalBillResult);
+//            homestayDailyPricesRepository.save(dailyPrice);
+//        }
 
 
         // Lưu thông tin CustomerBookingInfo nếu là người mới

@@ -58,4 +58,8 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
             WHERE b.customer.id = :customerId
             """)
     CustomerTierStats findTierStatsByCustomerId(@Param("customerId") Long customerId);
+    /**
+     * Tìm tất cả bills với status cụ thể
+     */
+    List<Bill> findByStatus(StatusBill status);
 }
