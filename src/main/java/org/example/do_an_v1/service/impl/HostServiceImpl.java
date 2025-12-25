@@ -600,12 +600,12 @@ public class HostServiceImpl implements HostService {
         }
 
         // Cập nhật trạng thái bill thành SUCCEED
-        bill.setStatus(StatusBill.SUCCEED);
+//        bill.setStatus(StatusBill.SUCCEED);
         billRepository.save(bill);
 
         log.info("Check-out confirmed for bill {}. Unlocked {} daily prices.", bill.getId(), dailyPrices.size());
 
-        return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED. Daily prices unlocked.", null);
+        return new ApiResponse<>(200, "Check-out confirmed successfully. Daily prices unlocked.", null);
     }
 
     private boolean isStatusAtOrAfter(StatusBill status, StatusBill reference) {

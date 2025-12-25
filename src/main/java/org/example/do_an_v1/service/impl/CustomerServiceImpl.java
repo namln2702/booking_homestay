@@ -1533,28 +1533,30 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(500, "No admin found to process complaint", null);
         }
 
-        // Lưu images
-        Set<Image> images = new HashSet<>();
-        if (complaintDTO.getImageUrls() != null && !complaintDTO.getImageUrls().isEmpty()) {
-            complaintDTO.getImageUrls().forEach(imageUrl -> {
-                if (imageUrl != null && !imageUrl.trim().isEmpty()) {
-                    Image image = Image.builder()
-                            .image_url(imageUrl)
-                            .build();
-                    images.add(imageRepository.save(image));
-                }
-            });
-        }
-
         // Tạo complaint
         Complaint complaint = Complaint.builder()
                 .bill(bill)
                 .admin(admin)
                 .description(complaintDTO.getDescription())
-                .listImage(images)
                 .build();
 
         Complaint savedComplaint = complaintRepository.save(complaint);
+
+        // Lưu images gắn với complaint
+        if (complaintDTO.getImageUrls() != null && !complaintDTO.getImageUrls().isEmpty()) {
+            Set<Image> images = complaintDTO.getImageUrls().stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(url -> !url.isEmpty())
+                    .map(imageUrl -> Image.builder()
+                            .image_url(imageUrl)
+                            .complaint(savedComplaint)
+                            .build())
+                    .map(imageRepository::save)
+                    .collect(Collectors.toSet());
+            savedComplaint.setListImage(images);
+            complaintRepository.save(savedComplaint);
+        }
 
         // Cập nhật status bill (nếu cần - có thể đã là HOST_COMPLAINT_PROCESSING rồi)
         bill.setStatus(StatusBill.HOST_COMPLAINT_PROCESSING);
@@ -1713,12 +1715,13 @@ public class CustomerServiceImpl implements CustomerService {
 
         log.info("Complaint {} cancelled by customer {} for bill {}. Reason: {}", latestComplaint.getId(), userId, billId, reason);
 
-        Map<String, Object> data = Map.of(
-                "billId", bill.getId(),
-                "newBillStatus", bill.getStatus(),
-                "complaintId", latestComplaint.getId(),
-                "reason", reason
-        );
+        Map<String, Object> data = new HashMap<>();
+        data.put("billId", bill.getId());
+        data.put("newBillStatus", bill.getStatus());
+        data.put("complaintId", latestComplaint.getId());
+        if (reason != null) {
+            data.put("reason", reason);
+        }
 
         return new ApiResponse<>(200, "Complaint cancelled successfully", data);
     }
