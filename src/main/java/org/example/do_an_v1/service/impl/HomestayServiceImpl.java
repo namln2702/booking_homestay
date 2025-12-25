@@ -1,6 +1,7 @@
 package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.example.do_an_v1.dto.AdvancedHomestaySearchDTO;
 import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
@@ -443,6 +444,54 @@ public class HomestayServiceImpl implements HomestayService {
         return new ApiResponse<>(200, "Success", homestayDTOS);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<?> searchHomestayAdvanced(AdvancedHomestaySearchDTO request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Search payload is required");
+        }
+
+        String keyword = normalizeSearchInput(request.getKeyword());
+        String city = normalizeSearchInput(request.getCity());
+        String state = normalizeSearchInput(request.getState());
+
+        // JDBC native queries cannot bind null for unknown types, use empty strings as "not provided"
+        String keywordParam = keyword == null ? "" : keyword;
+        String cityParam = city == null ? "" : city;
+        String stateParam = state == null ? "" : state;
+
+        Integer numAdults = request.getNumberAdults();
+        Integer numChildren = request.getNumberChildren();
+        Integer numBaby = request.getNumberBaby();
+
+        Date begin = parseDate(request.getBegin());
+        Date end = parseDate(request.getEnd());
+
+        if (begin != null && end != null && begin.after(end)) {
+            throw new IllegalArgumentException("Begin date must be before or equal to end date");
+        }
+
+        List<Homestay> homestays = homestayRepository.searchHomestayAdvanced(
+                keywordParam,
+                cityParam,
+                stateParam,
+                numAdults,
+                numChildren,
+                numBaby,
+                begin,
+                end
+        );
+
+        List<HomestayDTO> results = homestays.stream()
+                .map(homestay -> {
+                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    return homestayMapper.toDto(homestay, images);
+                })
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Success", results);
+    }
+
     private Date parseDate(String rawDate) {
         if (rawDate == null || rawDate.trim().isEmpty()) {
             return null;
@@ -453,6 +502,17 @@ public class HomestayServiceImpl implements HomestayService {
         } catch (DateTimeParseException ex) {
             throw new IllegalArgumentException("Invalid date format. Expected yyyy-MM-dd");
         }
+    }
+
+    private String normalizeSearchInput(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.toLowerCase();
     }
 
 //    @Override

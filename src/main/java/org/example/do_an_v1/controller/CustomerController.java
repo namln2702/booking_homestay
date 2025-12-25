@@ -5,12 +5,15 @@ import lombok.RequiredArgsConstructor;
 import org.example.do_an_v1.dto.BookingDTO;
 import org.example.do_an_v1.dto.ComplaintDTO;
 import org.example.do_an_v1.dto.CustomerDTO;
+import org.example.do_an_v1.dto.CustomerProfileWithTierDTO;
+import org.example.do_an_v1.dto.CustomerTierDTO;
 import org.example.do_an_v1.dto.ReviewDTO;
 import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.configuration.SessionConfig;
 import org.example.do_an_v1.service.CustomerService;
+import org.example.do_an_v1.service.CustomerTierService;
 import org.example.do_an_v1.service.support.RequestIdentityResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +26,7 @@ import java.util.List;
 public class CustomerController {
 
     private final CustomerService customerService;
+    private final CustomerTierService customerTierService;
     private final RequestIdentityResolver identityResolver;
     private final SessionConfig sessionConfig;
 
@@ -36,11 +40,23 @@ public class CustomerController {
         return customerService.upsertCustomerProfile(effectiveUserId, request);
     }
 
-    // Fetch the authenticated customer's profile
+    // Fetch the authenticated customer's profile including derived tier
     @GetMapping("/me")
-    public ApiResponse<CustomerDTO> getMyCustomer() {
+    public ApiResponse<?> getMyCustomer() {
         Long effectiveUserId = identityResolver.requireUserId(null);
-        return customerService.getCustomerByUserId(effectiveUserId);
+        ApiResponse<CustomerDTO> profileResponse = customerService.getCustomerByUserId(effectiveUserId);
+        if (profileResponse == null || profileResponse.getStatus() != 200 || profileResponse.getData() == null) {
+            return profileResponse;
+        }
+        ApiResponse<CustomerTierDTO> tierResponse = customerTierService.getCustomerTier(effectiveUserId);
+        if (tierResponse == null || tierResponse.getStatus() != 200 || tierResponse.getData() == null) {
+            return tierResponse;
+        }
+        CustomerProfileWithTierDTO combined = CustomerProfileWithTierDTO.builder()
+                .customer(profileResponse.getData())
+                .tier(tierResponse.getData())
+                .build();
+        return new ApiResponse<>(200, "Customer profile retrieved", combined);
     }
 
     // Admin-only: fetch the customer profile associated with the provided user identifier
@@ -49,6 +65,13 @@ public class CustomerController {
     public ApiResponse<CustomerDTO> getCustomerForAdmin(@PathVariable Long userId) {
         Long effectiveUserId = identityResolver.requireUserId(userId);
         return customerService.getCustomerByUserId(effectiveUserId);
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER','ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/{customerId}/tier")
+    public ApiResponse<CustomerTierDTO> getCustomerTier(@PathVariable Long customerId) {
+        Long effectiveUserId = identityResolver.requireUserId(customerId);
+        return customerTierService.getCustomerTier(effectiveUserId);
     }
     @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PostMapping("/booking")

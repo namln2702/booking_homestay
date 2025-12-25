@@ -1,5 +1,6 @@
 package org.example.do_an_v1.service;
 
+import org.example.do_an_v1.dto.AdvancedHomestaySearchDTO;
 import org.example.do_an_v1.dto.FindHomeStayDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HomestayDetailDTO;
@@ -23,6 +24,8 @@ public interface HomestayService {
     ApiResponse<HomestayDTO> getHomestayDetailForAdmin(Long adminUserId, Long homestayId);
 
     ApiResponse<?> findHomestay(FindHomeStayDTO findHomeStayDTO);
+
+    ApiResponse<?> searchHomestayAdvanced(AdvancedHomestaySearchDTO request);
 
 
     ApiResponse<?> detailHomestay(Long id);

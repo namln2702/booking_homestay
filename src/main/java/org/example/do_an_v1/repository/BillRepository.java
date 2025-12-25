@@ -5,7 +5,10 @@ import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.Homestay;
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.enums.StatusBill;
+import org.example.do_an_v1.repository.projection.CustomerTierStats;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -44,6 +47,17 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
      */
     List<Bill> findByHomestay(Homestay homestay);
 
+    /**
+     * Aggregated booking stats for tier calculation (read-only).
+     */
+    @Query("""
+            SELECT
+                COALESCE(SUM(CASE WHEN b.status = org.example.do_an_v1.enums.StatusBill.SUCCEED THEN 1 ELSE 0 END), 0) AS successfulBookings,
+                COALESCE(SUM(CASE WHEN b.status = org.example.do_an_v1.enums.StatusBill.REFUNDED THEN 1 ELSE 0 END), 0) AS refundedBookings
+            FROM Bill b
+            WHERE b.customer.id = :customerId
+            """)
+    CustomerTierStats findTierStatsByCustomerId(@Param("customerId") Long customerId);
     /**
      * Tìm tất cả bills với status cụ thể
      */
