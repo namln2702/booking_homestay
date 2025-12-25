@@ -67,6 +67,22 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class HostServiceImpl implements HostService {
+    private static final List<StatusBill> STATUS_TIMELINE = List.of(
+            StatusBill.DEPOSIT_PENDING,
+            StatusBill.DEPOSIT_PAID,
+            StatusBill.REMAINING_PAYMENT_PENDING,
+            StatusBill.REMAINING_PAYMENT_FAILED,
+            StatusBill.CHECKIN_EXPIRED,
+            StatusBill.COMPLAINT_PENDING,
+            StatusBill.HOST_COMPLAINT_PROCESSING,
+            StatusBill.ADMIN_COMPLAINT_PROCESSING,
+            StatusBill.REFUNDED_PENDING,
+            StatusBill.REFUNDED,
+            StatusBill.REJECTED,
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
+    );
 
     private final HostRepository hostRepository;
     private final AdminRepository adminRepository;
@@ -553,9 +569,11 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
         }
 
-        // Validate: Bill phải ở trạng thái COMPLAINT_PENDING
-        if (bill.getStatus() != StatusBill.COMPLAINT_PENDING) {
-            return new ApiResponse<>(400, "Bill must be in COMPLAINT_PENDING status to confirm checkout. Current status: " + bill.getStatus(), null);
+        // Validate: Bill phải ở trạng thái sau khi checkin
+        if (!isStatusAtOrAfter(bill.getStatus(), StatusBill.COMPLAINT_PENDING)) {
+            return new ApiResponse<>(400,
+                    "Bill must reach COMPLAINT_PENDING (post check-in) before checkout. Current status: " + bill.getStatus(),
+                    null);
         }
 
         // Validate: Phải sau ngày check-in mới được checkout
@@ -588,6 +606,18 @@ public class HostServiceImpl implements HostService {
         log.info("Check-out confirmed for bill {}. Unlocked {} daily prices.", bill.getId(), dailyPrices.size());
 
         return new ApiResponse<>(200, "Check-out confirmed successfully. Bill status changed to SUCCEED. Daily prices unlocked.", null);
+    }
+
+    private boolean isStatusAtOrAfter(StatusBill status, StatusBill reference) {
+        if (status == null || reference == null) {
+            return false;
+        }
+        int currentIndex = STATUS_TIMELINE.indexOf(status);
+        int referenceIndex = STATUS_TIMELINE.indexOf(reference);
+        if (currentIndex == -1 || referenceIndex == -1) {
+            return false;
+        }
+        return currentIndex >= referenceIndex;
     }
 
     @Override
