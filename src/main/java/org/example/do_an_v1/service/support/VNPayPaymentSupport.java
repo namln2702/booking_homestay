@@ -6,15 +6,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.configuration.VNPayConfig;
 import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.Transaction;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusTransaction;
 import org.example.do_an_v1.repository.BillRepository;
+import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.utils.GenNumber;
 import org.example.do_an_v1.utils.VNPayUtil;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.List;
 
 /**
  * Component hỗ trợ xử lý thanh toán VNPay
@@ -28,6 +35,7 @@ public class VNPayPaymentSupport {
     private final VNPayConfig vnPayConfig;
     private final BillRepository billRepository;
     private final TransactionRepository transactionRepository;
+    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
 
     /**
      * Tạo VNPay payment URL cho một transaction
@@ -66,6 +74,11 @@ public class VNPayPaymentSupport {
                 && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             log.error("Bill must be in DEPOSIT_PENDING or REMAINING_PAYMENT_PENDING status. Current status: {}", bill.getStatus());
             return null;
+        }
+
+        // Khóa các ngày HomestayDailyPrice khi tạo payment URL (chỉ cho lần đầu thanh toán - DEPOSIT_PENDING)
+        if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
+            lockHomestayDailyPrices(bill);
         }
 
         // Tạo orderId chỉ là số (8 chữ số) - VNPay yêu cầu vnp_TxnRef chỉ chứa số
@@ -164,6 +177,52 @@ public class VNPayPaymentSupport {
         }
 
         return createPaymentUrlForTransaction(transaction, httpRequest);
+    }
+
+    /**
+     * Khóa các ngày HomestayDailyPrice cho bill (set isBooked = true và gán bill)
+     * CHỈ áp dụng cho thanh toán lần đầu (30% - DEPOSIT_PENDING)
+     * KHÔNG áp dụng cho thanh toán lần 2 (70% - REMAINING_PAYMENT_PENDING)
+     */
+    @Transactional
+    private void lockHomestayDailyPrices(Bill bill) {
+        if (bill == null || bill.getHomestay() == null) {
+            log.warn("Cannot lock daily prices: bill or homestay is null");
+            return;
+        }
+
+        // Đảm bảo chỉ khóa cho thanh toán lần đầu (30%)
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING) {
+            log.warn("Cannot lock daily prices: bill must be in DEPOSIT_PENDING status. Current status: {}", bill.getStatus());
+            return;
+        }
+
+        // Chuyển đổi LocalDateTime sang Date để query
+        LocalDate checkInLocalDate = bill.getCheckIn().toLocalDate();
+        LocalDate checkOutLocalDate = bill.getCheckOut().toLocalDate();
+        Date startDate = Date.from(checkInLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        Date endDate = Date.from(checkOutLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+        // Tìm tất cả HomestayDailyPrice trong khoảng thời gian của bill
+        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findByHomestayAndDateRange(
+                bill.getHomestay().getId(),
+                startDate,
+                endDate
+        );
+
+        int lockedCount = 0;
+        for (HomestayDailyPrice dailyPrice : dailyPrices) {
+            // Chỉ khóa nếu chưa được book
+            if (Boolean.FALSE.equals(dailyPrice.getIsBooked()) || dailyPrice.getIsBooked() == null) {
+                dailyPrice.setIsBooked(true);
+                dailyPrice.setBill(bill);
+                homestayDailyPricesRepository.save(dailyPrice);
+                lockedCount++;
+            }
+        }
+
+        log.info("Locked {} daily prices for bill {} (homestay {}, checkIn: {}, checkOut: {})",
+                lockedCount, bill.getId(), bill.getHomestay().getId(), checkInLocalDate, checkOutLocalDate);
     }
 }
 

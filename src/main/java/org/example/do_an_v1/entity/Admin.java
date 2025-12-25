@@ -31,6 +31,9 @@ public class Admin extends BaseEntity{
     @Enumerated(EnumType.STRING)
     private RoleUser role = RoleUser.ADMIN;
 
+    @Column(name="password")
+    private String password;
+
 
     // Tac dong mot bang thi anh huong bang con lai
     @OneToOne(cascade = CascadeType.ALL)

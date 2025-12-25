@@ -33,7 +33,7 @@ public class HostController {
         return hostService.registerHost(effectiveUserId, request);
     }
 
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<List<HostDTO>>> listHosts(
             @RequestParam(name = "status", required = false) StatusHost status,
@@ -42,7 +42,7 @@ public class HostController {
     ) {
         return hostService.getHostsForAdmin(status, page, size);
     }
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','ROLE_HOST')")
     @GetMapping("/me")
     public ApiResponse<HostDTO> getMyHostProfile() {
         Long effectiveUserId = identityResolver.requireUserId(null);
@@ -51,8 +51,9 @@ public class HostController {
 
     /**
      * Thống kê danh sách homestay thuộc về host hiện tại
+     * Admin có thể xem homestays của host
      */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/homestays")
     public ApiResponse<?> getMyHomestays() {
         Long hostUserId = identityResolver.requireUserId(null);
@@ -61,8 +62,9 @@ public class HostController {
 
     /**
      * Liệt kê các bill đã đặt (thành công/đang sử dụng) cho các homestay của host hiện tại
+     * Admin có thể xem bills của host
      */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/bills")
     public ApiResponse<?> getMyHomestayBills() {
         Long hostUserId = identityResolver.requireUserId(null);
@@ -150,8 +152,9 @@ public class HostController {
     /**
      * Host lấy danh sách các bill ở trạng thái HOST_COMPLAINT_PROCESSING
      * (các khiếu nại đang chờ host xử lý)
+     * Admin có thể xem bills đang complaint processing của host
      */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/bills/complaint-processing")
     public ApiResponse<?> getComplaintProcessingBills() {
         Long hostUserId = identityResolver.requireUserId(null);
@@ -186,9 +189,9 @@ public class HostController {
     /**
      * Host lấy chi tiết bill theo billId
      * Kiểm tra bill có thuộc về homestay của host không
-     * Yêu cầu quyền HOST
+     * Admin có thể xem chi tiết bill của host
      */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/{billId}")
     public ApiResponse<?> getBillDetail(@PathVariable Long billId) {
         Long hostUserId = identityResolver.requireUserId(null);
@@ -197,9 +200,9 @@ public class HostController {
 
     /**
      * Host lấy tất cả các khiếu nại (complaints) của các homestay thuộc về host
-     * Yêu cầu quyền HOST
+     * Admin có thể xem complaints của host
      */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOST','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/complaints")
     public ApiResponse<?> getAllComplaints() {
         Long hostUserId = identityResolver.requireUserId(null);

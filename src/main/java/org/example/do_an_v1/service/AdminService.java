@@ -9,6 +9,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
+import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
@@ -24,6 +25,13 @@ import org.example.do_an_v1.payload.ApiResponse;
 import java.util.List;
 
 public interface AdminService {
+
+    /**
+     * Admin login với username và password
+     * @param request Thông tin đăng nhập (username từ User, password từ Admin)
+     * @return AccessTokenSystemDTO chứa token và thông tin admin
+     */
+    ApiResponse<?> login(AdminLoginRequest request);
 
     ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException;
 

@@ -40,7 +40,7 @@ public class PreferenceController {
      * Tạo mới Preference
      * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
      */
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @PostMapping
     public ApiResponse<PreferenceDTO> createPreference(@RequestBody @Valid PreferenceDTO preferenceDTO) {
         return preferenceService.createPreference(preferenceDTO);
@@ -50,7 +50,7 @@ public class PreferenceController {
      * Tạo nhiều Preferences cùng lúc (batch create)
      * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
      */
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @PostMapping("/batch")
     public ApiResponse<List<PreferenceDTO>> createPreferencesBatch(@RequestBody @Valid PreferenceBatchCreateRequest request) {
         return preferenceService.createPreferencesBatch(request);
@@ -60,7 +60,7 @@ public class PreferenceController {
      * Cập nhật Preference
      * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
      */
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @PutMapping("/{id}")
     public ApiResponse<PreferenceDTO> updatePreference(
             @PathVariable Long id,
@@ -72,7 +72,7 @@ public class PreferenceController {
      * Xóa Preference
      * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
      */
-//    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<?> deletePreference(@PathVariable Long id) {
         return preferenceService.deletePreference(id);

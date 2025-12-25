@@ -39,8 +39,6 @@ import java.util.stream.IntStream;
 @Slf4j
 @Service
 public class UserServiceImpl implements UserService {
-    @Autowired
-    private AdminRepository adminRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -247,27 +245,6 @@ public class UserServiceImpl implements UserService {
         List<String> roles = new ArrayList<>();
 
         // uu tien check admin truoc
-        Admin admin = adminRepository.findByUser(user);
-        if (Objects.nonNull(admin)) {
-            if (admin.getStatus() != Status.ACTIVE) {
-                return new ApiResponse<>(423, "Admin account is not active", null);
-            }
-            roles.add(RoleUser.ADMIN.toString());
-            
-            String token;
-            try {
-                token = securityService.createTokenSystem(user, roles);
-            } catch (JOSEException e) {
-                log.error("Cannot create token for admin", e);
-                return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
-            }
-            
-            UserDTO userDTO = userMapper.toUserDTO(user, roles, admin.getStatus(), null, null);
-            return new ApiResponse<>(200, "Register or Login success", AccessTokenSystemDTO.builder()
-                    .token(token)
-                    .user(userDTO)
-                    .build());
-        }
 
         Host host = hostRepository.findByUser(user);
         if (Objects.nonNull(host)) {

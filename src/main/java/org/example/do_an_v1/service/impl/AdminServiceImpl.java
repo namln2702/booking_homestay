@@ -10,6 +10,7 @@ import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminActivationRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
+import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
@@ -19,24 +20,30 @@ import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
+import org.example.do_an_v1.dto.AccessTokenSystemDTO;
+import org.example.do_an_v1.dto.UserDTO;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.ComplaintMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
 import org.example.do_an_v1.mapper.TransactionMapper;
+import org.example.do_an_v1.mapper.UserMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.EmailService;
+import org.example.do_an_v1.service.impl.SecurityService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nimbusds.jose.JOSEException;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -85,6 +92,75 @@ public class AdminServiceImpl implements AdminService {
     private final EmailService emailService;
     private final ProfileMapper profileMapper;
     private final HomestayMapper homestayMapper;
+    private final UserMapper userMapper;
+    private final SecurityService securityService;
+
+    @Override
+    @Transactional
+    public ApiResponse<?> login(AdminLoginRequest request) {
+        // Validate input
+        if (request == null || request.getUsername() == null || request.getUsername().trim().isEmpty()) {
+            return new ApiResponse<>(400, "Username is required", null);
+        }
+        if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
+            return new ApiResponse<>(400, "Password is required", null);
+        }
+
+        // Tìm user theo username
+        User user = userRepository.findByUsername(request.getUsername().trim());
+        if (user == null) {
+            return new ApiResponse<>(401, "Invalid username or password", null);
+        }
+
+        // Kiểm tra user có phải là admin không
+        Admin admin = user.getAdmin();
+        if (admin == null) {
+            return new ApiResponse<>(401, "Invalid username or password", null);
+        }
+
+        // Kiểm tra password
+        String providedPassword = request.getPassword().trim();
+        String storedPassword = admin.getPassword();
+        
+        if (storedPassword == null || !storedPassword.equals(providedPassword)) {
+            return new ApiResponse<>(401, "Invalid username or password", null);
+        }
+
+        // Kiểm tra admin status
+        if (admin.getStatus() != Status.ACTIVE) {
+            return new ApiResponse<>(403, "Admin account is not active. Current status: " + admin.getStatus(), null);
+        }
+
+        // Set isOnline = true
+        if (!Boolean.TRUE.equals(user.getIsOnline())) {
+            user.setIsOnline(true);
+            userRepository.save(user);
+        }
+
+        // Tạo roles cho admin
+        List<String> roles = new ArrayList<>();
+        if (admin.getLevelAdmin() == LevelAdmin.SUPER_ADMIN) {
+            roles.add("SUPER_ADMIN");
+        } else {
+            roles.add("ADMIN");
+        }
+
+        // Tạo JWT token
+        String token;
+        try {
+            token = securityService.createTokenSystem(user, roles);
+        } catch (JOSEException e) {
+            return new ApiResponse<>(500, "Cannot create token: " + e.getMessage(), null);
+        }
+
+        // Map user sang UserDTO
+        UserDTO userDTO = userMapper.toUserDTO(user, roles, admin.getStatus(), null, null);
+
+        return new ApiResponse<>(200, "Login successful", AccessTokenSystemDTO.builder()
+                .token(token)
+                .user(userDTO)
+                .build());
+    }
 
     @Override
     @Transactional
