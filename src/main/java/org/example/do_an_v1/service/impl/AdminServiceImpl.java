@@ -8,7 +8,7 @@ import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
-import org.example.do_an_v1.dto.request.AdminActivationRequest;
+import org.example.do_an_v1.dto.request.UpdateStatusAdminRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
@@ -32,7 +32,6 @@ import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.EmailService;
-import org.example.do_an_v1.service.impl.SecurityService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -71,8 +70,7 @@ public class AdminServiceImpl implements AdminService {
             TypeTransaction.BOOKING_PAYMENT
     );
     private static final List<TypeTransaction> HOST_PAYOUT_TYPES = List.of(
-            TypeTransaction.ADMIN_PAYMENT_HOST,
-            TypeTransaction.PAYLOAD_HOST
+            TypeTransaction.ADMIN_PAYMENT_HOST
     );
     private static final List<TypeTransaction> CUSTOMER_REFUND_TYPES = List.of(TypeTransaction.REFUND);
     private static final Comparator<Bill> BILL_CREATED_AT_DESC = Comparator
@@ -169,12 +167,21 @@ public class AdminServiceImpl implements AdminService {
         if (Objects.isNull(actingAdmin) || actingAdmin.getLevelAdmin() != LevelAdmin.SUPER_ADMIN) {
             return new ApiResponse<>(403, "Only super admins may invite new admins", null);
         }
+        
+        // Kiểm tra username đã tồn tại chưa
+        String username = request.getUsername().trim();
+        User existingUserByUsername = userRepository.findByUsername(username);
+        if (Objects.nonNull(existingUserByUsername)) {
+            return new ApiResponse<>(409, "Username đã tồn tại", null);
+        }
+        
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         User user = userRepository.findByEmail(normalizedEmail);
         if (Objects.isNull(user)) {
             user = User.builder()
                     .email(normalizedEmail)
+                    .username(username)
                     .name(request.getFullName())
                     .phone(request.getPhone())
                     .build();
@@ -189,6 +196,7 @@ public class AdminServiceImpl implements AdminService {
                     conflictResponse);
         } else {
             user.setName(request.getFullName());
+            user.setUsername(username);
             if (Objects.nonNull(request.getPhone())) {
                 user.setPhone(request.getPhone());
             }
@@ -204,7 +212,7 @@ public class AdminServiceImpl implements AdminService {
                     .levelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), LevelAdmin.ADMIN))
                     .build();
         } else {
-            admin.setStatus(Status.INACTIVE);
+            admin.setStatus(Status.ACTIVE);
             admin.setLevelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), admin.getLevelAdmin()));
         }
         admin.setRole(RoleUser.ADMIN);
@@ -233,37 +241,14 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminDTO> activateAdmin(AdminActivationRequest request) throws RuntimeException {
-        ConfirmEmail confirmEmail = confirmEmailRepository.findByEmailAndCode(request.getEmail(), request.getCode());
+    public ApiResponse<AdminDTO> updateStatusAdmin(UpdateStatusAdminRequest request) throws RuntimeException {
+        Admin admin = adminRepository.findById(request.getIdAdmin())
+                .orElseThrow(() -> new ResourceNotFoundException("Admin not found with id: " + request.getIdAdmin()));
 
-        if (Objects.isNull(confirmEmail)) {
-            return new ApiResponse<>(422, "Invalid activation code", null);
-        }
-
-        if (LocalDateTime.now().isAfter(confirmEmail.getExpired_at())) {
-            return new ApiResponse<>(422, "Activation code expired", null);
-        }
-
-        User user = userRepository.findByEmail(request.getEmail());
-        if (Objects.isNull(user)) {
-            throw new ResourceNotFoundException("User not found with email: " + request.getEmail());
-        }
-
-        Admin admin = adminRepository.findById(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Admin account not found for user id: " + user.getId()));
-
-        if (Objects.nonNull(request.getFullName())) {
-            user.setName(request.getFullName());
-        }
-        if (Objects.nonNull(request.getPhone())) {
-            user.setPhone(request.getPhone());
-        }
-        userRepository.save(user);
-
-        admin.setStatus(Status.ACTIVE);
+        admin.setStatus(request.getStatus());
         admin = adminRepository.save(admin);
 
-        return new ApiResponse<>(200, "Admin account activated successfully", profileMapper.toAdminDTO(admin));
+        return new ApiResponse<>(200, "Admin status updated successfully", profileMapper.toAdminDTO(admin));
     }
 
     private String generateInviteCode() {
@@ -352,6 +337,66 @@ public class AdminServiceImpl implements AdminService {
 
         Homestay homestay = homestayRepository.findById(homestayId)
                 .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
+
+        // Nếu chuyển sang BAN hoặc INACTIVE, kiểm tra và xử lý các bills liên quan
+        if (status == StatusHomestay.BAN || status == StatusHomestay.INACTIVE) {
+            List<Bill> bills = billRepository.findByHomestay(homestay);
+            LocalDateTime now = LocalDateTime.now();
+            
+            // Lọc các bills có checkIn trong tương lai và status = REMAINING_PAYMENT_FAILED
+            List<Bill> affectedBills = bills.stream()
+                    .filter(bill -> bill.getCheckIn() != null && bill.getCheckIn().isAfter(now))
+                    .filter(bill -> bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED)
+                    .toList();
+
+            if (!affectedBills.isEmpty()) {
+                // Lấy admin user để tạo transaction REFUND
+                User adminUser = adminRepository.findAll().stream()
+                        .filter(admin -> admin.getStatus() == Status.ACTIVE)
+                        .map(Admin::getUser)
+                        .findFirst()
+                        .orElse(null);
+
+                if (adminUser == null) {
+                    return new ApiResponse<>(500, "No active admin found to process refunds", null);
+                }
+
+                // Xử lý từng bill bị ảnh hưởng
+                for (Bill bill : affectedBills) {
+                    // Chuyển bill sang CANCELLED_REFUNDED
+                    bill.setStatus(StatusBill.CANCELLED_REFUNDED);
+                    billRepository.save(bill);
+
+                    // Kiểm tra xem bill đã thanh toán một phần chưa (có transaction CUSTOMER_PAYMENT_ADMIN_FIRST thành công)
+                    List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+                    Transaction firstPayment = billTransactions.stream()
+                            .filter(t -> t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST
+                                    && t.getStatus() == StatusTransaction.SUCCESS)
+                            .findFirst()
+                            .orElse(null);
+
+                    // Nếu đã thanh toán đợt 1, tạo transaction REFUND
+                    if (firstPayment != null && bill.getCustomer() != null && bill.getCustomer().getUser() != null) {
+                        // Kiểm tra xem đã có transaction REFUND cho bill này chưa
+                        boolean hasRefund = billTransactions.stream()
+                                .anyMatch(t -> t.getTransactionType() == TypeTransaction.REFUND);
+
+                        if (!hasRefund) {
+                            // Tạo transaction REFUND với số tiền đã thanh toán
+                            Transaction refundTransaction = Transaction.builder()
+                                    .amount(firstPayment.getAmount())
+                                    .transactionType(TypeTransaction.REFUND)
+                                    .status(StatusTransaction.PENDING)
+                                    .fromUser(adminUser)
+                                    .toUser(bill.getCustomer().getUser())
+                                    .bill(bill)
+                                    .build();
+                            transactionRepository.save(refundTransaction);
+                        }
+                    }
+                }
+            }
+        }
 
         homestay.setStatusHomestay(status);
         Homestay savedHomestay = homestayRepository.save(homestay);
@@ -569,6 +614,25 @@ public class AdminServiceImpl implements AdminService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Pending refunds retrieved successfully", refundDTOs);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<TransactionDTO>> getHostPayoutTransactions(StatusTransaction status) {
+        // Lấy tất cả transactions và filter theo type và status
+        List<Transaction> allTransactions = transactionRepository.findAll();
+        List<Transaction> filteredTransactions = allTransactions.stream()
+                .filter(t -> HOST_PAYOUT_TYPES.contains(t.getTransactionType()))
+                .filter(t -> status == null || t.getStatus() == status)
+                .sorted(Comparator.comparing(Transaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .collect(Collectors.toList());
+
+        // Map sang DTO
+        List<TransactionDTO> transactionDTOs = filteredTransactions.stream()
+                .map(TransactionMapper::toDTO)
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Host payout transactions retrieved successfully", transactionDTOs);
     }
 
     @Override

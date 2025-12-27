@@ -7,7 +7,7 @@ import org.example.do_an_v1.dto.CustomerDTO;
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
-import org.example.do_an_v1.dto.request.AdminActivationRequest;
+import org.example.do_an_v1.dto.request.UpdateStatusAdminRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
@@ -20,6 +20,7 @@ import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.enums.StatusHost;
+import org.example.do_an_v1.enums.StatusTransaction;
 import org.example.do_an_v1.payload.ApiResponse;
 
 import java.util.List;
@@ -35,7 +36,7 @@ public interface AdminService {
 
     ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException;
 
-    ApiResponse<AdminDTO> activateAdmin(AdminActivationRequest request) throws RuntimeException;
+    ApiResponse<AdminDTO> updateStatusAdmin(UpdateStatusAdminRequest request) throws RuntimeException;
 
     ApiResponse<HostDTO> updateHostStatus(Long idHost, StatusHost statusHost);
 
@@ -94,6 +95,12 @@ public interface AdminService {
      * Lấy danh sách các transaction REFUND đang chờ xử lý
      */
     ApiResponse<List<TransactionDTO>> getPendingRefunds(Long adminUserId);
+
+    /**
+     * Lấy danh sách các transaction trả tiền cho host (PAYLOAD_HOST, ADMIN_PAYMENT_HOST)
+     * filter theo status (optional)
+     */
+    ApiResponse<List<TransactionDTO>> getHostPayoutTransactions(StatusTransaction status);
 
     /**
      * Admin xác nhận hoàn tiền thành công

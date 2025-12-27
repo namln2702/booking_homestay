@@ -10,7 +10,7 @@ import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HostDTO;
 import org.example.do_an_v1.dto.TransactionDTO;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
-import org.example.do_an_v1.dto.request.AdminActivationRequest;
+import org.example.do_an_v1.dto.request.UpdateStatusAdminRequest;
 import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.AdminStatusUpdateRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
@@ -24,6 +24,7 @@ import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusBill;
+import org.example.do_an_v1.enums.StatusTransaction;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.service.AdminService;
 import org.example.do_an_v1.service.HostService;
@@ -58,10 +59,10 @@ public class AdminController {
         return adminService.inviteAdmin(actorId, request);
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @PostMapping("/activate")
-    public ApiResponse<AdminDTO> activateAdmin(@RequestBody @Valid AdminActivationRequest request) {
-        return adminService.activateAdmin(request);
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
+    @PutMapping("/update-status")
+    public ApiResponse<AdminDTO> updateStatusAdmin(@RequestBody @Valid UpdateStatusAdminRequest request) {
+        return adminService.updateStatusAdmin(request);
     }
 
     // Admin lấy danh sách tất cả admin
@@ -170,6 +171,18 @@ public class AdminController {
     public ApiResponse<List<TransactionDTO>> getPendingRefunds() {
         Long adminUserId = identityResolver.requireUserId(null);
         return adminService.getPendingRefunds(adminUserId);
+    }
+
+    /**
+     * Lấy danh sách các transaction trả tiền cho host (PAYLOAD_HOST, ADMIN_PAYMENT_HOST)
+     * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/transactions/host-payouts")
+    public ApiResponse<List<TransactionDTO>> getHostPayoutTransactions(
+            @RequestParam(required = false) StatusTransaction status
+    ) {
+        return adminService.getHostPayoutTransactions(status);
     }
 
     /**
