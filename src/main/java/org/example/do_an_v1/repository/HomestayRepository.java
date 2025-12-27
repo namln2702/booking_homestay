@@ -143,9 +143,50 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
           AND (
                 CAST(:keyword AS text) IS NULL OR CAST(:keyword AS text) = ''
              OR unaccent(lower(COALESCE(h.title, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+             OR unaccent(lower(COALESCE(h.description, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+             OR unaccent(lower(COALESCE(h.category, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
              OR unaccent(lower(COALESCE(a.city, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
              OR unaccent(lower(COALESCE(a.state, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
              OR unaccent(lower(COALESCE(a.address_line, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+             OR EXISTS (
+                    SELECT 1
+                    FROM tbl_hosts host
+                    LEFT JOIN tbl_users host_user ON host_user.id = host.user_id
+                    WHERE host.user_id = h.host_id
+                      AND (
+                          unaccent(lower(COALESCE(host.business_name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(host_user.name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(host_user.username, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(host_user.email, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(host_user.phone, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                      )
+             )
+             OR EXISTS (
+                    SELECT 1
+                    FROM tbl_homestay_rules hr
+                    WHERE hr.home_id = h.address_id
+                      AND unaccent(lower(COALESCE(hr.description, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+             )
+             OR EXISTS (
+                    SELECT 1
+                    FROM tbl_homestays_list_facilities hlf
+                    JOIN tbl_facilities f ON f.id = hlf.list_facilities_id
+                    WHERE hlf.homestay_address_id = h.address_id
+                      AND (
+                          unaccent(lower(COALESCE(f.name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(f.category, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                      )
+             )
+             OR EXISTS (
+                    SELECT 1
+                    FROM tbl_homestays_list_amenities hla
+                    JOIN tbl_amenities am ON am.id = hla.list_amenities_id
+                    WHERE hla.homestay_address_id = h.address_id
+                      AND (
+                          unaccent(lower(COALESCE(am.name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                       OR unaccent(lower(COALESCE(am.description, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
+                      )
+             )
           )
           AND (
                 CAST(:numAdults AS integer) IS NULL OR CAST(:numAdults AS integer) <= 0
