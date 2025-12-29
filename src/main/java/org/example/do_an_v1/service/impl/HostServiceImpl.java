@@ -55,6 +55,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -460,6 +462,14 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(404, "Bill not found with id: " + request.getBillId(), null);
         }
 
+        String submittedCode = request.getCode() != null ? request.getCode().trim() : null;
+        if (submittedCode == null || submittedCode.isEmpty()) {
+            return new ApiResponse<>(400, "Check-in code is required", null);
+        }
+        if (!bill.getCode().equalsIgnoreCase(submittedCode)) {
+            return new ApiResponse<>(400, "Invalid check-in code for this bill", null);
+        }
+
         // Validate: Bill phải có homestay
         if (bill.getHomestay() == null) {
             return new ApiResponse<>(400, "Bill must have a homestay associated", null);
@@ -491,12 +501,14 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(400, "Bill total amount is not set", null);
         }
 
-        // Tính 70% còn lại
-        double remainingAmount = bill.getTotalAmount().doubleValue() * 0.7;
+        // Tính 70% còn lại và làm tròn đến 2 chữ số thập phân
+        BigDecimal remainingAmount = bill.getTotalAmount()
+                .multiply(BigDecimal.valueOf(70))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         // Tạo transaction mới cho phần còn lại (70%)
         Transaction remainingPaymentTransaction = null;
-        if (remainingAmount > 0) {
+        if (remainingAmount.compareTo(BigDecimal.ZERO) > 0) {
             // Lấy admin user
             User adminUser = adminRepository.findAll().stream()
                     .map(Admin::getUser)
@@ -514,7 +526,7 @@ public class HostServiceImpl implements HostService {
                     .bill(bill)
                     .fromUser(bill.getCustomer().getUser())
                     .toUser(adminUser)
-                    .amount(java.math.BigDecimal.valueOf(remainingAmount))
+                    .amount(remainingAmount)
                     .build();
             transactionRepository.save(remainingPaymentTransaction);
         }
