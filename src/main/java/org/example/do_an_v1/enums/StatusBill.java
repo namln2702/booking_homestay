@@ -13,7 +13,7 @@ public enum StatusBill {
      * Đơn bị hủy, không có giao dịch tiền.
      * Status cuối của luồng thanh toán đợt 1.
      */
-    DEPOSIT_PAID(11),
+    DEPOSIT_FAILED(11),
 
 
     /**
