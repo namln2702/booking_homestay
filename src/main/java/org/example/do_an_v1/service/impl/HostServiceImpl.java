@@ -71,7 +71,7 @@ import java.util.Optional;
 public class HostServiceImpl implements HostService {
     private static final List<StatusBill> STATUS_TIMELINE = List.of(
             StatusBill.DEPOSIT_PENDING,
-            StatusBill.DEPOSIT_PAID,
+            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING,
             StatusBill.REMAINING_PAYMENT_FAILED,
             StatusBill.CHECKIN_EXPIRED,
@@ -894,7 +894,7 @@ public class HostServiceImpl implements HostService {
 
     // Trạng thái bill đã hoàn thành (không cần refund khi ẩn homestay)
     private static final EnumSet<StatusBill> COMPLETED_BILL_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_PAID,
+            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_FAILED,
             StatusBill.CHECKIN_EXPIRED,
             StatusBill.CANCELLED,

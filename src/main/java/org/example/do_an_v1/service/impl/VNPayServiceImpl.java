@@ -211,7 +211,7 @@ public class VNPayServiceImpl implements VNPayService {
             }
 
             // Update bill và transaction status
-            bill.setStatus(StatusBill.DEPOSIT_PAID);
+            bill.setStatus(StatusBill.DEPOSIT_FAILED);
             transaction.setStatus(StatusTransaction.FAILED);
 
             billRepository.save(bill);

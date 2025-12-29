@@ -7,7 +7,6 @@ import org.example.do_an_v1.dto.request.CancelComplaintRequest;
 import org.example.do_an_v1.dto.request.CustomerProfileUpdateRequest;
 import org.example.do_an_v1.dto.request.PersonCapacityRequest;
 import org.example.do_an_v1.dto.request.PricePerDayRequest;
-import org.example.do_an_v1.dto.request.UserRegistrationRequest;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.mapper.*;
@@ -54,7 +53,7 @@ public class CustomerServiceImpl implements CustomerService {
     private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final List<StatusBill> STATUS_TIMELINE = List.of(
             StatusBill.DEPOSIT_PENDING,
-            StatusBill.DEPOSIT_PAID,
+            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING,
             StatusBill.REMAINING_PAYMENT_FAILED,
             StatusBill.CHECKIN_EXPIRED,
@@ -69,7 +68,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.CANCELLED
     );
     private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_PAID,
+            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING,
             StatusBill.REMAINING_PAYMENT_FAILED,
             StatusBill.CHECKIN_EXPIRED,
@@ -94,7 +93,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.SUCCEED
     );
     private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_PAID,
+            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING
     );
     private final CustomerRepository customerRepository;
@@ -1218,7 +1217,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
         return switch (status) {
             case DEPOSIT_PENDING -> "WAITING_DEPOSIT";
-            case DEPOSIT_PAID -> "DEPOSIT_PAID_WAITING_CHECKIN";
+            case DEPOSIT_FAILED -> "DEPOSIT_FAILED_CHECKIN";
             case REMAINING_PAYMENT_PENDING -> "AWAITING_REMAINING_PAYMENT";
             case REMAINING_PAYMENT_FAILED -> "REMAINING_PAYMENT_FAILED";
             case CHECKIN_EXPIRED -> "CHECKIN_EXPIRED";
@@ -1401,7 +1400,7 @@ public class CustomerServiceImpl implements CustomerService {
         Kiểm tra xem những trạng thái nào thì được cancel bill
          */
         if (bill.getStatus() != StatusBill.DEPOSIT_PENDING
-                && bill.getStatus() != StatusBill.DEPOSIT_PAID
+                && bill.getStatus() != StatusBill.DEPOSIT_FAILED
                 && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
