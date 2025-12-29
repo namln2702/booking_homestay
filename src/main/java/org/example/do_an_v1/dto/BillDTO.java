@@ -41,6 +41,7 @@ public class BillDTO {
     private LocalDateTime checkOut;       // Ngày check-out
     
     private LocalDateTime actualCheckin;  // Thời gian check-in thực tế (nếu có)
+    private LocalDateTime actualCheckout; // Thời gian check-out thực tế (nếu có)
     private BigDecimal totalAmount;       // Tổng giá trị bill (100%)
 
     // --- Thông tin giá theo ngày ---

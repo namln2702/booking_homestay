@@ -110,7 +110,6 @@ public class AdminController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
     @PutMapping("/homestays/status")
     public ApiResponse<HomestayDTO> updateHomestayStatus(@RequestBody @Valid HomestayStatusUpdateRequest request) {
-
         return adminService.updateHomestayStatus(request.getHomestayId(), request.getStatus());
     }
 

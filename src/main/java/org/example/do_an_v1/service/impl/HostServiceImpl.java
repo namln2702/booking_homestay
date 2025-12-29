@@ -589,6 +589,9 @@ public class HostServiceImpl implements HostService {
         // Validate: Host phải sở hữu homestay này
         // (Có thể thêm validation này nếu cần)
 
+        // Cập nhật thời gian checkout thực tế
+        bill.setActualCheckoutTime(now);
+
         // Unlock homestay_daily_prices - các ngày đã book giờ có thể book lại
         List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
                 .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
@@ -923,61 +926,62 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(200, "Homestay status is already " + newStatus, null);
         }
 
-        // Xử lý khi ACTIVE -> INACTIVE
+        // Xử lý khi ACTIVE -> INACTIVE (luồng giống với admin BAN/INACTIVE)
         if (currentStatus == StatusHomestay.ACTIVE && newStatus == StatusHomestay.INACTIVE) {
-            // Tìm tất cả bills chưa hoàn thành của homestay này
             List<Bill> bills = billRepository.findByHomestay(homestay);
-            List<Bill> incompleteBills = bills.stream()
-                    .filter(bill -> bill.getStatus() != null && !COMPLETED_BILL_STATUSES.contains(bill.getStatus()))
+            LocalDateTime now = LocalDateTime.now();
+            
+            // Lọc các bills có checkIn trong tương lai và status = REMAINING_PAYMENT_PENDING
+            List<Bill> affectedBills = bills.stream()
+                    .filter(bill -> bill.getCheckIn() != null && bill.getCheckIn().isAfter(now))
+                    .filter(bill -> bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING)
                     .toList();
 
-            // Lấy admin user để tạo transaction REFUND
-            User adminUser = adminRepository.findAll().stream()
-                    .filter(admin -> admin.getStatus() == Status.ACTIVE)
-                    .map(Admin::getUser)
-                    .findFirst()
-                    .orElse(null);
+            if (!affectedBills.isEmpty()) {
+                // Xử lý từng bill bị ảnh hưởng
+                int refundedCount = 0;
+                for (Bill bill : affectedBills) {
+                    // Chuyển bill sang CANCELLED_REFUNDED
+                    bill.setStatus(StatusBill.CANCELLED_REFUNDED);
+                    billRepository.save(bill);
 
-            if (adminUser == null) {
-                return new ApiResponse<>(500, "No active admin found to process refunds", null);
-            }
+                    // Kiểm tra xem bill đã thanh toán một phần chưa (có transaction CUSTOMER_PAYMENT_ADMIN_FIRST thành công)
+                    List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+                    Transaction firstPayment = billTransactions.stream()
+                            .filter(t -> t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST
+                                    && t.getStatus() == StatusTransaction.SUCCESS)
+                            .findFirst()
+                            .orElse(null);
 
-            int refundedCount = 0;
-            for (Bill bill : incompleteBills) {
-                // Chuyển bill sang REFUNDED
-                bill.setStatus(StatusBill.REFUNDED);
-                billRepository.save(bill);
+                    // Nếu đã thanh toán đợt 1, tạo transaction REFUND
+                    if (firstPayment != null && bill.getCustomer() != null && bill.getCustomer().getUser() != null) {
+                        // Kiểm tra xem đã có transaction REFUND cho bill này chưa
+                        boolean hasRefund = billTransactions.stream()
+                                .anyMatch(t -> t.getTransactionType() == TypeTransaction.REFUND);
 
-                // Tạo transaction REFUND nếu bill có totalAmount
-                if (bill.getTotalAmount() != null && bill.getTotalAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
-                    // Kiểm tra xem đã có transaction REFUND cho bill này chưa
-                    List<Transaction> existingRefunds = transactionRepository.findByBill(bill).stream()
-                            .filter(t -> t.getTransactionType() == TypeTransaction.REFUND)
-                            .toList();
-
-                    if (existingRefunds.isEmpty()) {
-                        Transaction refundTransaction = Transaction.builder()
-                                .amount(bill.getTotalAmount())
-                                .transactionType(TypeTransaction.REFUND)
-                                .status(StatusTransaction.PENDING) // Chờ admin xác nhận
-                                .bill(bill)
-                                .fromUser(adminUser)
-                                .toUser(bill.getCustomer() != null ? bill.getCustomer().getUser() : null)
-                                .completedAt(null)
-                                .build();
-                        transactionRepository.save(refundTransaction);
-                        refundedCount++;
+                        if (!hasRefund) {
+                            // Tạo transaction REFUND với số tiền đã thanh toán
+                            Transaction refundTransaction = Transaction.builder()
+                                    .amount(firstPayment.getAmount())
+                                    .transactionType(TypeTransaction.REFUND)
+                                    .status(StatusTransaction.PENDING)
+                                    .toUser(bill.getCustomer().getUser())
+                                    .bill(bill)
+                                    .build();
+                            transactionRepository.save(refundTransaction);
+                            refundedCount++;
+                        }
                     }
                 }
+
+                // Cập nhật status homestay
+                homestay.setStatusHomestay(StatusHomestay.INACTIVE);
+                homestayRepository.save(homestay);
+
+                return new ApiResponse<>(200, 
+                        String.format("Homestay status updated to INACTIVE. %d bills cancelled and refunded.", refundedCount), 
+                        null);
             }
-
-            // Cập nhật status homestay
-            homestay.setStatusHomestay(StatusHomestay.INACTIVE);
-            homestayRepository.save(homestay);
-
-            return new ApiResponse<>(200, 
-                    String.format("Homestay status updated to INACTIVE. %d incomplete bills refunded.", refundedCount), 
-                    null);
         }
 
         // Xử lý khi INACTIVE -> ACTIVE (hoặc các trường hợp khác)

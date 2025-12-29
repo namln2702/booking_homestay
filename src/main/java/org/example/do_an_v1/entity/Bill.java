@@ -3,7 +3,6 @@ package org.example.do_an_v1.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
 
 import java.time.LocalDateTime;
@@ -34,6 +33,9 @@ public class Bill extends BaseEntity{
 
     @Column(name = "actual_checkin_time")
     private LocalDateTime actualCheckinTime;
+
+    @Column(name = "actual_checkout_time")
+    private LocalDateTime actualCheckoutTime;
 
     @Column(name = "total_amount", precision = 12, scale = 2)
     private java.math.BigDecimal totalAmount; // Tổng giá trị bill (100%)

@@ -343,10 +343,10 @@ public class AdminServiceImpl implements AdminService {
             List<Bill> bills = billRepository.findByHomestay(homestay);
             LocalDateTime now = LocalDateTime.now();
             
-            // Lọc các bills có checkIn trong tương lai và status = REMAINING_PAYMENT_FAILED
+            // Lọc các bills có checkIn trong tương lai và status = REMAINING_PAYMENT_PENDING
             List<Bill> affectedBills = bills.stream()
                     .filter(bill -> bill.getCheckIn() != null && bill.getCheckIn().isAfter(now))
-                    .filter(bill -> bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED)
+                    .filter(bill -> bill.getStatus() == StatusBill.REMAINING_PAYMENT_PENDING)
                     .toList();
 
             if (!affectedBills.isEmpty()) {

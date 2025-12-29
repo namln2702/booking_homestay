@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,4 +63,13 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
      * Tìm tất cả bills với status cụ thể
      */
     List<Bill> findByStatus(StatusBill status);
+
+    /**
+     * Tìm bills theo status và khoảng thời gian createdAt
+     */
+    List<Bill> findByStatusAndCreatedAtBetween(
+            StatusBill status,
+            LocalDateTime startDate,
+            LocalDateTime endDate
+    );
 }
