@@ -1,13 +1,7 @@
 package org.example.do_an_v1.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.do_an_v1.dto.AdminDTO;
-import org.example.do_an_v1.dto.BillDTO;
-import org.example.do_an_v1.dto.ComplaintDTO;
-import org.example.do_an_v1.dto.CustomerDTO;
-import org.example.do_an_v1.dto.HomestayDTO;
-import org.example.do_an_v1.dto.HostDTO;
-import org.example.do_an_v1.dto.TransactionDTO;
+import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.dto.request.UpdateStatusAdminRequest;
 import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminLoginRequest;
@@ -16,15 +10,15 @@ import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
+import org.example.do_an_v1.dto.response.HostWithPendingPayoutTransactionsResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
-import org.example.do_an_v1.dto.AccessTokenSystemDTO;
-import org.example.do_an_v1.dto.UserDTO;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.ComplaintMapper;
 import org.example.do_an_v1.mapper.HomestayMapper;
+import org.example.do_an_v1.mapper.HostMapper;
 import org.example.do_an_v1.mapper.TransactionMapper;
 import org.example.do_an_v1.mapper.UserMapper;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
@@ -162,11 +156,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException {
-        Admin actingAdmin = adminRepository.findById(actorAdminId).orElse(null);
-        if (Objects.isNull(actingAdmin) || actingAdmin.getLevelAdmin() != LevelAdmin.SUPER_ADMIN) {
-            return new ApiResponse<>(403, "Only super admins may invite new admins", null);
-        }
+    public ApiResponse<AdminInvitationResponse> createAdmin( AdminInviteRequest request) throws RuntimeException {
         
         // Kiểm tra username đã tồn tại chưa
         String username = request.getUsername().trim();
@@ -189,7 +179,7 @@ public class AdminServiceImpl implements AdminService {
             Admin existingAdmin = user.getAdmin();
             AdminInvitationResponse conflictResponse = AdminInvitationResponse.builder()
                     .admin(profileMapper.toAdminDTO(existingAdmin))
-                    .activationCode(null)
+                    .status(false)
                     .build();
             return new ApiResponse<>(409,
                     "Admin account already active for email: " + normalizedEmail,
@@ -208,7 +198,8 @@ public class AdminServiceImpl implements AdminService {
         if (Objects.isNull(admin)) {
             admin = Admin.builder()
                     .user(user)
-                    .status(Status.INACTIVE)
+                    .status(Status.ACTIVE)
+                    .password(request.getPassword())
                     .levelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), LevelAdmin.ADMIN))
                     .build();
         } else {
@@ -216,22 +207,21 @@ public class AdminServiceImpl implements AdminService {
             admin.setLevelAdmin(Objects.requireNonNullElse(request.getLevelAdmin(), admin.getLevelAdmin()));
         }
         admin.setRole(RoleUser.ADMIN);
-        // BaseEntity timestamps (createdAt/updatedAt) auto-populate here; requests never control them
         admin = adminRepository.save(admin);
 
-        String inviteCode = generateInviteCode();
-        // expired_at is derived here so invitation validity stays under server control, never taken from client input
-        confirmEmailRepository.save(ConfirmEmail.builder()
-                .email(normalizedEmail)
-                .code(inviteCode)
-                .expired_at(LocalDateTime.now().plusHours(24))
-                .build());
-
-        emailService.sendSimpleEmail(normalizedEmail, buildInvitationMessage(inviteCode));
+//        String inviteCode = generateInviteCode();
+//        // expired_at is derived here so invitation validity stays under server control, never taken from client input
+//        confirmEmailRepository.save(ConfirmEmail.builder()
+//                .email(normalizedEmail)
+//                .code(inviteCode)
+//                .expired_at(LocalDateTime.now().plusHours(24))
+//                .build());
+//
+//        emailService.sendSimpleEmail(normalizedEmail, buildInvitationMessage(inviteCode));
 
         AdminInvitationResponse response = AdminInvitationResponse.builder()
                 .admin(profileMapper.toAdminDTO(admin))
-                .activationCode(inviteCode)
+                .status(true)
                 .build();
 
         return new ApiResponse<>(200,
@@ -756,7 +746,7 @@ public class AdminServiceImpl implements AdminService {
             transactionRepository.save(refundTransaction);
 
             // Cập nhật bill sang REFUNDED
-            bill.setStatus(StatusBill.REFUNDED);
+            bill.setStatus(StatusBill.REFUNDED_PENDING);
             billRepository.save(bill);
 
             return new ApiResponse<>(200, 
@@ -926,5 +916,132 @@ public class AdminServiceImpl implements AdminService {
                 .filter(transaction -> transaction.getAmount() != null)
                 .map(Transaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<List<HostWithPendingPayoutTransactionsResponse>> getHostsWithPendingPayoutTransactions() {
+        // Lấy tất cả transactions có type là HOST_PAYOUT_TYPES và status là PENDING
+        // Sử dụng JOIN FETCH để eager load Bill, Homestay, Host, Address trong một query (tránh N+1)
+        List<Transaction> pendingPayoutTransactions = transactionRepository.findByTransactionTypeInAndStatusWithJoins(
+                HOST_PAYOUT_TYPES,
+                StatusTransaction.PENDING
+        );
+
+        if (pendingPayoutTransactions.isEmpty()) {
+            return new ApiResponse<>(200, "No pending payout transactions found", new ArrayList<>());
+        }
+
+        // Group transactions theo Host (thông qua Bill -> Homestay -> Host)
+        java.util.Map<Host, java.util.Map<Homestay, List<Transaction>>> hostHomestayTransactionsMap = 
+                pendingPayoutTransactions.stream()
+                        .filter(t -> t.getBill() != null 
+                                && t.getBill().getHomestay() != null 
+                                && t.getBill().getHomestay().getHost() != null)
+                        .collect(Collectors.groupingBy(
+                                t -> t.getBill().getHomestay().getHost(),
+                                Collectors.groupingBy(
+                                        t -> t.getBill().getHomestay()
+                                )
+                        ));
+
+        // Tối ưu: Batch load tất cả images cho tất cả homestays cùng lúc (tránh N+1 query)
+        List<Homestay> allHomestays = hostHomestayTransactionsMap.values().stream()
+                .flatMap(homestayMap -> homestayMap.keySet().stream())
+                .distinct()
+                .collect(Collectors.toList());
+        
+        // Load tất cả images trong một query
+        List<HomestayImage> allImages = allHomestays.isEmpty() 
+                ? new ArrayList<>() 
+                : homestayImageRepository.findByHomestayIn(allHomestays);
+        
+        // Group images theo homestay để dễ lookup
+        java.util.Map<Long, List<HomestayImage>> imagesByHomestayId = allImages.stream()
+                .collect(Collectors.groupingBy(img -> img.getHomestay().getId()));
+
+        // Map sang DTO
+        List<HostWithPendingPayoutTransactionsResponse> result = hostHomestayTransactionsMap.entrySet().stream()
+                .map(entry -> {
+                    Host host = entry.getKey();
+                    java.util.Map<Homestay, List<Transaction>> homestayTransactionsMap = entry.getValue();
+
+                    // Map Host sang HostDTO
+                    HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
+
+                    // Map Homestay và Transactions
+                    List<HostWithPendingPayoutTransactionsResponse.HomestayWithTransactionsDTO> homestayWithTransactionsList =
+                            homestayTransactionsMap.entrySet().stream()
+                                    .map(homestayEntry -> {
+                                        Homestay homestay = homestayEntry.getKey();
+                                        List<Transaction> transactions = homestayEntry.getValue();
+
+                                        // Tối ưu: Sử dụng HomestaySummaryDTO thay vì HomestayDTO để giảm dữ liệu
+                                        // Chỉ load thông tin cần thiết, không load facilities, amenities, rules, dailyPrices, personCapacities
+                                        HomestaySummaryDTO homestaySummary = homestayMapper.toSummary(homestay);
+                                        
+                                        // Convert HomestaySummaryDTO sang HomestayDTO đơn giản (chỉ thông tin cơ bản)
+                                        HomestayDTO homestayDTO = HomestayDTO.builder()
+                                                .id(homestaySummary.getId())
+                                                .hostId(homestaySummary.getHostId())
+                                                .title(homestaySummary.getTitle())
+                                                .category(homestaySummary.getCategory())
+                                                .status(homestaySummary.getStatus())
+                                                .address(homestay.getAddress() != null ? HomestayDTO.AddressDTO.builder()
+                                                        .addressLine(homestay.getAddress().getAddressLine())
+                                                        .city(homestay.getAddress().getCity())
+                                                        .state(homestay.getAddress().getState())
+                                                        .latitude(homestay.getAddress().getLatitude())
+                                                        .longitude(homestay.getAddress().getLongitude())
+                                                        .build() : null)
+                                                // Chỉ load images (đã được batch load)
+                                                .images(imagesByHomestayId.getOrDefault(homestay.getId(), new ArrayList<>())
+                                                        .stream()
+                                                        .map(img -> HomestayDTO.HomestayImageDTO.builder()
+                                                                .id(img.getId())
+                                                                .imageUrl(img.getImageUrl())
+                                                                .primary(img.getIsPrimary())
+                                                                .build())
+                                                        .collect(Collectors.toList()))
+                                                // Không load các dữ liệu không cần thiết
+                                                .facilities(null)
+                                                .amenities(null)
+                                                .rules(null)
+                                                .dailyPrices(null)
+                                                .personCapacities(null)
+                                                .description(null)
+                                                .rating(null)
+                                                .numbersOfReview(null)
+                                                .minGuest(null)
+                                                .maxGuest(null)
+                                                .numBedrooms(null)
+                                                .numBeds(null)
+                                                .numBathrooms(null)
+                                                .numKitchen(null)
+                                                .advancedPayment(null)
+                                                .warningCount(null)
+                                                .basePrice(null)
+                                                .build();
+
+                                        // Map Transactions sang TransactionDTO
+                                        List<TransactionDTO> transactionDTOs = transactions.stream()
+                                                .map(TransactionMapper::toDTO)
+                                                .collect(Collectors.toList());
+
+                                        return HostWithPendingPayoutTransactionsResponse.HomestayWithTransactionsDTO.builder()
+                                                .homestay(homestayDTO)
+                                                .transactions(transactionDTOs)
+                                                .build();
+                                    })
+                                    .collect(Collectors.toList());
+
+                    return HostWithPendingPayoutTransactionsResponse.builder()
+                            .host(hostDTO)
+                            .homestays(homestayWithTransactionsList)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>(200, "Hosts with pending payout transactions retrieved successfully", result);
     }
 }

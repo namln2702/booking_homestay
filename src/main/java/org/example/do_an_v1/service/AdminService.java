@@ -15,6 +15,7 @@ import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
+import org.example.do_an_v1.dto.response.HostWithPendingPayoutTransactionsResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
@@ -34,7 +35,7 @@ public interface AdminService {
      */
     ApiResponse<?> login(AdminLoginRequest request);
 
-    ApiResponse<AdminInvitationResponse> inviteAdmin(Long actorAdminId, AdminInviteRequest request) throws RuntimeException;
+    ApiResponse<AdminInvitationResponse> createAdmin( AdminInviteRequest request) throws RuntimeException;
 
     ApiResponse<AdminDTO> updateStatusAdmin(UpdateStatusAdminRequest request) throws RuntimeException;
 
@@ -131,4 +132,10 @@ public interface AdminService {
      * Lấy danh sách tất cả complaints với phân trang
      */
     ApiResponse<PageResponse<List<ComplaintDTO>>> getAllComplaints(int page, int size);
+
+    /**
+     * Lấy danh sách các Host với các Homestay và các transaction đang chờ hoàn tiền
+     * (transaction type là thanh toán cho host và status là PENDING)
+     */
+    ApiResponse<List<HostWithPendingPayoutTransactionsResponse>> getHostsWithPendingPayoutTransactions();
 }

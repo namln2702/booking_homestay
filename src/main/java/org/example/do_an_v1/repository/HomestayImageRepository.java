@@ -11,4 +11,9 @@ import java.util.List;
 public interface HomestayImageRepository extends JpaRepository<HomestayImage, Long> {
 
     List<HomestayImage> findByHomestay(Homestay homestay);
+
+    /**
+     * Lấy tất cả images của nhiều homestays cùng lúc (batch load để tránh N+1 query)
+     */
+    List<HomestayImage> findByHomestayIn(java.util.List<Homestay> homestays);
 }

@@ -9,6 +9,6 @@ import org.example.do_an_v1.dto.AdminDTO;
 public class AdminInvitationResponse {
 
     private final AdminDTO admin;
-    private final String activationCode;
+    private final boolean status;
 }
 

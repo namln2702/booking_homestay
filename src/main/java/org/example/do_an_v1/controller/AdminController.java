@@ -22,6 +22,7 @@ import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
 import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
 import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
+import org.example.do_an_v1.dto.response.HostWithPendingPayoutTransactionsResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusTransaction;
@@ -53,10 +54,9 @@ public class AdminController {
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
-    @PostMapping("/invite")
-    public ApiResponse<AdminInvitationResponse> inviteAdmin(@RequestBody @Valid AdminInviteRequest request) {
-        Long actorId = identityResolver.requireUserId(null);
-        return adminService.inviteAdmin(actorId, request);
+    @PostMapping("/create")
+    public ApiResponse<AdminInvitationResponse> createAdmin(@RequestBody @Valid AdminInviteRequest request) {
+        return adminService.createAdmin(request);
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
@@ -182,6 +182,17 @@ public class AdminController {
             @RequestParam(required = false) StatusTransaction status
     ) {
         return adminService.getHostPayoutTransactions(status);
+    }
+
+    /**
+     * Lấy danh sách các Host với các Homestay và các transaction đang chờ hoàn tiền
+     * (transaction type là thanh toán cho host và status là PENDING)
+     * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/transactions/pending-payouts-by-host")
+    public ApiResponse<List<HostWithPendingPayoutTransactionsResponse>> getHostsWithPendingPayoutTransactions() {
+        return adminService.getHostsWithPendingPayoutTransactions();
     }
 
     /**

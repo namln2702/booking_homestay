@@ -23,6 +23,10 @@ public class AdminInviteRequest {
     @Size(max = 255)
     private String username;
 
+    @NotBlank
+    @Size(max = 255)
+    private String password;
+
     private LevelAdmin levelAdmin;
 
     @Size(max = 20)

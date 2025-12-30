@@ -10,11 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients
 @EnableJpaAuditing
 @EnableScheduling
-public class
-
-
-
-DoAnV1Application {
+public class DoAnV1Application {
 
     public static void main(String[] args) {
         SpringApplication.run(DoAnV1Application.class, args);
