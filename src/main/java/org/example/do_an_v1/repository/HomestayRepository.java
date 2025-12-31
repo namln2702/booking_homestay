@@ -135,10 +135,18 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
           AND (
                 CAST(:city AS text) IS NULL OR CAST(:city AS text) = ''
              OR unaccent(lower(a.city)) = unaccent(lower(CAST(:city AS text)))
+             OR similarity(
+                    unaccent(lower(COALESCE(a.city, ''))),
+                    unaccent(lower(COALESCE(CAST(:city AS text), '')))
+                ) > 0.4
           )
           AND (
                 CAST(:state AS text) IS NULL OR CAST(:state AS text) = ''
              OR unaccent(lower(a.state)) = unaccent(lower(CAST(:state AS text)))
+             OR similarity(
+                    unaccent(lower(COALESCE(a.state, ''))),
+                    unaccent(lower(COALESCE(CAST(:state AS text), '')))
+                ) > 0.5
           )
           AND (
                 CAST(:keyword AS text) IS NULL OR CAST(:keyword AS text) = ''
@@ -222,14 +230,18 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
              )
           )
           AND (
-                CAST(:begin AS date) IS NULL OR CAST(:end AS date) IS NULL
+                CAST(:begin AS date) IS NULL
              OR NOT EXISTS (
                     SELECT 1
                     FROM tbl_homestay_daily_prices hdp
                     JOIN tbl_price_per_days ppd ON ppd.id = hdp.price_per_day_id
                     WHERE hdp.homestay_id = h.address_id
                       AND hdp.is_booked = true
-                      AND ppd.day BETWEEN CAST(:begin AS date) AND CAST(:end AS date)
+                      AND ppd.day BETWEEN CAST(:begin AS date)
+                                      AND COALESCE(
+                                              CAST(:end AS date),
+                                              CAST(:begin AS date) + 1
+                                          )
              )
           )
         ORDER BY
