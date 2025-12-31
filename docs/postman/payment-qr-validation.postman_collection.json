@@ -1,0 +1,139 @@
+{
+  "info": {
+    "_postman_id": "a90e17b8-7fb3-4d15-8a6e-43f9644c20c7",
+    "name": "Payment QR Validation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection to exercise POST /api/check-payment-qr against valid and invalid QR images."
+  },
+  "item": [
+    {
+      "name": "Check Payment QR - Valid",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "pm.test(\"Response contract is valid\", function () {",
+              "  pm.expect(body).to.have.property(\"success\", true);",
+              "  pm.expect(body).to.have.property(\"message\").that.is.a(\"string\");",
+              "  pm.expect(body).to.have.property(\"data\");",
+              "  pm.expect(body.data).to.have.property(\"isQr\").that.is.a(\"boolean\");",
+              "  pm.expect(body.data).to.have.property(\"isPaymentQr\").that.is.a(\"boolean\");",
+              "  pm.expect(body.data).to.have.property(\"isValidStructure\").that.is.a(\"boolean\");",
+              "  pm.expect(body.data).to.have.property(\"isValidCRC\").that.is.a(\"boolean\");",
+              "});",
+              "",
+              "pm.test(\"Payment QR flags are true\", function () {",
+              "  pm.expect(body.data.isQr).to.be.true;",
+              "  pm.expect(body.data.isPaymentQr).to.be.true;",
+              "  pm.expect(body.data.isValidStructure).to.be.true;",
+              "});",
+              "",
+              "pm.test(\"CRC and metadata present\", function () {",
+              "  pm.expect(body.data.isValidCRC).to.be.a(\"boolean\");",
+              "  if (body.data.isValidCRC) {",
+              "    pm.expect(body.data.bankCode).to.be.a(\"string\").and.not.empty;",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"imageUrl\": \"{{validPaymentQrImageUrl}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/check-payment-qr",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "check-payment-qr"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Check Payment QR - Invalid/Non-payment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "pm.test(\"Response contract is valid\", function () {",
+              "  pm.expect(body).to.have.property(\"success\", true);",
+              "  pm.expect(body).to.have.property(\"message\").that.is.a(\"string\");",
+              "  pm.expect(body).to.have.property(\"data\");",
+              "  pm.expect(body.data).to.have.property(\"isQr\").that.is.a(\"boolean\");",
+              "  pm.expect(body.data).to.have.property(\"isPaymentQr\").that.is.a(\"boolean\");",
+              "});",
+              "",
+              "pm.test(\"Non-payment QR assertions\", function () {",
+              "  pm.expect(body.data.isPaymentQr).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"imageUrl\": \"{{invalidPaymentQrImageUrl}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/check-payment-qr",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "check-payment-qr"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "validPaymentQrImageUrl",
+      "value": "https://example.com/path/to/vietqr-valid.png"
+    },
+    {
+      "key": "invalidPaymentQrImageUrl",
+      "value": "https://example.com/path/to/non-payment-qr.png"
+    }
+  ]
+}

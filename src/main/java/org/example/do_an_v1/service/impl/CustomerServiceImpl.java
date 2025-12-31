@@ -68,7 +68,6 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.CANCELLED
     );
     private static final EnumSet<StatusBill> DEPOSIT_COMPLETED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING,
             StatusBill.REMAINING_PAYMENT_FAILED,
             StatusBill.CHECKIN_EXPIRED,
@@ -93,7 +92,6 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.SUCCEED
     );
     private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
-            StatusBill.DEPOSIT_FAILED,
             StatusBill.REMAINING_PAYMENT_PENDING
     );
     private final CustomerRepository customerRepository;
