@@ -76,7 +76,6 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final HostRepository hostRepository;
     private final HomestayRepository homestayRepository;
-    private final HomestayImageRepository homestayImageRepository;
     private final ConfirmEmailRepository confirmEmailRepository;
     private final BillRepository billRepository;
     private final ComplaintRepository complaintRepository;
@@ -304,7 +303,7 @@ public class AdminServiceImpl implements AdminService {
 
         Homestay savedHomestay = homestayRepository.save(homestay);
 
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+        List<Image> images = savedHomestay.getListImage() != null ? new ArrayList<>(savedHomestay.getListImage()) : new ArrayList<>();
         HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
 
         String message = Boolean.TRUE.equals(approve)
@@ -391,7 +390,7 @@ public class AdminServiceImpl implements AdminService {
         homestay.setStatusHomestay(status);
         Homestay savedHomestay = homestayRepository.save(homestay);
 
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+        List<Image> images = savedHomestay.getListImage() != null ? new ArrayList<>(savedHomestay.getListImage()) : new ArrayList<>();
         HomestayDTO response = homestayMapper.toDto(savedHomestay, images);
 
         return new ApiResponse<>(200, "Homestay status updated successfully", response);
@@ -399,21 +398,55 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(int page, int size) {
+    public ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(int page, int size, String status, String email) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
-        Pageable pageable = PageRequest.of(safePage, safeSize);
         
-        Page<Admin> adminPage = adminRepository.findAll(pageable);
+        // Parse status string to enum
+        Status statusEnum = null;
+        if (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                statusEnum = Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Invalid status, ignore
+            }
+        }
         
-        List<AdminDTO> admins = adminPage.getContent().stream()
+        // Normalize email search
+        String normalizedEmail = (email != null && !email.trim().isEmpty()) 
+                ? email.trim().toLowerCase() 
+                : null;
+        
+        // Load all admins and filter
+        List<Admin> allAdmins = adminRepository.findAll();
+
+        Status finalStatusEnum = statusEnum;
+        List<Admin> filteredAdmins = allAdmins.stream()
+                .filter(admin -> finalStatusEnum == null || admin.getStatus() == finalStatusEnum)
+                .filter(admin -> {
+                    if (normalizedEmail == null) {
+                        return true;
+                    }
+                    if (admin.getUser() == null || admin.getUser().getEmail() == null) {
+                        return false;
+                    }
+                    return admin.getUser().getEmail().toLowerCase().contains(normalizedEmail);
+                })
+                .collect(Collectors.toList());
+        
+        // Manual pagination
+        long total = filteredAdmins.size();
+        int fromIndex = Math.min(safePage * safeSize, filteredAdmins.size());
+        int toIndex = Math.min(fromIndex + safeSize, filteredAdmins.size());
+        
+        List<AdminDTO> admins = filteredAdmins.subList(fromIndex, toIndex).stream()
                 .map(profileMapper::toAdminDTO)
                 .toList();
         
         PageResponse<List<AdminDTO>> response = PageResponse.<List<AdminDTO>>builder()
-                .page(adminPage.getNumber())
-                .size(adminPage.getSize())
-                .total(adminPage.getTotalElements())
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
                 .items(admins)
                 .build();
         
@@ -422,21 +455,55 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(int page, int size) {
+    public ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(int page, int size, String status, String email) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
-        Pageable pageable = PageRequest.of(safePage, safeSize);
         
-        Page<Customer> customerPage = customerRepository.findAll(pageable);
+        // Parse status string to enum
+        Status statusEnum = null;
+        if (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                statusEnum = Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Invalid status, ignore
+            }
+        }
         
-        List<CustomerDTO> customers = customerPage.getContent().stream()
+        // Normalize email search
+        String normalizedEmail = (email != null && !email.trim().isEmpty()) 
+                ? email.trim().toLowerCase() 
+                : null;
+        
+        // Load all customers and filter
+        List<Customer> allCustomers = customerRepository.findAll();
+
+        Status finalStatusEnum = statusEnum;
+        List<Customer> filteredCustomers = allCustomers.stream()
+                .filter(customer -> finalStatusEnum == null || customer.getStatus() == finalStatusEnum)
+                .filter(customer -> {
+                    if (normalizedEmail == null) {
+                        return true;
+                    }
+                    if (customer.getUser() == null || customer.getUser().getEmail() == null) {
+                        return false;
+                    }
+                    return customer.getUser().getEmail().toLowerCase().contains(normalizedEmail);
+                })
+                .collect(Collectors.toList());
+        
+        // Manual pagination
+        long total = filteredCustomers.size();
+        int fromIndex = Math.min(safePage * safeSize, filteredCustomers.size());
+        int toIndex = Math.min(fromIndex + safeSize, filteredCustomers.size());
+        
+        List<CustomerDTO> customers = filteredCustomers.subList(fromIndex, toIndex).stream()
                 .map(profileMapper::toCustomerDTO)
                 .toList();
         
         PageResponse<List<CustomerDTO>> response = PageResponse.<List<CustomerDTO>>builder()
-                .page(customerPage.getNumber())
-                .size(customerPage.getSize())
-                .total(customerPage.getTotalElements())
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
                 .items(customers)
                 .build();
         
@@ -515,10 +582,24 @@ public class AdminServiceImpl implements AdminService {
             StatusBill status,
             Long customerId,
             Long hostId,
-            Long homestayId
+            Long homestayId,
+            String billCode,
+            String customerName,
+            String homestayTitle
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
+
+        // Normalize search strings
+        String normalizedBillCode = (billCode != null && !billCode.trim().isEmpty()) 
+                ? billCode.trim().toLowerCase() 
+                : null;
+        String normalizedCustomerName = (customerName != null && !customerName.trim().isEmpty()) 
+                ? customerName.trim().toLowerCase() 
+                : null;
+        String normalizedHomestayTitle = (homestayTitle != null && !homestayTitle.trim().isEmpty()) 
+                ? homestayTitle.trim().toLowerCase() 
+                : null;
 
         List<Bill> filteredBills = billRepository.findAll().stream()
                 .filter(bill -> status == null || bill.getStatus() == status)
@@ -530,6 +611,38 @@ public class AdminServiceImpl implements AdminService {
                         || (bill.getHomestay() != null
                         && bill.getHomestay().getHost() != null
                         && Objects.equals(bill.getHomestay().getHost().getId(), hostId)))
+                .filter(bill -> {
+                    // Filter theo billCode
+                    if (normalizedBillCode != null) {
+                        if (bill.getCode() == null || !bill.getCode().toLowerCase().contains(normalizedBillCode)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .filter(bill -> {
+                    // Filter theo customerName
+                    if (normalizedCustomerName != null) {
+                        if (bill.getCustomer() == null 
+                                || bill.getCustomer().getUser() == null
+                                || bill.getCustomer().getUser().getName() == null
+                                || !bill.getCustomer().getUser().getName().toLowerCase().contains(normalizedCustomerName)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .filter(bill -> {
+                    // Filter theo homestayTitle
+                    if (normalizedHomestayTitle != null) {
+                        if (bill.getHomestay() == null
+                                || bill.getHomestay().getTitle() == null
+                                || !bill.getHomestay().getTitle().toLowerCase().contains(normalizedHomestayTitle)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
                 .sorted(BILL_CREATED_AT_DESC)
                 .collect(Collectors.toList());
 
@@ -673,6 +786,10 @@ public class AdminServiceImpl implements AdminService {
             return new ApiResponse<>(500, "Admin user not found", null);
         }
 
+        // Cập nhập trạng thái của bill
+        bill.setStatus(StatusBill.REFUNDED);
+        billRepository.save(bill);
+
         // Cập nhật transaction: thêm proof image, set fromUser/toUser và chuyển status sang SUCCESS
         transaction.setProofImageUrl(request.getProofImageUrl());
         transaction.setFromUser(adminUser); // Admin là người gửi (hoàn tiền)
@@ -737,7 +854,7 @@ public class AdminServiceImpl implements AdminService {
             Transaction refundTransaction = Transaction.builder()
                     .amount(bill.getTotalAmount())
                     .transactionType(TypeTransaction.REFUND)
-                    .status(StatusTransaction.SUCCESS) // Admin đã duyệt nên thành công luôn
+                    .status(StatusTransaction.PENDING) // Admin đã duyệt nên thành công luôn
                     .bill(bill)
                     .fromUser(adminUser)
                     .toUser(bill.getCustomer().getUser())
@@ -945,21 +1062,6 @@ public class AdminServiceImpl implements AdminService {
                                 )
                         ));
 
-        // Tối ưu: Batch load tất cả images cho tất cả homestays cùng lúc (tránh N+1 query)
-        List<Homestay> allHomestays = hostHomestayTransactionsMap.values().stream()
-                .flatMap(homestayMap -> homestayMap.keySet().stream())
-                .distinct()
-                .collect(Collectors.toList());
-        
-        // Load tất cả images trong một query
-        List<HomestayImage> allImages = allHomestays.isEmpty() 
-                ? new ArrayList<>() 
-                : homestayImageRepository.findByHomestayIn(allHomestays);
-        
-        // Group images theo homestay để dễ lookup
-        java.util.Map<Long, List<HomestayImage>> imagesByHomestayId = allImages.stream()
-                .collect(Collectors.groupingBy(img -> img.getHomestay().getId()));
-
         // Map sang DTO
         List<HostWithPendingPayoutTransactionsResponse> result = hostHomestayTransactionsMap.entrySet().stream()
                 .map(entry -> {
@@ -994,15 +1096,17 @@ public class AdminServiceImpl implements AdminService {
                                                         .latitude(homestay.getAddress().getLatitude())
                                                         .longitude(homestay.getAddress().getLongitude())
                                                         .build() : null)
-                                                // Chỉ load images (đã được batch load)
-                                                .images(imagesByHomestayId.getOrDefault(homestay.getId(), new ArrayList<>())
-                                                        .stream()
-                                                        .map(img -> HomestayDTO.HomestayImageDTO.builder()
-                                                                .id(img.getId())
-                                                                .imageUrl(img.getImageUrl())
-                                                                .primary(img.getIsPrimary())
-                                                                .build())
-                                                        .collect(Collectors.toList()))
+                                                // Load images từ homestay.getListImage() (đã được eager load qua JOIN FETCH)
+                                                .images(homestay.getListImage() != null 
+                                                        ? homestay.getListImage().stream()
+                                                                .map(img -> HomestayDTO.ImageDTO.builder()
+                                                                        .id(img.getId())
+                                                                        .imageUrl(img.getImage_url())
+                                                                        .primary(img.getIsPrimary())
+                                                                        .build())
+                                                                .sorted(Comparator.comparing(HomestayDTO.ImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                                                                .collect(Collectors.toList())
+                                                        : new ArrayList<>())
                                                 // Không load các dữ liệu không cần thiết
                                                 .facilities(null)
                                                 .amenities(null)

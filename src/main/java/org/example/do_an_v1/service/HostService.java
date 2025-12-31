@@ -18,7 +18,7 @@ public interface HostService {
 
     ApiResponse<HostDTO> registerHost(Long userId, HostRegistrationRequest request) throws RuntimeException;
 
-    ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(StatusHost status, int page, int size);
+    ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(int page, int size, String status, String businessName, String email);
 
     ApiResponse<HostDTO> getHostDetailForAdmin(Long hostUserId);
 

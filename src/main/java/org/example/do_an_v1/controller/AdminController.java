@@ -69,20 +69,24 @@ public class AdminController {
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "page") int page,
+            @RequestParam(name = "size") int size,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "email", required = false) String email
     ) {
-        return adminService.getAllAdmins(page, size);
+        return adminService.getAllAdmins(page, size, status, email);
     }
 
     // Admin lấy danh sách tất cả customer
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping("/customers")
     public ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "page") int page,
+            @RequestParam(name = "size") int size,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "email", required = false) String email
     ) {
-        return adminService.getAllCustomers(page, size);
+        return adminService.getAllCustomers(page, size, status, email);
     }
 
     // Admin cập nhật trạng thái admin
@@ -136,9 +140,12 @@ public class AdminController {
             @RequestParam(name = "status", required = false) StatusBill status,
             @RequestParam(name = "customerId", required = false) Long customerId,
             @RequestParam(name = "hostId", required = false) Long hostId,
-            @RequestParam(name = "homestayId", required = false) Long homestayId
+            @RequestParam(name = "homestayId", required = false) Long homestayId,
+            @RequestParam(name = "billCode", required = false) String billCode,
+            @RequestParam(name = "customerName", required = false) String customerName,
+            @RequestParam(name = "homestayTitle", required = false) String homestayTitle
     ) {
-        return adminService.getAllBills(page, size, status, customerId, hostId, homestayId);
+        return adminService.getAllBills(page, size, status, customerId, hostId, homestayId, billCode, customerName, homestayTitle);
     }
 
     // Danh sách giao dịch cho một bill

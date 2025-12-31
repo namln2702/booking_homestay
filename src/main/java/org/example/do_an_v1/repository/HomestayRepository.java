@@ -26,6 +26,8 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
 
     Page<Homestay> findByStatusHomestay(StatusHomestay statusHomestay, Pageable pageable);
 
+    long countByStatusHomestay(StatusHomestay statusHomestay);
+
 
     @Query("""
         SELECT DISTINCT h
@@ -260,6 +262,44 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
             @Param("end") Date end
     );
 
-
+    /**
+     * Tìm homestays với các filter tùy chỉnh
+     * Sử dụng native query để tránh lỗi cast trong PostgreSQL
+     */
+    @Query(value = """
+        SELECT DISTINCT h.*
+        FROM tbl_homestays h
+        LEFT JOIN tbl_addresses a ON a.id = h.address_id
+        WHERE (CAST(:status AS text) IS NULL OR h.status = CAST(:status AS text))
+          AND (CAST(:minPrice AS float) IS NULL OR h.base_price >= CAST(:minPrice AS float))
+          AND (CAST(:maxPrice AS float) IS NULL OR h.base_price <= CAST(:maxPrice AS float))
+          AND (CAST(:minBedrooms AS integer) IS NULL OR h.num_bedrooms >= CAST(:minBedrooms AS integer))
+          AND (CAST(:minBathrooms AS integer) IS NULL OR h.num_bathrooms >= CAST(:minBathrooms AS integer))
+          AND (CAST(:minGuests AS integer) IS NULL OR h.min_guest >= CAST(:minGuests AS integer))
+          AND (CAST(:city AS text) IS NULL OR CAST(:city AS text) = '' OR LOWER(CAST(a.city AS text)) LIKE LOWER('%' || CAST(:city AS text) || '%'))
+          AND (CAST(:category AS text) IS NULL OR CAST(:category AS text) = '' OR LOWER(CAST(h.category AS text)) LIKE LOWER('%' || CAST(:category AS text) || '%'))
+          AND (
+               CAST(:search AS text) IS NULL 
+            OR CAST(:search AS text) = ''
+            OR LOWER(CAST(h.title AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')
+            OR LOWER(CAST(h.description AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')
+            OR LOWER(CAST(h.category AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')
+            OR LOWER(CAST(a.city AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')
+            OR LOWER(CAST(a.state AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')
+          )
+        ORDER BY h.created_at DESC
+    """, nativeQuery = true)
+    Page<Homestay> findHomestaysWithFilters(
+            @Param("status") String status,
+            @Param("minPrice") Float minPrice,
+            @Param("maxPrice") Float maxPrice,
+            @Param("minBedrooms") Integer minBedrooms,
+            @Param("minBathrooms") Integer minBathrooms,
+            @Param("minGuests") Integer minGuests,
+            @Param("city") String city,
+            @Param("category") String category,
+            @Param("search") String search,
+            Pageable pageable
+    );
 
 }

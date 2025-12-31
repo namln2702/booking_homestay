@@ -62,6 +62,7 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -143,22 +144,67 @@ public class HostServiceImpl implements HostService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(StatusHost status, int page, int size) {
+    public ApiResponse<PageResponse<List<HostDTO>>> getHostsForAdmin(int page, int size, String status, String businessName, String email) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
-        Pageable pageable = PageRequest.of(safePage, safeSize);
-        Page<Host> hostPage = status != null
-                ? hostRepository.findByStatusHost(status, pageable)
-                : hostRepository.findAll(pageable);
+        
+        // Parse status string to enum
+        StatusHost statusEnum = null;
+        if (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                statusEnum = StatusHost.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Invalid status, ignore
+            }
+        }
+        
+        // Normalize search strings
+        String normalizedBusinessName = (businessName != null && !businessName.trim().isEmpty()) 
+                ? businessName.trim().toLowerCase() 
+                : null;
+        String normalizedEmail = (email != null && !email.trim().isEmpty()) 
+                ? email.trim().toLowerCase() 
+                : null;
+        
+        // Load all hosts and filter
+        List<Host> allHosts = hostRepository.findAll();
 
-        List<HostDTO> hosts = hostPage.getContent().stream()
+        StatusHost finalStatusEnum = statusEnum;
+        List<Host> filteredHosts = allHosts.stream()
+                .filter(host -> finalStatusEnum == null || host.getStatusHost() == finalStatusEnum)
+                .filter(host -> {
+                    if (normalizedBusinessName == null) {
+                        return true;
+                    }
+                    if (host.getBusinessName() == null) {
+                        return false;
+                    }
+                    return host.getBusinessName().toLowerCase().contains(normalizedBusinessName);
+                })
+                .filter(host -> {
+                    if (normalizedEmail == null) {
+                        return true;
+                    }
+                    if (host.getUser() == null || host.getUser().getEmail() == null) {
+                        return false;
+                    }
+                    return host.getUser().getEmail().toLowerCase().contains(normalizedEmail);
+                })
+                .collect(Collectors.toList());
+        
+        // Manual pagination
+        long total = filteredHosts.size();
+        int fromIndex = Math.min(safePage * safeSize, filteredHosts.size());
+        int toIndex = Math.min(fromIndex + safeSize, filteredHosts.size());
+        
+        List<HostDTO> hosts = filteredHosts.subList(fromIndex, toIndex).stream()
                 .map(profileMapper::toHostDTO)
                 .toList();
 
         PageResponse<List<HostDTO>> response = PageResponse.<List<HostDTO>>builder()
-                .page(hostPage.getNumber())
-                .size(hostPage.getSize())
-                .total(hostPage.getTotalElements())
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
                 .items(hosts)
                 .build();
 

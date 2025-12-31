@@ -46,7 +46,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     /**
      * Tìm tất cả transaction theo danh sách type và status với JOIN FETCH để eager load
-     * Bill -> Homestay -> Host và Address để tránh N+1 query problem
+     * Bill -> Homestay -> Host, Address và Images để tránh N+1 query problem
      */
     @Query("""
         SELECT DISTINCT t
@@ -55,6 +55,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
         JOIN FETCH b.homestay h
         JOIN FETCH h.host host
         JOIN FETCH h.address a
+        LEFT JOIN FETCH h.listImage img
         WHERE t.transactionType IN :transactionTypes
           AND t.status = :status
     """)

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 public interface HostRepository extends JpaRepository<Host, Long> {
 
     Host findByUser(User user);
+    long findByStatusHost(StatusHost statusHost);
 
     Page<Host> findByStatusHost(StatusHost statusHost, Pageable pageable);
 }

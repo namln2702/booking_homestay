@@ -29,7 +29,7 @@ public class HomestayCreateRequest {
     private AddressRequest address;
     private List<Long> facilitiesIds;         // chọn từ hệ thống
     private List<AmenityRequest> amenities;   // host tự đăng
-    private List<HomestayImageRequest> imageUrls;
+    private List<ImageRequest> imageUrls;
     private List<HomestayRuleRequest> rules;
     private List<HomestayDailyPriceRequest> dailyPrices;
     private List<PersonCapacityRequest> listPersonHomestay;

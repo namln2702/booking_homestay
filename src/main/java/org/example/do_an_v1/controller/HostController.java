@@ -36,11 +36,13 @@ public class HostController {
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<List<HostDTO>>> listHosts(
-            @RequestParam(name = "status", required = false) StatusHost status,
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "page") int page,
+            @RequestParam(name = "size") int size,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "businessName", required = false) String businessName,
+            @RequestParam(name = "email", required = false) String email
     ) {
-        return hostService.getHostsForAdmin(status, page, size);
+        return hostService.getHostsForAdmin(page, size, status, businessName, email);
     }
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','ROLE_HOST')")
     @GetMapping("/me")

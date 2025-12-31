@@ -8,8 +8,8 @@ import lombok.Setter;
 import org.example.do_an_v1.dto.HomestayDTO.AmenityDTO;
 import org.example.do_an_v1.dto.HomestayDTO.DailyPriceDTO;
 import org.example.do_an_v1.dto.HomestayDTO.FacilityDTO;
-import org.example.do_an_v1.dto.HomestayDTO.HomestayImageDTO;
 import org.example.do_an_v1.dto.HomestayDTO.HomestayRuleDTO;
+import org.example.do_an_v1.dto.ImageDTO;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.enums.StatusHost;
 
@@ -51,7 +51,7 @@ public class HomestayDetailDTO {
     private List<AmenityDTO> amenities;
     private List<HomestayRuleDTO> rules;
     private List<DailyPriceDTO> dailyPrices;
-    private List<HomestayImageDTO> images;
+    private List<HomestayDTO.ImageDTO> images;
     private List<HomestayDTO.PersonCapacityDTO> personCapacities;
     private PriceInsightDTO priceInsight;
     private List<ReviewDetailDTO> reviews;

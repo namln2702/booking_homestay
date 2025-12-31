@@ -57,15 +57,11 @@ public class HomestayServiceImpl implements HomestayService {
     private final FacilitiesRepository facilitiesRepository;
     private final AmenitiesRepository amenitiesRepository;
     private final PricePerDayRepository pricePerDayRepository;
-    private final HomestayImageRepository homestayImageRepository;
     private final AdminRepository adminRepository;
     private final HomestayMapper homestayMapper;
     private final ImageRepository imageRepository;
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
-    private final CustomerRepository customerRepository;
-    private final BillRepository billRepository;
-    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
     private final PersonRepository personRepository;
 
     @Override
@@ -114,7 +110,7 @@ public class HomestayServiceImpl implements HomestayService {
         // Tự động tạo 30 ngày giá từ ngày tạo homestay với giá basePrice
 //        generateDefaultDailyPrices(savedHomestay);
 
-        List<HomestayImage> savedImages = persistImages(savedHomestay, request.getImageUrls());
+        List<Image> savedImages = persistImages(savedHomestay, request.getImageUrls());
 
         HomestayDTO response = homestayMapper.toDto(savedHomestay, savedImages);
         return new ApiResponse<>(201, "Homestay created successfully", response);
@@ -123,32 +119,46 @@ public class HomestayServiceImpl implements HomestayService {
     @Override
     @Transactional(readOnly = true)
     public ApiResponse<PageResponse<List<HomestayDTO>>> getHomestays(
-                                                                     StatusHomestay status,
-                                                                     int page,
-                                                                     int size) {
-//        if (adminUserId == null) {
-//            throw new IllegalArgumentException("Admin user id is required");
-//        }
-
-//        Admin admin = adminRepository.findById(adminUserId)
-//                .orElseThrow(() -> new IllegalArgumentException("Admin account not found for user id " + adminUserId));
-
-//        if (admin.getStatus() != Status.ACTIVE) {
-//            return new ApiResponse<>(403, "Admin account is not active", null);
-//        }
-
+            StatusHomestay status,
+            int page,
+            int size,
+            Float minPrice,
+            Float maxPrice,
+            Integer minBedrooms,
+            Integer minBathrooms,
+            Integer minGuests,
+            String city,
+            String category,
+            String search
+    ) {
         int safePage = Math.max(page, 0);
         int safeSize = size > 0 ? size : 20;
 
         Pageable pageable = PageRequest.of(safePage, safeSize);
-        Page<Homestay> homestayPage = status != null
-                ? homestayRepository.findByStatusHomestay(status, pageable)
-                : homestayRepository.findAll(pageable);
+        
+        // Convert enum sang string cho native query
+        String statusStr = status != null ? status.name() : null;
+        
+        // Sử dụng query method mới với tất cả các filter
+        Page<Homestay> homestayPage = homestayRepository.findHomestaysWithFilters(
+                statusStr,
+                minPrice,
+                maxPrice,
+                minBedrooms,
+                minBathrooms,
+                minGuests,
+                city,
+                category,
+                search,
+                pageable
+        );
 
         // Map từng homestay sang HomestayDTO với images
         List<HomestayDTO> homestayDTOs = homestayPage.getContent().stream()
                 .map(homestay -> {
-                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    List<Image> images = homestay.getListImage() != null 
+                            ? new ArrayList<>(homestay.getListImage()) 
+                            : new ArrayList<>();
                     return homestayMapper.toDto(homestay, images);
                 })
                 .toList();
@@ -157,6 +167,9 @@ public class HomestayServiceImpl implements HomestayService {
                 .page(homestayPage.getNumber())
                 .size(homestayPage.getSize())
                 .total(homestayPage.getTotalElements())
+                .active(homestayRepository.countByStatusHomestay(StatusHomestay.ACTIVE))
+                .inactive(homestayRepository.countByStatusHomestay(StatusHomestay.INACTIVE))
+                .pending(homestayRepository.countByStatusHomestay(StatusHomestay.PENDING))
                 .items(homestayDTOs)
                 .build();
 
@@ -180,7 +193,8 @@ public class HomestayServiceImpl implements HomestayService {
         Homestay homestay = homestayRepository.findById(homestayId)
                 .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + homestayId));
 
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+        // Sử dụng images từ homestay.getListImage() (đã được eager load nếu cần)
+        List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
         HomestayDTO response = homestayMapper.toDto(homestay, images);
         return new ApiResponse<>(200, "Homestay detail retrieved successfully", response);
     }
@@ -333,31 +347,31 @@ public class HomestayServiceImpl implements HomestayService {
         return pricePerDayRepository.save(newPricePerDay);
     }
 
-    private List<HomestayImage> persistImages(Homestay homestay, List<org.example.do_an_v1.dto.request.HomestayImageRequest> imageRequests) {
+    private List<Image> persistImages(Homestay homestay, List<org.example.do_an_v1.dto.request.ImageRequest> imageRequests) {
         if (imageRequests == null || imageRequests.isEmpty()) {
             return List.of();
         }
 
-        List<HomestayImage> images = new ArrayList<>();
+        List<Image> images = new ArrayList<>();
         boolean hasPrimary = imageRequests.stream()
                 .anyMatch(image -> Boolean.TRUE.equals(image.getIsPrimary()));
 
         for (int i = 0; i < imageRequests.size(); i++) {
-            org.example.do_an_v1.dto.request.HomestayImageRequest imageRequest = imageRequests.get(i);
+            org.example.do_an_v1.dto.request.ImageRequest imageRequest = imageRequests.get(i);
             boolean isPrimary = Boolean.TRUE.equals(imageRequest.getIsPrimary());
             if (!hasPrimary && i == 0) {
                 isPrimary = true;
             }
 
-            HomestayImage image = HomestayImage.builder()
-                    .imageUrl(imageRequest.getImageUrl())
+            Image image = Image.builder()
+                    .image_url(imageRequest.getImageUrl())
                     .isPrimary(isPrimary)
                     .homestay(homestay)
                     .build();
             images.add(image);
         }
 
-        return homestayImageRepository.saveAll(images);
+        return imageRepository.saveAll(images);
     }
 
     private void applyPersonCapacities(Homestay homestay, HomestayCreateRequest request) {
@@ -436,7 +450,7 @@ public class HomestayServiceImpl implements HomestayService {
 
         List<HomestayDTO> homestayDTOS = homestays.stream()
                 .map(homestay -> {
-                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
                     return homestayMapper.toDto(homestay, images);
                 })
                 .collect(Collectors.toList());
@@ -484,7 +498,7 @@ public class HomestayServiceImpl implements HomestayService {
 
         List<HomestayDTO> results = homestays.stream()
                 .map(homestay -> {
-                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+                    List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
                     return homestayMapper.toDto(homestay, images);
                 })
                 .collect(Collectors.toList());
@@ -529,7 +543,7 @@ public class HomestayServiceImpl implements HomestayService {
 //        // Map sang DTO với images
 //        List<HomestayDTO> homestayDTOS = homestayPage.getContent().stream()
 //                .map(homestay -> {
-//                    List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+//                    List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
 //                    return homestayMapper.toDto(homestay, images);
 //                })
 //                .collect(Collectors.toList());
@@ -561,8 +575,8 @@ public class HomestayServiceImpl implements HomestayService {
 //            return new ApiResponse<>(404, "Homestay is not available", null);
 //        }
 
-        // Lấy images của homestay
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+        // Lấy images của homestay từ entity
+        List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
 
         // Map sang HomestayDTO đầy đủ
         HomestayDTO homestayDTO = homestayMapper.toDto(homestay, images);
@@ -580,7 +594,7 @@ public class HomestayServiceImpl implements HomestayService {
         Homestay homestay = homestayRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Homestay not found for id " + id));
 
-        List<HomestayImage> images = homestayImageRepository.findByHomestay(homestay);
+        List<Image> images = homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>();
         HomestayDTO baseDto = homestayMapper.toDto(homestay, images);
         List<Review> reviews = reviewRepository.findByHomestay(homestay);
 
@@ -1028,7 +1042,7 @@ public class HomestayServiceImpl implements HomestayService {
 //        Homestay savedHomestay = homestayRepository.save(homestay);
 //
 //        // Lấy images
-//        List<HomestayImage> images = homestayImageRepository.findByHomestay(savedHomestay);
+//        List<Image> images = savedHomestay.getListImage() != null ? new ArrayList<>(savedHomestay.getListImage()) : new ArrayList<>();
 //
 //        // Map sang DTO
 //        HomestayDTO responseDTO = homestayMapper.toDto(savedHomestay, images);

@@ -48,12 +48,12 @@ public interface AdminService {
     /**
      * Lấy danh sách tất cả admin
      */
-    ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(int page, int size);
+    ApiResponse<PageResponse<List<AdminDTO>>> getAllAdmins(int page, int size, String status, String email);
 
     /**
      * Lấy danh sách tất cả customer
      */
-    ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(int page, int size);
+    ApiResponse<PageResponse<List<CustomerDTO>>> getAllCustomers(int page, int size, String status, String email);
 
     /**
      * Cập nhật trạng thái admin
@@ -84,7 +84,10 @@ public interface AdminService {
             StatusBill status,
             Long customerId,
             Long hostId,
-            Long homestayId
+            Long homestayId,
+            String billCode,
+            String customerName,
+            String homestayTitle
     );
 
     /**

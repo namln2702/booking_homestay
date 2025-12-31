@@ -2,16 +2,10 @@ package org.example.do_an_v1.mapper;
 
 import org.example.do_an_v1.dto.HomestayDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
-import org.example.do_an_v1.entity.Address;
-import org.example.do_an_v1.entity.Amenities;
-import org.example.do_an_v1.entity.Facilities;
-import org.example.do_an_v1.entity.Homestay;
-import org.example.do_an_v1.entity.HomestayDailyPrice;
-import org.example.do_an_v1.entity.HomestayImage;
-import org.example.do_an_v1.entity.HomestayRule;
-import org.example.do_an_v1.entity.PersonHomestay;
+import org.example.do_an_v1.entity.*;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +14,7 @@ import java.util.stream.Collectors;
 @Component
 public class HomestayMapper {
 
-    public HomestayDTO toDto(Homestay homestay, List<HomestayImage> images) {
+    public HomestayDTO toDto(Homestay homestay, List<Image> images) {
         if (homestay == null) {
             return null;
         }
@@ -31,7 +25,9 @@ public class HomestayMapper {
         List<HomestayDTO.AmenityDTO> amenities = mapAmenities(homestay.getListAmenities());
         List<HomestayDTO.HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
         List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
-        List<HomestayDTO.HomestayImageDTO> imageDtos = mapImages(images);
+        // Sử dụng images từ parameter hoặc từ homestay.getListImage()
+        List<Image> imagesToMap = images != null ? images : (homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>());
+        List<HomestayDTO.ImageDTO> imageDtos = mapImages(imagesToMap);
         List<HomestayDTO.PersonCapacityDTO> personCapacities = mapPersonCapacities(homestay.getListPersonHomestay());
 
         int reviewCount = homestay.getListReview() != null ? homestay.getListReview().size() : 0;
@@ -156,17 +152,17 @@ public class HomestayMapper {
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.HomestayImageDTO> mapImages(List<HomestayImage> images) {
-        if (images == null) {
+    private List<HomestayDTO.ImageDTO> mapImages(List<Image> images) {
+        if (images == null || images.isEmpty()) {
             return List.of();
         }
         return images.stream()
-                .map(image -> HomestayDTO.HomestayImageDTO.builder()
+                .map(image -> HomestayDTO.ImageDTO.builder()
                         .id(image.getId())
-                        .imageUrl(image.getImageUrl())
+                        .imageUrl(image.getImage_url())
                         .primary(image.getIsPrimary())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.HomestayImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(HomestayDTO.ImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 

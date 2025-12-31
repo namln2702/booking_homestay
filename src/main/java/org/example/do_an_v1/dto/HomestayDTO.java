@@ -42,7 +42,7 @@ public class HomestayDTO {
     private List<AmenityDTO> amenities;
     private List<HomestayRuleDTO> rules;
     private List<DailyPriceDTO> dailyPrices;
-    private List<HomestayImageDTO> images;
+    private List<ImageDTO> images;
     private List<PersonCapacityDTO> personCapacities;
 
     @Getter
@@ -109,7 +109,7 @@ public class HomestayDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class HomestayImageDTO {
+    public static class ImageDTO {
         private Long id;
         private String imageUrl;
         private Boolean primary;

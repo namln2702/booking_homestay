@@ -17,9 +17,19 @@ public interface HomestayService {
 
     ApiResponse<HomestayDTO> createHomestay(Long hostUserId, HomestayCreateRequest request);
 
-    ApiResponse<PageResponse<List<HomestayDTO>>> getHomestays(StatusHomestay status,
-                                                               int page,
-                                                               int size);
+    ApiResponse<PageResponse<List<HomestayDTO>>> getHomestays(
+            StatusHomestay status,
+            int page,
+            int size,
+            Float minPrice,
+            Float maxPrice,
+            Integer minBedrooms,
+            Integer minBathrooms,
+            Integer minGuests,
+            String city,
+            String category,
+            String search
+    );
 
     ApiResponse<HomestayDTO> getHomestayDetailForAdmin(Long adminUserId, Long homestayId);
 

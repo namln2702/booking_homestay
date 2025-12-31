@@ -29,11 +29,19 @@ public class HomestayController {
 
     @GetMapping("/all")
     public ApiResponse<?> homestays(
-            @RequestParam(name = "status", required = false ) StatusHomestay statusHomestay,
+            @RequestParam(name = "status", required = false) StatusHomestay status,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "minPrice", required = false) Float minPrice,
+            @RequestParam(name = "maxPrice", required = false) Float maxPrice,
+            @RequestParam(name = "minBedrooms", required = false) Integer minBedrooms,
+            @RequestParam(name = "minBathrooms", required = false) Integer minBathrooms,
+            @RequestParam(name = "minGuests", required = false) Integer minGuests,
+            @RequestParam(name = "city", required = false) String city,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "search", required = false) String search
     ){
-        return homestayService.getHomestays(statusHomestay , page, size);
+        return homestayService.getHomestays(status, page, size, minPrice, maxPrice, minBedrooms, minBathrooms, minGuests, city, category, search);
     }
 
     @GetMapping("/detail")

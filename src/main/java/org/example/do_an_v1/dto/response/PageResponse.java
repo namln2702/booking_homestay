@@ -11,6 +11,9 @@ public class PageResponse<T> implements Serializable {
     private int page;
     private int size;
     private long total;
+    private long active;
+    private long inactive;
+    private long pending;
     private T items;
 }
 
