@@ -1,6 +1,5 @@
 package org.example.do_an_v1.dto;
 
-import jakarta.persistence.Column;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -15,6 +14,8 @@ public class DailyPriceDVO {
     private Float price;
 
     private Boolean isBooked ;
+
+    private Boolean activeHost;
 
     private Date date;
 }

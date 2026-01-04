@@ -44,6 +44,7 @@ public class HomestayDTO {
     private List<DailyPriceDTO> dailyPrices;
     private List<ImageDTO> images;
     private List<PersonCapacityDTO> personCapacities;
+    private List<TouristAttractionsDTO> touristAttractions;
 
     @Getter
     @Setter
@@ -91,6 +92,7 @@ public class HomestayDTO {
         private Date day;
         private Float price;
         private Boolean booked;
+        private Boolean activeHost;
     }
 
     @Getter
@@ -123,5 +125,17 @@ public class HomestayDTO {
     public static class PersonCapacityDTO {
         private TypePerson type;
         private Integer quantity;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class TouristAttractionsDTO {
+        private Long id;
+        private String name;
+        private String description;
+        private String imageUrl;
     }
 }

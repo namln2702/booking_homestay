@@ -723,20 +723,30 @@ public class HostServiceImpl implements HostService {
                         .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
 
                 if (existingDailyPrice.isPresent()) {
-                    // Đã tồn tại: set isBooked = false (bật lại)
                     HomestayDailyPrice dailyPrice = existingDailyPrice.get();
+                    
+                    // Kiểm tra xem có phải do host tắt không (activeHost = true)
+                    // Chỉ cho phép enable những ngày do chính host tắt
+                    if (!Boolean.TRUE.equals(dailyPrice.getActiveHost())) {
+                        // Không phải do host tắt, không thể enable
+                        return new ApiResponse<>(409, "Cannot enable this day. It was not disabled by host or already booked by customer", null);
+                    }
+                    
+                    // Đã tồn tại và do host tắt: set isBooked = false (bật lại) và activeHost = false
                     dailyPrice.setIsBooked(false);
+                    dailyPrice.setActiveHost(false);
                     dailyPrice.setPrice(price);
                     // Xóa bill nếu có (unlock)
                     dailyPrice.setBill(null);
                     homestayDailyPricesRepository.save(dailyPrice);
                 } else {
-                    // Chưa tồn tại: tạo mới với isBooked = false
+                    // Chưa tồn tại: tạo mới với isBooked = false và activeHost = false
                     HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
                             .homestay(homestay)
                             .pricePerDay(pricePerDay)
                             .price(price)
                             .isBooked(false)
+                            .activeHost(false)
                             .bill(null)
                             .build();
                     homestayDailyPricesRepository.save(newDailyPrice);
@@ -769,12 +779,17 @@ public class HostServiceImpl implements HostService {
             // Xử lý từng ngày trong danh sách
             for (UpdateHomestayPriceRequest.DailyPriceUpdate priceUpdate : request.getDailyPrices()) {
                 Date day = priceUpdate.getDay();
+                Float price = priceUpdate.getPrice();
 
-                // Tìm PricePerDay
+                // Tìm hoặc tạo PricePerDay
                 PricePerDay pricePerDay = pricePerDayRepository.findByDay(day).orElse(null);
                 if (pricePerDay == null) {
-                    // Không có PricePerDay thì không có gì để tắt
-                    continue;
+                    // Nếu chưa có PricePerDay thì tạo mới
+                    pricePerDay = PricePerDay.builder()
+                            .day(day)
+                            .price(price != null ? price : homestay.getBasePrice())
+                            .build();
+                    pricePerDay = pricePerDayRepository.save(pricePerDay);
                 }
 
                 // Tìm HomestayDailyPrice đã tồn tại
@@ -782,20 +797,23 @@ public class HostServiceImpl implements HostService {
                         .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
 
                 if (existingDailyPrice.isPresent()) {
+                    // Nếu đã có HomestayDailyPrice thì set isBooked = true và activeHost = true
                     HomestayDailyPrice dailyPrice = existingDailyPrice.get();
-                    
-                    // Nếu đã được book (có bill) thì set isBooked = true (không cho book thêm)
-                    // Nếu chưa được book thì xóa luôn
-                    if (dailyPrice.getBill() != null || Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-                        // Đã được book: set isBooked = true để không cho book thêm
-                        dailyPrice.setIsBooked(true);
-                        homestayDailyPricesRepository.save(dailyPrice);
-                    } else {
-                        // Chưa được book: xóa luôn
-                        homestayDailyPricesRepository.delete(dailyPrice);
-                    }
+                    dailyPrice.setIsBooked(true);
+                    dailyPrice.setActiveHost(true);
+                    homestayDailyPricesRepository.save(dailyPrice);
+                } else {
+                    // Nếu chưa có thì tạo mới HomestayDailyPrice với isBooked = true và activeHost = true
+                    HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
+                            .homestay(homestay)
+                            .pricePerDay(pricePerDay)
+                            .price(price != null ? price : homestay.getBasePrice())
+                            .isBooked(true)
+                            .activeHost(true)
+                            .bill(null)
+                            .build();
+                    homestayDailyPricesRepository.save(newDailyPrice);
                 }
-                // Nếu không tồn tại thì không làm gì (đã tắt rồi)
             }
 
             return new ApiResponse<>(200, "Homestay days disabled successfully", null);
@@ -867,6 +885,7 @@ public class HostServiceImpl implements HostService {
                     HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
                             .price(price)
                             .isBooked(false)
+                            .activeHost(false)
                             .pricePerDay(pricePerDay)
                             .homestay(homestay)
                             .bill(null)
