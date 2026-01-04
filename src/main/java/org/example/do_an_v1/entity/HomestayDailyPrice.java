@@ -20,6 +20,9 @@ public class HomestayDailyPrice extends BaseEntity{
     @Column(name = "isBooked")
     private Boolean isBooked ;
 
+    @Column(name = "activeHost")
+    private Boolean activeHost;
+
     @ManyToOne
     @JoinColumn(name = "price_per_day_id", nullable = false)
     private PricePerDay pricePerDay;

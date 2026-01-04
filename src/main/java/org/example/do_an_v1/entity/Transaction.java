@@ -35,11 +35,11 @@ public class Transaction extends BaseEntity{
     private StatusTransaction status;
 
     @ManyToOne
-    @JoinColumn(name = "from_user", nullable = false)
+    @JoinColumn(name = "from_user")
     User fromUser;
 
     @ManyToOne
-    @JoinColumn(name = "to_user", nullable = true)
+    @JoinColumn(name = "to_user")
     User toUser;
 
     @ManyToOne

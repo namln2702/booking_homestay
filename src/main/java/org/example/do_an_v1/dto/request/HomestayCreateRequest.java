@@ -33,4 +33,5 @@ public class HomestayCreateRequest {
     private List<HomestayRuleRequest> rules;
     private List<HomestayDailyPriceRequest> dailyPrices;
     private List<PersonCapacityRequest> listPersonHomestay;
+    private List<TouristAttractionsRequest> touristAttractions;
 }

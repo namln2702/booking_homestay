@@ -11,6 +11,8 @@ public class DailyPriceMapper {
                 .id(entity.getId())
                 .date(entity.getPricePerDay().getDay())
                 .price(entity.getPrice())
+                .isBooked(entity.getIsBooked())
+                .activeHost(entity.getActiveHost())
                 .build();
     }
 

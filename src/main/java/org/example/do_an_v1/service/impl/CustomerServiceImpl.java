@@ -457,6 +457,7 @@ public class CustomerServiceImpl implements CustomerService {
                 homestayDailyPrice = HomestayDailyPrice.builder()
                         .price(pricePerDay.getPrice())
                         .isBooked(Boolean.FALSE)
+                        .activeHost(false)
                         .pricePerDay(pricePerDay)
                         .homestay(homestay)
                         .build();

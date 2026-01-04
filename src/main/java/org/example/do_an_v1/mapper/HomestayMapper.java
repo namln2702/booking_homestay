@@ -29,6 +29,7 @@ public class HomestayMapper {
         List<Image> imagesToMap = images != null ? images : (homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>());
         List<HomestayDTO.ImageDTO> imageDtos = mapImages(imagesToMap);
         List<HomestayDTO.PersonCapacityDTO> personCapacities = mapPersonCapacities(homestay.getListPersonHomestay());
+        List<HomestayDTO.TouristAttractionsDTO> touristAttractions = mapTouristAttractions(homestay.getListTourisAttractions());
 
         int reviewCount = homestay.getListReview() != null ? homestay.getListReview().size() : 0;
 
@@ -57,6 +58,7 @@ public class HomestayMapper {
                 .dailyPrices(dailyPrices)
                 .images(imageDtos)
                 .personCapacities(personCapacities)
+                .touristAttractions(touristAttractions)
                 .build();
     }
 
@@ -147,6 +149,7 @@ public class HomestayMapper {
                         .day(price.getPricePerDay() != null ? price.getPricePerDay().getDay() : null)
                         .price(price.getPrice())
                         .booked(price.getIsBooked())
+                        .activeHost(price.getActiveHost())
                         .build())
                 .sorted(Comparator.comparing(HomestayDTO.DailyPriceDTO::getDay, Comparator.nullsLast(java.util.Date::compareTo)))
                 .collect(Collectors.toList());
@@ -178,6 +181,22 @@ public class HomestayMapper {
                         .build())
                 .filter(dto -> dto.getType() != null)
                 .sorted(Comparator.comparing(dto -> dto.getType().ordinal()))
+                .collect(Collectors.toList());
+    }
+
+    private List<HomestayDTO.TouristAttractionsDTO> mapTouristAttractions(Set<TouristAttractions> touristAttractions) {
+        if (touristAttractions == null) {
+            return List.of();
+        }
+        return touristAttractions.stream()
+                .filter(ta -> ta != null && !Boolean.TRUE.equals(ta.getDeleted()))
+                .map(ta -> HomestayDTO.TouristAttractionsDTO.builder()
+                        .id(ta.getId())
+                        .name(ta.getName())
+                        .description(ta.getDescription())
+                        .imageUrl(ta.getImageUrl())
+                        .build())
+                .sorted(Comparator.comparing(HomestayDTO.TouristAttractionsDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 }

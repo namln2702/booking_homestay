@@ -13,6 +13,7 @@ import org.example.do_an_v1.dto.request.HomestayCreateRequest;
 import org.example.do_an_v1.dto.request.HomestayDailyPriceRequest;
 import org.example.do_an_v1.dto.request.HomestayRuleRequest;
 import org.example.do_an_v1.dto.request.PersonCapacityRequest;
+import org.example.do_an_v1.dto.request.TouristAttractionsRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
 import org.example.do_an_v1.entity.*;
@@ -63,6 +64,7 @@ public class HomestayServiceImpl implements HomestayService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final PersonRepository personRepository;
+    private final TouristAttractionsRepository touristAttractionsRepository;
 
     @Override
     @Transactional
@@ -104,6 +106,7 @@ public class HomestayServiceImpl implements HomestayService {
         applyRules(homestay, request);
         applyDailyPrices(homestay, request);
         applyPersonCapacities(homestay, request);
+        applyTouristAttractions(homestay, request);
 
         Homestay savedHomestay = homestayRepository.save(homestay);
 
@@ -323,6 +326,7 @@ public class HomestayServiceImpl implements HomestayService {
                     return HomestayDailyPrice.builder()
                             .price(priceRequest.getPrice())
                             .isBooked(Boolean.FALSE)
+                            .activeHost(false)
                             .pricePerDay(pricePerDay)
                             .homestay(homestay)
                             .build();
@@ -398,6 +402,36 @@ public class HomestayServiceImpl implements HomestayService {
                 .collect(Collectors.toSet());
 
         homestay.setListPersonHomestay(capacities);
+    }
+
+    private void applyTouristAttractions(Homestay homestay, HomestayCreateRequest request) {
+        List<TouristAttractionsRequest> touristAttractionsRequests = request.getTouristAttractions();
+        if (touristAttractionsRequests == null || touristAttractionsRequests.isEmpty()) {
+            return;
+        }
+
+        List<TouristAttractions> touristAttractions = touristAttractionsRequests.stream()
+                .map(req -> {
+                    if (req == null || req.getName() == null || req.getName().isBlank()) {
+                        throw new IllegalArgumentException("Tourist attraction name is required");
+                    }
+                    if (req.getDescription() == null || req.getDescription().isBlank()) {
+                        throw new IllegalArgumentException("Tourist attraction description is required");
+                    }
+                    if (req.getImageUrl() == null || req.getImageUrl().isBlank()) {
+                        throw new IllegalArgumentException("Tourist attraction image URL is required");
+                    }
+                    return TouristAttractions.builder()
+                            .name(req.getName())
+                            .description(req.getDescription())
+                            .imageUrl(req.getImageUrl())
+                            .deleted(false)
+                            .homestay(homestay)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        touristAttractionsRepository.saveAll(touristAttractions);
     }
 
     private Person resolvePerson(TypePerson type) {
