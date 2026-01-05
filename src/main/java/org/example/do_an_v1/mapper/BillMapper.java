@@ -32,6 +32,7 @@ public class BillMapper {
                 .actualCheckin(bill.getActualCheckinTime())
                 .actualCheckout(bill.getActualCheckoutTime())
                 .totalAmount(bill.getTotalAmount())
+                .commission(bill.getCommission())
 
                 // Thông tin khách hàng
                 .customerDTO(CustomerMapper.toDTO(bill.getCustomer()))
@@ -83,6 +84,7 @@ public class BillMapper {
         bill.setActualCheckinTime(dto.getActualCheckin());
         bill.setActualCheckoutTime(dto.getActualCheckout());
         bill.setTotalAmount(dto.getTotalAmount());
+        bill.setCommission(dto.getCommission());
 
         // Các quan hệ bên dưới sẽ được gán ở tầng Service để tránh lỗi detached entity
         // (vì cần lấy từ DB trước rồi set vào Bill)

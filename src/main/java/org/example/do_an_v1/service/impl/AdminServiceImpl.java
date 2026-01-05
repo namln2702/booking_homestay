@@ -35,7 +35,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.nimbusds.jose.JOSEException;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.Map;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -75,6 +78,7 @@ public class AdminServiceImpl implements AdminService {
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
     private final HostRepository hostRepository;
+    private final HomestayDailyPricesRepository homestayDailyPricesRepository;
     private final HomestayRepository homestayRepository;
     private final ConfirmEmailRepository confirmEmailRepository;
     private final BillRepository billRepository;
@@ -790,6 +794,18 @@ public class AdminServiceImpl implements AdminService {
         bill.setStatus(StatusBill.REFUNDED);
         billRepository.save(bill);
 
+        // Trừ điểm homestay khi complaint thành công (0.2 điểm)
+        if (bill.getHomestay() != null) {
+            Homestay homestay = bill.getHomestay();
+            Float currentPoint = homestay.getPoint();
+            if (currentPoint == null) {
+                currentPoint = 5.0f; // Mặc định nếu chưa có
+            }
+            float newPoint = Math.max(0.0f, currentPoint - 0.2f);
+            homestay.setPoint(newPoint);
+            homestayRepository.save(homestay);
+        }
+
         // Cập nhật transaction: thêm proof image, set fromUser/toUser và chuyển status sang SUCCESS
         transaction.setProofImageUrl(request.getProofImageUrl());
         transaction.setFromUser(adminUser); // Admin là người gửi (hoàn tiền)
@@ -862,13 +878,16 @@ public class AdminServiceImpl implements AdminService {
                     .build();
             transactionRepository.save(refundTransaction);
 
+            // Nếu bill chưa có actual_checkout, set nó = thời điểm hiện tại và unlock các ngày còn lại
+            handleRefundPendingForActiveStay(bill);
+            
             // Cập nhật bill sang REFUNDED
             bill.setStatus(StatusBill.REFUNDED_PENDING);
             billRepository.save(bill);
 
             return new ApiResponse<>(200, 
                     "Complaint approved. Bill status changed to REFUNDED. Refund transaction created.", 
-                    java.util.Map.of(
+                    Map.of(
                             "billId", bill.getId(),
                             "billStatus", bill.getStatus(),
                             "transactionId", refundTransaction.getId(),
@@ -882,7 +901,7 @@ public class AdminServiceImpl implements AdminService {
 
             return new ApiResponse<>(200, 
                     "Complaint rejected. Bill status changed to REJECTED.", 
-                    java.util.Map.of(
+                    Map.of(
                             "billId", bill.getId(),
                             "billStatus", bill.getStatus()
                     ));
@@ -1050,7 +1069,7 @@ public class AdminServiceImpl implements AdminService {
         }
 
         // Group transactions theo Host (thông qua Bill -> Homestay -> Host)
-        java.util.Map<Host, java.util.Map<Homestay, List<Transaction>>> hostHomestayTransactionsMap = 
+        Map<Host, Map<Homestay, List<Transaction>>> hostHomestayTransactionsMap = 
                 pendingPayoutTransactions.stream()
                         .filter(t -> t.getBill() != null 
                                 && t.getBill().getHomestay() != null 
@@ -1066,7 +1085,7 @@ public class AdminServiceImpl implements AdminService {
         List<HostWithPendingPayoutTransactionsResponse> result = hostHomestayTransactionsMap.entrySet().stream()
                 .map(entry -> {
                     Host host = entry.getKey();
-                    java.util.Map<Homestay, List<Transaction>> homestayTransactionsMap = entry.getValue();
+                    Map<Homestay, List<Transaction>> homestayTransactionsMap = entry.getValue();
 
                     // Map Host sang HostDTO
                     HostDTO hostDTO = HostMapper.hostMapHostDTO(host);
@@ -1149,5 +1168,50 @@ public class AdminServiceImpl implements AdminService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>(200, "Hosts with pending payout transactions retrieved successfully", result);
+    }
+
+    /**
+     * Xử lý khi bill chuyển sang REFUNDED_PENDING trong thời gian lưu trú
+     * - Chỉ unlock các ngày còn lại nếu actual_checkout_time là null (chưa checkout)
+     * - Nếu bill chưa có actual_checkout_time, set nó = thời điểm hiện tại và unlock các ngày từ đó đến checkOut ban đầu
+     */
+    private void handleRefundPendingForActiveStay(Bill bill) {
+        if (bill == null || bill.getHomestay() == null) {
+            return;
+        }
+
+        // Chỉ unlock nếu actual_checkout_time là null (chưa checkout)
+        if (bill.getActualCheckoutTime() == null) {
+            // Set actual_checkout_time = thời điểm hiện tại
+            LocalDateTime now = LocalDateTime.now();
+            bill.setActualCheckoutTime(now);
+            billRepository.save(bill);
+
+            // Unlock các ngày từ actual_checkout (hiện tại) đến checkOut ban đầu
+            LocalDateTime originalCheckOut = bill.getCheckOut();
+            if (originalCheckOut != null && now.isBefore(originalCheckOut)) {
+                // Chuyển đổi LocalDateTime sang Date để query
+                LocalDate actualCheckoutLocalDate = now.toLocalDate();
+                LocalDate checkOutLocalDate = originalCheckOut.toLocalDate();
+                Date startDate = java.sql.Date.valueOf(actualCheckoutLocalDate);
+                Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
+
+                // Tìm các HomestayDailyPrice trong khoảng thời gian từ actual_checkout đến checkOut
+                List<HomestayDailyPrice> dailyPricesToUnlock = homestayDailyPricesRepository.findByHomestayAndDateRange(
+                        bill.getHomestay().getId(),
+                        startDate,
+                        endDate
+                );
+
+                // Chỉ unlock những ngày thuộc về bill này
+                for (HomestayDailyPrice dailyPrice : dailyPricesToUnlock) {
+                    if (dailyPrice.getBill() != null && dailyPrice.getBill().getId().equals(bill.getId())) {
+                        dailyPrice.setIsBooked(false);
+                        dailyPrice.setBill(null);
+                        homestayDailyPricesRepository.save(dailyPrice);
+                    }
+                }
+            }
+        }
     }
 }

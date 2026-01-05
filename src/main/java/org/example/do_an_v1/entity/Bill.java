@@ -40,6 +40,9 @@ public class Bill extends BaseEntity{
     @Column(name = "total_amount", precision = 12, scale = 2)
     private java.math.BigDecimal totalAmount; // Tổng giá trị bill (100%)
 
+    @Column(name = "commission", precision = 12, scale = 2)
+    private java.math.BigDecimal commission; // Hoa hồng của ADMIN cho bill này
+
     @ManyToOne
     @JoinColumn(name = "homestay_id")
     Homestay homestay;

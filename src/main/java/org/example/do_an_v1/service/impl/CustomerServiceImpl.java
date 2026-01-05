@@ -23,6 +23,7 @@ import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.repository.*;
 import org.example.do_an_v1.service.CustomerService;
 import org.example.do_an_v1.service.EmailService;
+import org.example.do_an_v1.service.SystemConfigService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
 //import org.example.do_an_v1.utils.Date;
 import org.example.do_an_v1.utils.GenNumber;
@@ -111,6 +112,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final PricePerDayRepository pricePerDayRepository;
     private final EmailService emailService;
     private final AdminRepository adminRepository;
+    private final SystemConfigService systemConfigService;
 
     private static String trimToNull(String value) {
         if (value == null) {
@@ -516,7 +518,17 @@ public class CustomerServiceImpl implements CustomerService {
                 .sum();
 
         // Lưu tổng giá trị vào bill
-        billResult.setTotalAmount(java.math.BigDecimal.valueOf(totalAmount));
+        BigDecimal totalAmountBD = java.math.BigDecimal.valueOf(totalAmount);
+        billResult.setTotalAmount(totalAmountBD);
+
+        // Tính hoa hồng cho ADMIN từ system config
+        Optional<BigDecimal> commissionRateOpt = systemConfigService.getConfigValueAsBigDecimal("ADMIN_COMMISSION_RATE");
+        if (commissionRateOpt.isEmpty()) {
+            return new ApiResponse<>(500, "System config 'ADMIN_COMMISSION_RATE' not found. Please configure it in system_config table.", null);
+        }
+        BigDecimal commissionRate = commissionRateOpt.get();
+        BigDecimal commission = totalAmountBD.multiply(commissionRate);
+        billResult.setCommission(commission);
 
         // Tính 30% cho thanh toán cọc
         double depositAmount = totalAmount * 0.3;
@@ -712,7 +724,10 @@ public class CustomerServiceImpl implements CustomerService {
             homestay.setRating((float) averageRating);
         }
 
-        // Lưu homestay với rating mới
+        // Trừ điểm homestay dựa trên rating của review
+        deductPointForReview(homestay, reviewDTO.getRating());
+
+        // Lưu homestay với rating và point mới
         homestay = homestayRepository.save(homestay);
 
         // Map sang DTO để trả về
@@ -764,9 +779,13 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(404, "Homestay not found for this review", null);
         }
 
+        // Lưu rating cũ để tính lại điểm nếu thay đổi
+        Integer oldRating = review.getRating();
+        Integer newRating = reviewDTO.getRating();
+
         // Update rating nếu có
-        if (reviewDTO.getRating() != null) {
-            review.setRating(reviewDTO.getRating());
+        if (newRating != null) {
+            review.setRating(newRating);
         }
 
         // Update comment nếu có
@@ -805,15 +824,32 @@ public class CustomerServiceImpl implements CustomerService {
         Review updatedReview = reviewRepository.save(review);
 
         // Tính lại rating trung bình của homestay
-        // List<Review> allReviews = reviewRepository.findByHomestay(homestay);
-        // if (!allReviews.isEmpty()) {
-        //     double averageRating = allReviews.stream()
-        //             .mapToInt(Review::getRating)
-        //             .average()
-        //             .orElse(0.0);
-        //     homestay.setRating((float) averageRating);
-        //     homestayRepository.save(homestay);
-        // }
+        List<Review> allReviews = reviewRepository.findByHomestay(homestay);
+        if (!allReviews.isEmpty()) {
+            double averageRating = allReviews.stream()
+                    .mapToInt(Review::getRating)
+                    .average()
+                    .orElse(0.0);
+            homestay.setRating((float) averageRating);
+        }
+
+        // Nếu rating thay đổi, tính lại điểm
+        if (newRating != null && !newRating.equals(oldRating)) {
+            // Hoàn lại điểm cũ (nếu có)
+            if (oldRating != null && oldRating >= 1 && oldRating <= 3) {
+                float oldDeduction = getDeductionForRating(oldRating);
+                Float currentPoint = homestay.getPoint();
+                if (currentPoint == null) {
+                    currentPoint = 5.0f;
+                }
+                homestay.setPoint(Math.min(5.0f, currentPoint + oldDeduction));
+            }
+            // Trừ điểm mới
+            deductPointForReview(homestay, newRating);
+        }
+
+        // Lưu homestay với rating và point mới
+        homestayRepository.save(homestay);
 
         // Map sang DTO để trả về
         ReviewDTO responseDTO = ReviewMapper.toDTO(updatedReview);
@@ -1727,5 +1763,40 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         return new ApiResponse<>(200, "Complaint cancelled successfully", data);
+    }
+
+    /**
+     * Trừ điểm homestay dựa trên rating của review
+     * 1 sao: trừ 0.09, 2 sao: trừ 0.07, 3 sao: trừ 0.05, 4-5 sao: không trừ
+     */
+    private void deductPointForReview(Homestay homestay, Integer rating) {
+        if (homestay == null || rating == null) {
+            return;
+        }
+
+        Float currentPoint = homestay.getPoint();
+        if (currentPoint == null) {
+            currentPoint = 5.0f; // Mặc định nếu chưa có
+        }
+
+        float deduction = getDeductionForRating(rating);
+        float newPoint = Math.max(0.0f, currentPoint - deduction);
+        homestay.setPoint(newPoint);
+    }
+
+    /**
+     * Lấy số điểm bị trừ dựa trên rating
+     */
+    private float getDeductionForRating(Integer rating) {
+        if (rating == null) {
+            return 0.0f;
+        }
+        return switch (rating) {
+            case 1 -> 0.09f;
+            case 2 -> 0.07f;
+            case 3 -> 0.05f;
+            case 4, 5 -> 0.0f; // Không trừ điểm cho 4-5 sao
+            default -> 0.0f;
+        };
     }
 }

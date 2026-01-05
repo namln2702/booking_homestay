@@ -58,6 +58,9 @@ public class Homestay extends BaseEntity{
     @Column(name = "base_price")
     private Float basePrice;
 
+    @Column(name = "point")
+    private Float point;
+
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "addressId", referencedColumnName = "id")
     @MapsId

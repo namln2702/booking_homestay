@@ -94,6 +94,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .numKitchen(request.getNumKitchen())
                 .basePrice(request.getBasePrice() != null ? request.getBasePrice() : 0f)
                 .rating(0f)
+                .point(5.0f) // Điểm mặc định là 5.0
                 .advancedPayment(0)
                 .warningCount(0)
                 .statusHomestay(StatusHomestay.PENDING)
@@ -648,6 +649,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .advancedPayment(homestay.getAdvancedPayment())
                 .warningCount(homestay.getWarningCount())
                 .basePrice(homestay.getBasePrice())
+                .point(homestay.getPoint())
                 .status(homestay.getStatusHomestay())
                 .address(baseDto.getAddress())
                 .facilities(baseDto.getFacilities())

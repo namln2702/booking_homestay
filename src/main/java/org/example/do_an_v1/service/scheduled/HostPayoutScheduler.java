@@ -90,7 +90,10 @@ public class HostPayoutScheduler {
         for (Bill bill : succeedBills) {
             if (processBillPayout(bill, adminUser)) {
                 totalCreated++;
-                totalAmount = totalAmount.add(calculateTotalReceivedAmount(bill));
+                BigDecimal totalReceived = calculateTotalReceivedAmount(bill);
+                BigDecimal commission = bill.getCommission() != null ? bill.getCommission() : BigDecimal.ZERO;
+                BigDecimal payoutAmount = totalReceived.subtract(commission);
+                totalAmount = totalAmount.add(payoutAmount);
             }
             totalProcessed++;
         }
@@ -99,7 +102,10 @@ public class HostPayoutScheduler {
         for (Bill bill : rejectedBills) {
             if (processBillPayout(bill, adminUser)) {
                 totalCreated++;
-                totalAmount = totalAmount.add(calculateTotalReceivedAmount(bill));
+                BigDecimal totalReceived = calculateTotalReceivedAmount(bill);
+                BigDecimal commission = bill.getCommission() != null ? bill.getCommission() : BigDecimal.ZERO;
+                BigDecimal payoutAmount = totalReceived.subtract(commission);
+                totalAmount = totalAmount.add(payoutAmount);
             }
             totalProcessed++;
         }
@@ -108,7 +114,10 @@ public class HostPayoutScheduler {
         for (Bill bill : cancelledBills) {
             if (processBillPayout(bill, adminUser)) {
                 totalCreated++;
-                totalAmount = totalAmount.add(calculateTotalReceivedAmount(bill));
+                BigDecimal totalReceived = calculateTotalReceivedAmount(bill);
+                BigDecimal commission = bill.getCommission() != null ? bill.getCommission() : BigDecimal.ZERO;
+                BigDecimal payoutAmount = totalReceived.subtract(commission);
+                totalAmount = totalAmount.add(payoutAmount);
             }
             totalProcessed++;
         }
@@ -151,11 +160,24 @@ public class HostPayoutScheduler {
             return false;
         }
 
+        // Trừ commission (hoa hồng của admin) khỏi số tiền trả cho host
+        BigDecimal commission = bill.getCommission();
+        if (commission == null) {
+            commission = BigDecimal.ZERO;
+        }
+        BigDecimal payoutAmount = totalReceived.subtract(commission);
+
+        // Nếu số tiền trả cho host <= 0 sau khi trừ commission, không tạo transaction
+        if (payoutAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            log.debug("Bill {} payout amount after commission deduction is zero or negative, skipping payout", bill.getId());
+            return false;
+        }
+
         User hostUser = bill.getHomestay().getHost().getUser();
 
         // Tạo transaction ADMIN_PAYMENT_HOST
         Transaction payoutTransaction = Transaction.builder()
-                .amount(totalReceived)
+                .amount(payoutAmount)
                 .transactionType(TypeTransaction.ADMIN_PAYMENT_HOST)
                 .status(StatusTransaction.PENDING) // Chờ admin xác nhận
                 .fromUser(adminUser)
@@ -164,8 +186,8 @@ public class HostPayoutScheduler {
                 .build();
 
         transactionRepository.save(payoutTransaction);
-        log.info("Created ADMIN_PAYMENT_HOST transaction for bill {}. Amount: {}, Host: {}",
-                bill.getId(), totalReceived, hostUser.getId());
+        log.info("Created ADMIN_PAYMENT_HOST transaction for bill {}. Total received: {}, Commission: {}, Payout amount: {}, Host: {}",
+                bill.getId(), totalReceived, commission, payoutAmount, hostUser.getId());
 
         return true;
     }

@@ -450,6 +450,9 @@ public class HostServiceImpl implements HostService {
         // Xử lý theo quyết định của host
         if (request.getApproved()) {
             // Host đồng ý -> chuyển thành REFUNDED và tạo transaction REFUND
+            // Nếu bill chưa có actual_checkout, set nó = thời điểm hiện tại và unlock các ngày còn lại
+            handleRefundPendingForActiveStay(bill);
+            
             bill.setStatus(StatusBill.REFUNDED_PENDING);
             billRepository.save(bill);
 
@@ -1090,5 +1093,56 @@ public class HostServiceImpl implements HostService {
                 .toList();
 
         return new ApiResponse<>(200, "Host complaints retrieved successfully", complaintDTOs);
+    }
+
+    /**
+     * Xử lý khi bill chuyển sang REFUNDED_PENDING trong thời gian lưu trú
+     * - Chỉ unlock các ngày còn lại nếu actual_checkout_time là null (chưa checkout)
+     * - Nếu bill chưa có actual_checkout_time, set nó = thời điểm hiện tại và unlock các ngày từ đó đến checkOut ban đầu
+     */
+    private void handleRefundPendingForActiveStay(Bill bill) {
+        if (bill == null || bill.getHomestay() == null) {
+            return;
+        }
+
+        // Chỉ unlock nếu actual_checkout_time là null (chưa checkout)
+        if (bill.getActualCheckoutTime() == null) {
+            // Set actual_checkout_time = thời điểm hiện tại
+            LocalDateTime now = LocalDateTime.now();
+            bill.setActualCheckoutTime(now);
+            billRepository.save(bill);
+            log.info("Set actual_checkout_time for bill {} to current time", bill.getId());
+
+            // Unlock các ngày từ actual_checkout (hiện tại) đến checkOut ban đầu
+            LocalDateTime originalCheckOut = bill.getCheckOut();
+            if (originalCheckOut != null && now.isBefore(originalCheckOut)) {
+                // Chuyển đổi LocalDateTime sang Date để query
+                LocalDate actualCheckoutLocalDate = now.toLocalDate();
+                LocalDate checkOutLocalDate = originalCheckOut.toLocalDate();
+                Date startDate = java.sql.Date.valueOf(actualCheckoutLocalDate);
+                Date endDate = java.sql.Date.valueOf(checkOutLocalDate);
+
+                // Tìm các HomestayDailyPrice trong khoảng thời gian từ actual_checkout đến checkOut
+                List<HomestayDailyPrice> dailyPricesToUnlock = homestayDailyPricesRepository.findByHomestayAndDateRange(
+                        bill.getHomestay().getId(),
+                        startDate,
+                        endDate
+                );
+
+                // Chỉ unlock những ngày thuộc về bill này
+                int unlockedCount = 0;
+                for (HomestayDailyPrice dailyPrice : dailyPricesToUnlock) {
+                    if (dailyPrice.getBill() != null && dailyPrice.getBill().getId().equals(bill.getId())) {
+                        dailyPrice.setIsBooked(false);
+                        dailyPrice.setBill(null);
+                        homestayDailyPricesRepository.save(dailyPrice);
+                        unlockedCount++;
+                    }
+                }
+
+                log.info("Unlocked {} daily prices for bill {} from {} to {}", 
+                        unlockedCount, bill.getId(), actualCheckoutLocalDate, checkOutLocalDate);
+            }
+        }
     }
 }
