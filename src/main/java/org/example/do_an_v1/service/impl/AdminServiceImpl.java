@@ -698,7 +698,7 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    public ApiResponse<List<TransactionDTO>> getPendingRefunds(Long adminUserId) {
+    public ApiResponse<List<TransactionDTO>> getTransactionPendingRefund(Long adminUserId) {
         // Validate admin
         Admin admin = requireActiveAdmin(adminUserId);
         if (admin == null) {
@@ -1089,22 +1089,24 @@ public class AdminServiceImpl implements AdminService {
                                                 .title(homestaySummary.getTitle())
                                                 .category(homestaySummary.getCategory())
                                                 .status(homestaySummary.getStatus())
-                                                .address(homestay.getAddress() != null ? HomestayDTO.AddressDTO.builder()
+                                                .address(homestay.getAddress() != null ? AddressDTO.builder()
+                                                        .id(homestay.getAddress().getId())
                                                         .addressLine(homestay.getAddress().getAddressLine())
                                                         .city(homestay.getAddress().getCity())
                                                         .state(homestay.getAddress().getState())
                                                         .latitude(homestay.getAddress().getLatitude())
                                                         .longitude(homestay.getAddress().getLongitude())
+                                                        .url(homestay.getAddress().getUrl())
                                                         .build() : null)
                                                 // Load images từ homestay.getListImage() (đã được eager load qua JOIN FETCH)
                                                 .images(homestay.getListImage() != null 
                                                         ? homestay.getListImage().stream()
-                                                                .map(img -> HomestayDTO.ImageDTO.builder()
+                                                                .map(img -> HomestayImageDTO.builder()
                                                                         .id(img.getId())
                                                                         .imageUrl(img.getImage_url())
                                                                         .primary(img.getIsPrimary())
                                                                         .build())
-                                                                .sorted(Comparator.comparing(HomestayDTO.ImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                                                                .sorted(Comparator.comparing(HomestayImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
                                                                 .collect(Collectors.toList())
                                                         : new ArrayList<>())
                                                 // Không load các dữ liệu không cần thiết

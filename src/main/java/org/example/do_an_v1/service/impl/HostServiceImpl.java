@@ -536,11 +536,28 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(400, "Bill does not have check-in date", null);
         }
 
-        LocalDate today = LocalDate.now();
-        LocalDate checkInDate = bill.getCheckIn().toLocalDate();
-        if (!today.isEqual(checkInDate)) {
-            return new ApiResponse<>(400, "Check-in is only allowed on the scheduled date: " + checkInDate, null);
+        // Thời điểm hiện tại (có giờ, phút, giây)
+//        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+
+        LocalDateTime checkInTime = bill.getCheckIn();
+
+        // Thời điểm cuối ngày check-in: 23:59:59
+        LocalDateTime endOfCheckInDay = checkInTime
+                .toLocalDate()
+                .atTime(23, 59, 59);
+
+        // Điều kiện hợp lệ:
+        // now >= checkInTime && now <= endOfCheckInDay
+        if (LocalDateTime.now().isBefore(checkInTime) || LocalDateTime.now().isAfter(endOfCheckInDay)) {
+            return new ApiResponse<>(
+                    400,
+                    "Check-in is allowed only from "
+                            + checkInTime
+                            + " until 23:59:59 of the same day",
+                    null
+            );
         }
+
 
         // Tính 70% còn lại cần thanh toán
         if (bill.getTotalAmount() == null) {
@@ -899,62 +916,6 @@ public class HostServiceImpl implements HostService {
         } catch (Exception e) {
             return new ApiResponse<>(500, "Error updating homestay prices: " + e.getMessage(), null);
         }
-    }
-
-    @Override
-    @Transactional
-    public ApiResponse<?> cancelBill(Long hostUserId, Long billId) {
-        // Tìm bill
-        Bill bill = billRepository.findById(billId).orElse(null);
-        if (bill == null) {
-            return new ApiResponse<>(404, "Bill not found with id: " + billId, null);
-        }
-
-        // Validate: Bill phải thuộc về homestay của host này
-        User hostUser = userRepository.findById(hostUserId).orElse(null);
-        if (hostUser == null) {
-            return new ApiResponse<>(404, "User not found", null);
-        }
-        Host host = hostRepository.findByUser(hostUser);
-        if (host == null) {
-            return new ApiResponse<>(404, "Host not found", null);
-        }
-
-        if (bill.getHomestay() == null || !Objects.equals(bill.getHomestay().getHost().getId(), host.getId())) {
-            return new ApiResponse<>(403, "You can only cancel bills for your own homestays", null);
-        }
-
-        // Validate: Bill phải ở trạng thái CHECKIN_PENDING (đã thanh toán cọc nhưng chưa check-in)
-        if (bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
-            return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
-        }
-
-        // Kiểm tra thời gian: phải sau 3h từ thời gian check-in
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime checkIn = bill.getCheckIn();
-
-        // Kiểm tra xem đã qua 3h từ thời gian check-in chưa
-        LocalDateTime threeHoursAfterCheckIn = checkIn.plusHours(3);
-        if (now.isBefore(threeHoursAfterCheckIn)) {
-            return new ApiResponse<>(400, "Cannot cancel bill. Must wait 3 hours after check-in time", null);
-        }
-
-        // Unlock homestay_daily_prices
-        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
-                .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
-                .toList();
-
-        for (HomestayDailyPrice dailyPrice : dailyPrices) {
-            dailyPrice.setIsBooked(false);
-            dailyPrice.setBill(null);
-            homestayDailyPricesRepository.save(dailyPrice);
-        }
-
-//         Cập nhật status bill thành PAYMENT_FAILED (không hoàn tiền)
-        bill.setStatus(StatusBill.CHECKIN_EXPIRED);
-        billRepository.save(bill);
-
-        return new ApiResponse<>(200, "Bill cancelled successfully. No refund will be processed.", null);
     }
 
     // Trạng thái bill đã hoàn thành (không cần refund khi ẩn homestay)

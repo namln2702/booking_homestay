@@ -141,12 +141,6 @@ public class AmenitiesServiceImpl implements AmenitiesService {
         Amenities amenity = amenitiesRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Amenity not found with id: " + id));
 
-        // Kiểm tra xem amenity có đang được sử dụng bởi homestay nào không
-        if (amenity.getListHomestay() != null && !amenity.getListHomestay().isEmpty()) {
-            throw new IllegalStateException("Cannot delete amenity. It is currently associated with " + 
-                    amenity.getListHomestay().size() + " homestay(s)");
-        }
-
         // Soft delete: set deleted = true
         amenity.setDeleted(true);
         amenitiesRepository.save(amenity);

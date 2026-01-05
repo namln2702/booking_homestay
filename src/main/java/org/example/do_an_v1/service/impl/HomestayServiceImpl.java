@@ -249,6 +249,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .addressLine(addressRequest.getAddressLine())
                 .city(addressRequest.getCity())
                 .state(addressRequest.getState())
+                .url(addressRequest.getUrl())
                 .build();
         address.setHomestay(homestay);
         homestay.setAddress(address);

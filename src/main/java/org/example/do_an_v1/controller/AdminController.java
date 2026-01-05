@@ -176,7 +176,7 @@ public class AdminController {
     @GetMapping("/refunds/pending")
     public ApiResponse<List<TransactionDTO>> getPendingRefunds() {
         Long adminUserId = identityResolver.requireUserId(null);
-        return adminService.getPendingRefunds(adminUserId);
+        return adminService.getTransactionPendingRefund(adminUserId);
     }
 
     /**

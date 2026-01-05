@@ -84,6 +84,12 @@ public enum StatusBill {
     SUCCEED(10),
 
     /**
+     * Đơn bị customer hủy, đang chờ thanh toán hoàn tiền
+     * Chuyển sang CANCELLED_REFUNDED khi thanh toán hoàn tiền thành công
+     */
+    CANCEL_REFUND_PENDING(17),
+
+    /**
      * Đơn bị customer hủy, và được hoàn tiền
      * Luồng thanh toán cuối của luồng thanh toán
      */

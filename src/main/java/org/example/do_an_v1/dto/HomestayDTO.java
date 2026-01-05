@@ -5,11 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.example.do_an_v1.enums.RuleTypeHomestay;
 import org.example.do_an_v1.enums.StatusHomestay;
-import org.example.do_an_v1.enums.TypePerson;
 
-import java.util.Date;
 import java.util.List;
 
 @Getter
@@ -38,104 +35,11 @@ public class HomestayDTO {
     private StatusHomestay status;
 
     private AddressDTO address;
-    private List<FacilityDTO> facilities;
-    private List<AmenityDTO> amenities;
+    private List<HomestayFacilityDTO> facilities;
+    private List<HomestayAmenityDTO> amenities;
     private List<HomestayRuleDTO> rules;
-    private List<DailyPriceDTO> dailyPrices;
-    private List<ImageDTO> images;
+    private List<HomestayDailyPriceDTO> dailyPrices;
+    private List<HomestayImageDTO> images;
     private List<PersonCapacityDTO> personCapacities;
-    private List<TouristAttractionsDTO> touristAttractions;
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AddressDTO {
-        private String addressLine;
-        private String city;
-        private String state;
-        private String latitude;
-        private String longitude;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AmenityDTO {
-        private Long id;
-        private String name;
-        private String description;
-        private String imageUrl;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class HomestayRuleDTO {
-        private Long id;
-        private String description;
-        private RuleTypeHomestay ruleType;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class DailyPriceDTO {
-        private Long id;
-        private Date day;
-        private Float price;
-        private Boolean booked;
-        private Boolean activeHost;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class FacilityDTO {
-        private Long id;
-        private String name;
-        private String category;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class ImageDTO {
-        private Long id;
-        private String imageUrl;
-        private Boolean primary;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class PersonCapacityDTO {
-        private TypePerson type;
-        private Integer quantity;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class TouristAttractionsDTO {
-        private Long id;
-        private String name;
-        private String description;
-        private String imageUrl;
-    }
+    private List<TouristAttractionDTO> touristAttractions;
 }

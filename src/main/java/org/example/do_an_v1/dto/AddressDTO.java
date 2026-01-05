@@ -20,5 +20,6 @@ public class AddressDTO {
     private String state;               // Tỉnh/Thành phố
     private String latitude;            // Vĩ độ
     private String longitude;           // Kinh độ
+    private String url;                 // URL địa chỉ
 }
 

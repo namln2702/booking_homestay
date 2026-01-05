@@ -140,18 +140,6 @@ public class HostController {
     }
 
     /**
-     * Host hủy bill
-     * Chỉ được hủy nếu đến thời gian check-in mà customer không đến được
-     * Sau 3h từ thời gian check-in, host có thể hủy và không cần hoàn tiền
-     */
-    @PreAuthorize("hasAuthority('ROLE_HOST')")
-    @PostMapping("/bills/{billId}/cancel")
-    public ApiResponse<?> cancelBill(@PathVariable Long billId) {
-        Long effectiveUserId = identityResolver.requireUserId(null);
-        return hostService.cancelBill(effectiveUserId, billId);
-    }
-
-    /**
      * Host lấy danh sách các bill ở trạng thái HOST_COMPLAINT_PROCESSING
      * (các khiếu nại đang chờ host xử lý)
      * Admin có thể xem bills đang complaint processing của host

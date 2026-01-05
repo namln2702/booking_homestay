@@ -5,11 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.example.do_an_v1.dto.HomestayDTO.AmenityDTO;
-import org.example.do_an_v1.dto.HomestayDTO.DailyPriceDTO;
-import org.example.do_an_v1.dto.HomestayDTO.FacilityDTO;
-import org.example.do_an_v1.dto.HomestayDTO.HomestayRuleDTO;
-import org.example.do_an_v1.dto.ImageDTO;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.enums.StatusHost;
 
@@ -45,14 +40,14 @@ public class HomestayDetailDTO {
     private Float basePrice;
     private StatusHomestay status;
 
-    private HomestayDTO.AddressDTO address;
+    private AddressDTO address;
     private HostSummaryDTO host;
-    private List<FacilityDTO> facilities;
-    private List<AmenityDTO> amenities;
+    private List<HomestayFacilityDTO> facilities;
+    private List<HomestayAmenityDTO> amenities;
     private List<HomestayRuleDTO> rules;
-    private List<DailyPriceDTO> dailyPrices;
-    private List<HomestayDTO.ImageDTO> images;
-    private List<HomestayDTO.PersonCapacityDTO> personCapacities;
+    private List<HomestayDailyPriceDTO> dailyPrices;
+    private List<HomestayImageDTO> images;
+    private List<PersonCapacityDTO> personCapacities;
     private PriceInsightDTO priceInsight;
     private List<ReviewDetailDTO> reviews;
 

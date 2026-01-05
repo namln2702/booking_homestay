@@ -182,6 +182,7 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
                     FROM tbl_homestays_list_facilities hlf
                     JOIN tbl_facilities f ON f.id = hlf.list_facilities_id
                     WHERE hlf.homestay_address_id = h.address_id
+                      AND (f.deleted = false OR f.deleted IS NULL)
                       AND (
                           unaccent(lower(COALESCE(f.name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
                        OR unaccent(lower(COALESCE(f.category, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
@@ -192,6 +193,7 @@ public interface HomestayRepository extends JpaRepository<Homestay, Long> {
                     FROM tbl_homestays_list_amenities hla
                     JOIN tbl_amenities am ON am.id = hla.list_amenities_id
                     WHERE hla.homestay_address_id = h.address_id
+                      AND (am.deleted = false OR am.deleted IS NULL)
                       AND (
                           unaccent(lower(COALESCE(am.name, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))
                        OR unaccent(lower(COALESCE(am.description, ''))) % unaccent(lower(COALESCE(CAST(:keyword AS text), '')))

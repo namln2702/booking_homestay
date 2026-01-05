@@ -32,6 +32,9 @@ public class Address extends BaseEntity {
     @Column(name = "longitude")
     private String longitude;
 
+    @Column(name = "url")
+    private String url;
+
     @OneToOne(mappedBy = "address")
     Homestay homestay;
 }

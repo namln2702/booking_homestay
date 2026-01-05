@@ -23,6 +23,7 @@ public class AddressMapper {
                 .state(address.getState())
                 .latitude(address.getLatitude())
                 .longitude(address.getLongitude())
+                .url(address.getUrl())
                 .build();
     }
 
@@ -40,6 +41,7 @@ public class AddressMapper {
                 .state(dto.getState())
                 .latitude(dto.getLatitude())
                 .longitude(dto.getLongitude())
+                .url(dto.getUrl())
                 .build();
         
         // Set id nếu có (khi cập nhật)

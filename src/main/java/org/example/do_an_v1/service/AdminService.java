@@ -98,7 +98,7 @@ public interface AdminService {
     /**
      * Lấy danh sách các transaction REFUND đang chờ xử lý
      */
-    ApiResponse<List<TransactionDTO>> getPendingRefunds(Long adminUserId);
+    ApiResponse<List<TransactionDTO>> getTransactionPendingRefund(Long adminUserId);
 
     /**
      * Lấy danh sách các transaction trả tiền cho host (PAYLOAD_HOST, ADMIN_PAYMENT_HOST)

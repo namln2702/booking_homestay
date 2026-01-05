@@ -26,7 +26,7 @@ public class Facilities extends BaseEntity{
     @Builder.Default
     private Boolean deleted = false;
 
-    @ManyToMany
-    Set<Homestay>  listHomestay;
+//    @ManyToMany
+//    Set<Homestay> listHomestay;
 
 }

@@ -1119,7 +1119,9 @@ public class CustomerServiceImpl implements CustomerService {
         boolean remainingRequired = status != null && REMAINING_PAYMENT_REQUIRED_STATUSES.contains(status);
         boolean awaitingRemaining = remainingRequired && !remainingPaid;
 
-        boolean awaitingRefund = status == StatusBill.REFUNDED_PENDING || refundPendingTransaction != null;
+        boolean awaitingRefund = status == StatusBill.REFUNDED_PENDING 
+                || status == StatusBill.CANCEL_REFUND_PENDING 
+                || refundPendingTransaction != null;
         boolean refunded = status == StatusBill.REFUNDED
                 || status == StatusBill.CANCELLED_REFUNDED
                 || refundSuccessTransaction != null;
@@ -1155,7 +1157,8 @@ public class CustomerServiceImpl implements CustomerService {
         boolean inComplaintWindow = status == StatusBill.COMPLAINT_PENDING;
         boolean underHostReview = status == StatusBill.HOST_COMPLAINT_PROCESSING;
         boolean underAdminReview = status == StatusBill.ADMIN_COMPLAINT_PROCESSING;
-        boolean refundInProgress = status == StatusBill.REFUNDED_PENDING;
+        boolean refundInProgress = status == StatusBill.REFUNDED_PENDING 
+                || status == StatusBill.CANCEL_REFUND_PENDING;
         boolean resolvedWithRefund = status == StatusBill.REFUNDED
                 || status == StatusBill.CANCELLED_REFUNDED;
         boolean resolvedWithoutRefund = status == StatusBill.REJECTED
@@ -1165,6 +1168,7 @@ public class CustomerServiceImpl implements CustomerService {
                 || status == StatusBill.HOST_COMPLAINT_PROCESSING
                 || status == StatusBill.ADMIN_COMPLAINT_PROCESSING
                 || status == StatusBill.REFUNDED_PENDING
+                || status == StatusBill.CANCEL_REFUND_PENDING
                 || status == StatusBill.REFUNDED
                 || status == StatusBill.REJECTED;
 
@@ -1227,6 +1231,7 @@ public class CustomerServiceImpl implements CustomerService {
             case REFUNDED -> "REFUNDED";
             case REJECTED -> "COMPLAINT_REJECTED";
             case SUCCEED -> "COMPLETED";
+            case CANCEL_REFUND_PENDING -> "CANCEL_REFUND_PENDING";
             case CANCELLED_REFUNDED -> "CANCELLED_REFUNDED";
             case CANCELLED -> "CANCELLED";
         };
@@ -1241,6 +1246,7 @@ public class CustomerServiceImpl implements CustomerService {
             case HOST_COMPLAINT_PROCESSING -> "HOST_REVIEW";
             case ADMIN_COMPLAINT_PROCESSING -> "ADMIN_REVIEW";
             case REFUNDED_PENDING -> "REFUNDED_PENDING";
+            case CANCEL_REFUND_PENDING -> "CANCEL_REFUND_PENDING";
             case REFUNDED, CANCELLED_REFUNDED -> "RESOLVED_REFUNDED";
             case REJECTED, SUCCEED, CANCELLED -> "RESOLVED";
             default -> "NONE";
@@ -1398,9 +1404,7 @@ public class CustomerServiceImpl implements CustomerService {
         /* TODO
         Kiểm tra xem những trạng thái nào thì được cancel bill
          */
-        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING
-                && bill.getStatus() != StatusBill.DEPOSIT_FAILED
-                && bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
+        if ( bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
 
@@ -1452,10 +1456,11 @@ public class CustomerServiceImpl implements CustomerService {
                 }
             }
 
-            bill.setStatus(StatusBill.CANCELLED_REFUNDED);
-        } else
+            bill.setStatus(StatusBill.CANCEL_REFUND_PENDING);
+        } else {
             // Cập nhật status bill thành CANCELLED do khong duoc hoang tien
             bill.setStatus(StatusBill.CANCELLED);
+        }
         billRepository.save(bill);
 
         String message = canRefund

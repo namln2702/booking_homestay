@@ -199,12 +199,6 @@ public class FacilitiesServiceImpl implements FacilitiesService {
         Facilities facility = facilitiesRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Facility not found with id: " + id));
 
-        // Kiểm tra xem facility có đang được sử dụng bởi homestay nào không
-        if (facility.getListHomestay() != null && !facility.getListHomestay().isEmpty()) {
-            throw new IllegalStateException("Cannot delete facility. It is currently associated with " + 
-                    facility.getListHomestay().size() + " homestay(s)");
-        }
-
         // Soft delete: set deleted = true
         facility.setDeleted(true);
         facilitiesRepository.save(facility);

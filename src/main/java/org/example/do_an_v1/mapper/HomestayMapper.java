@@ -1,7 +1,6 @@
 package org.example.do_an_v1.mapper;
 
-import org.example.do_an_v1.dto.HomestayDTO;
-import org.example.do_an_v1.dto.HomestaySummaryDTO;
+import org.example.do_an_v1.dto.*;
 import org.example.do_an_v1.entity.*;
 import org.springframework.stereotype.Component;
 
@@ -19,17 +18,17 @@ public class HomestayMapper {
             return null;
         }
 
-        HomestayDTO.AddressDTO addressDTO = mapAddress(homestay.getAddress());
+        AddressDTO addressDTO = mapAddress(homestay.getAddress());
 
-        List<HomestayDTO.FacilityDTO> facilities = mapFacilities(homestay.getListFacilities());
-        List<HomestayDTO.AmenityDTO> amenities = mapAmenities(homestay.getListAmenities());
-        List<HomestayDTO.HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
-        List<HomestayDTO.DailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
+        List<HomestayFacilityDTO> facilities = mapFacilities(homestay.getListFacilities());
+        List<HomestayAmenityDTO> amenities = mapAmenities(homestay.getListAmenities());
+        List<HomestayRuleDTO> rules = mapRules(homestay.getListHomestayRule());
+        List<HomestayDailyPriceDTO> dailyPrices = mapDailyPrices(homestay.getListHomestayDailyPrice());
         // Sử dụng images từ parameter hoặc từ homestay.getListImage()
         List<Image> imagesToMap = images != null ? images : (homestay.getListImage() != null ? new ArrayList<>(homestay.getListImage()) : new ArrayList<>());
-        List<HomestayDTO.ImageDTO> imageDtos = mapImages(imagesToMap);
-        List<HomestayDTO.PersonCapacityDTO> personCapacities = mapPersonCapacities(homestay.getListPersonHomestay());
-        List<HomestayDTO.TouristAttractionsDTO> touristAttractions = mapTouristAttractions(homestay.getListTourisAttractions());
+        List<HomestayImageDTO> imageDtos = mapImages(imagesToMap);
+        List<PersonCapacityDTO> personCapacities = mapPersonCapacities(homestay.getListPersonHomestay());
+        List<TouristAttractionDTO> touristAttractions = mapTouristAttractions(homestay.getListTourisAttractions());
 
         int reviewCount = homestay.getListReview() != null ? homestay.getListReview().size() : 0;
 
@@ -83,99 +82,103 @@ public class HomestayMapper {
                 .build();
     }
 
-    private HomestayDTO.AddressDTO mapAddress(Address address) {
+    private AddressDTO mapAddress(Address address) {
         if (address == null) {
             return null;
         }
-        return HomestayDTO.AddressDTO.builder()
+        return AddressDTO.builder()
+                .id(address.getId())
                 .addressLine(address.getAddressLine())
                 .city(address.getCity())
                 .state(address.getState())
                 .latitude(address.getLatitude())
                 .longitude(address.getLongitude())
+                .url(address.getUrl())
                 .build();
     }
 
-    private List<HomestayDTO.FacilityDTO> mapFacilities(Set<Facilities> facilities) {
+    private List<HomestayFacilityDTO> mapFacilities(Set<Facilities> facilities) {
         if (facilities == null) {
             return List.of();
         }
         return facilities.stream()
-                .map(facility -> HomestayDTO.FacilityDTO.builder()
+                .filter(facility -> facility != null && !Boolean.TRUE.equals(facility.getDeleted()))
+                .map(facility -> HomestayFacilityDTO.builder()
                         .id(facility.getId())
                         .name(facility.getName())
                         .category(facility.getCategory())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.FacilityDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(HomestayFacilityDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.AmenityDTO> mapAmenities(Set<Amenities> amenities) {
+    private List<HomestayAmenityDTO> mapAmenities(Set<Amenities> amenities) {
         if (amenities == null) {
             return List.of();
         }
         return amenities.stream()
-                .map(amenity -> HomestayDTO.AmenityDTO.builder()
+                .filter(amenity -> amenity != null && !Boolean.TRUE.equals(amenity.getDeleted()))
+                .map(amenity -> HomestayAmenityDTO.builder()
                         .id(amenity.getId())
                         .name(amenity.getName())
                         .description(amenity.getDescription())
                         .imageUrl(amenity.getImageUrl())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.AmenityDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(HomestayAmenityDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.HomestayRuleDTO> mapRules(Set<HomestayRule> rules) {
+    private List<HomestayRuleDTO> mapRules(Set<HomestayRule> rules) {
         if (rules == null) {
             return List.of();
         }
         return rules.stream()
-                .map(rule -> HomestayDTO.HomestayRuleDTO.builder()
+                .map(rule -> HomestayRuleDTO.builder()
                         .id(rule.getId())
                         .description(rule.getDescription())
                         .ruleType(rule.getRuleTypeHomestay())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.HomestayRuleDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(HomestayRuleDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.DailyPriceDTO> mapDailyPrices(Set<HomestayDailyPrice> dailyPrices) {
+    private List<HomestayDailyPriceDTO> mapDailyPrices(Set<HomestayDailyPrice> dailyPrices) {
         if (dailyPrices == null) {
             return List.of();
         }
         return dailyPrices.stream()
-                .map(price -> HomestayDTO.DailyPriceDTO.builder()
+                .map(price -> HomestayDailyPriceDTO.builder()
                         .id(price.getId())
                         .day(price.getPricePerDay() != null ? price.getPricePerDay().getDay() : null)
                         .price(price.getPrice())
                         .booked(price.getIsBooked())
                         .activeHost(price.getActiveHost())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.DailyPriceDTO::getDay, Comparator.nullsLast(java.util.Date::compareTo)))
+                .sorted(Comparator.comparing(HomestayDailyPriceDTO::getDay, Comparator.nullsLast(java.util.Date::compareTo)))
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.ImageDTO> mapImages(List<Image> images) {
+    private List<HomestayImageDTO> mapImages(List<Image> images) {
         if (images == null || images.isEmpty()) {
             return List.of();
         }
         return images.stream()
-                .map(image -> HomestayDTO.ImageDTO.builder()
+                .map(image -> HomestayImageDTO.builder()
                         .id(image.getId())
                         .imageUrl(image.getImage_url())
                         .primary(image.getIsPrimary())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.ImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(HomestayImageDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.PersonCapacityDTO> mapPersonCapacities(Set<PersonHomestay> capacities) {
+    private List<PersonCapacityDTO> mapPersonCapacities(Set<PersonHomestay> capacities) {
         if (capacities == null) {
             return List.of();
         }
         return capacities.stream()
                 .filter(capacity -> capacity != null && capacity.getPerson() != null)
-                .map(capacity -> HomestayDTO.PersonCapacityDTO.builder()
+                .map(capacity -> PersonCapacityDTO.builder()
                         .type(capacity.getPerson().getType())
                         .quantity(capacity.getQuantity())
                         .build())
@@ -184,19 +187,19 @@ public class HomestayMapper {
                 .collect(Collectors.toList());
     }
 
-    private List<HomestayDTO.TouristAttractionsDTO> mapTouristAttractions(Set<TouristAttractions> touristAttractions) {
+    private List<TouristAttractionDTO> mapTouristAttractions(Set<TouristAttractions> touristAttractions) {
         if (touristAttractions == null) {
             return List.of();
         }
         return touristAttractions.stream()
                 .filter(ta -> ta != null && !Boolean.TRUE.equals(ta.getDeleted()))
-                .map(ta -> HomestayDTO.TouristAttractionsDTO.builder()
+                .map(ta -> TouristAttractionDTO.builder()
                         .id(ta.getId())
                         .name(ta.getName())
                         .description(ta.getDescription())
                         .imageUrl(ta.getImageUrl())
                         .build())
-                .sorted(Comparator.comparing(HomestayDTO.TouristAttractionsDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(Comparator.comparing(TouristAttractionDTO::getId, Comparator.nullsLast(Long::compareTo)))
                 .collect(Collectors.toList());
     }
 }
