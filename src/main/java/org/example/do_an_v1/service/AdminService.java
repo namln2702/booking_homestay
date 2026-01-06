@@ -12,11 +12,7 @@ import org.example.do_an_v1.dto.request.AdminInviteRequest;
 import org.example.do_an_v1.dto.request.AdminLoginRequest;
 import org.example.do_an_v1.dto.request.ConfirmRefundRequest;
 import org.example.do_an_v1.dto.request.ProcessComplaintRefundRequest;
-import org.example.do_an_v1.dto.response.AdminFinanceReportResponse;
-import org.example.do_an_v1.dto.response.AdminInvitationResponse;
-import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
-import org.example.do_an_v1.dto.response.HostWithPendingPayoutTransactionsResponse;
-import org.example.do_an_v1.dto.response.PageResponse;
+import org.example.do_an_v1.dto.response.*;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusHomestay;
@@ -141,4 +137,12 @@ public interface AdminService {
      * (transaction type là thanh toán cho host và status là PENDING)
      */
     ApiResponse<List<HostWithPendingPayoutTransactionsResponse>> getHostsWithPendingPayoutTransactions();
+
+    /**
+     * Thống kê doanh thu chi tiết theo khoảng thời gian:
+     * - Số tiền host đã nhận
+     * - Số tiền admin đã nhận (commission)
+     * - Số tiền đã trả lại cho customer
+     */
+    ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(Integer startMonth, Integer startYear, Integer endMonth, Integer endYear);
 }

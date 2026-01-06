@@ -212,6 +212,30 @@ public class AdminController {
     }
 
     /**
+     * Thống kê doanh thu chi tiết theo khoảng thời gian:
+     * - Số tiền host đã nhận
+     * - Số tiền admin đã nhận (commission)
+     * - Số tiền đã trả lại cho customer
+     * 
+     * @param startMonth Tháng bắt đầu (1-12). Required
+     * @param startYear Năm bắt đầu (ví dụ: 2025). Required
+     * @param endMonth Tháng kết thúc (1-12). Required
+     * @param endYear Năm kết thúc (ví dụ: 2025). Required
+     * 
+     * Ví dụ: Nếu truyền startMonth=7, startYear=2025, endMonth=8, endYear=2025
+     * sẽ thống kê từ 01-07-2025 đến 31-08-2025
+     */
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @GetMapping("/reports/revenue-statistics")
+    public ApiResponse<org.example.do_an_v1.dto.response.RevenueStatisticsResponse> getRevenueStatistics(
+            @org.springframework.web.bind.annotation.RequestParam Integer startMonth,
+            @org.springframework.web.bind.annotation.RequestParam Integer startYear,
+            @org.springframework.web.bind.annotation.RequestParam Integer endMonth,
+            @org.springframework.web.bind.annotation.RequestParam Integer endYear) {
+        return adminService.getRevenueStatistics(startMonth, startYear, endMonth, endYear);
+    }
+
+    /**
      * Admin xác nhận hoàn tiền thành công
      * Yêu cầu quyền ADMIN hoặc SUPER_ADMIN
      * @param request Thông tin xác nhận (transactionId và proofImageUrl)

@@ -29,6 +29,4 @@ public class Amenities extends BaseEntity{
     @Builder.Default
     private Boolean deleted = false;
 
-    @ManyToMany
-    Set<Homestay> listHomestay;
 }

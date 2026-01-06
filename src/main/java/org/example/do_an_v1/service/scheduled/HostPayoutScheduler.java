@@ -161,10 +161,16 @@ public class HostPayoutScheduler {
         }
 
         // Trừ commission (hoa hồng của admin) khỏi số tiền trả cho host
+        // Commission đã được tính trên totalAmount (100% của bill) khi tạo bill
+        // và được lưu vào bill.commission
         BigDecimal commission = bill.getCommission();
         if (commission == null) {
             commission = BigDecimal.ZERO;
         }
+        
+        // Số tiền trả cho host = totalReceived - commission
+        // Lưu ý: Commission được tính trên totalAmount, nhưng trừ từ totalReceived
+        // Nếu totalReceived < commission, thì payoutAmount sẽ < 0 và sẽ bị skip ở check bên dưới
         BigDecimal payoutAmount = totalReceived.subtract(commission);
 
         // Nếu số tiền trả cho host <= 0 sau khi trừ commission, không tạo transaction

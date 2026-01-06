@@ -12,6 +12,7 @@ import org.example.do_an_v1.dto.response.AdminInvitationResponse;
 import org.example.do_an_v1.dto.response.HomestayStatisticsDTO;
 import org.example.do_an_v1.dto.response.HostWithPendingPayoutTransactionsResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
+import org.example.do_an_v1.dto.response.RevenueStatisticsResponse;
 import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.*;
 import org.example.do_an_v1.exception.ResourceNotFoundException;
@@ -85,6 +86,7 @@ public class AdminServiceImpl implements AdminService {
     private final ComplaintRepository complaintRepository;
     private final TransactionRepository transactionRepository;
     private final EmailService emailService;
+    private final org.example.do_an_v1.service.SystemConfigService systemConfigService;
     private final ProfileMapper profileMapper;
     private final HomestayMapper homestayMapper;
     private final UserMapper userMapper;
@@ -970,7 +972,7 @@ public class AdminServiceImpl implements AdminService {
                     || bill.getStatus() == StatusBill.REJECTED
                     || bill.getStatus() == StatusBill.CANCELLED
                     || bill.getStatus() == StatusBill.CHECKIN_EXPIRED
-                    || bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED
+//                    || bill.getStatus() == StatusBill.REMAINING_PAYMENT_FAILED
             ){
                 if(bill.getTotalAmount() != null) totalRevenue = totalRevenue.add(bill.getTotalAmount());
             }
@@ -1051,6 +1053,23 @@ public class AdminServiceImpl implements AdminService {
                         && transactionTypes.contains(transaction.getTransactionType()))
                 .filter(transaction -> transaction.getAmount() != null)
                 .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Tính tổng tiền đã nhận từ customer cho bill này
+     * Bao gồm CUSTOMER_PAYMENT_ADMIN_FIRST và CUSTOMER_PAYMENT_ADMIN_SECOND thành công
+     */
+    private BigDecimal calculateTotalReceivedAmount(Bill bill) {
+        List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+
+        return billTransactions.stream()
+                .filter(t -> (t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST
+                        || t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_SECOND
+                        || t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN)
+                        && t.getStatus() == StatusTransaction.SUCCESS)
+                .map(Transaction::getAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -1213,5 +1232,192 @@ public class AdminServiceImpl implements AdminService {
                 }
             }
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(Integer startMonth, Integer startYear, Integer endMonth, Integer endYear) {
+        // Validate các tham số
+        if (startMonth == null || startYear == null || endMonth == null || endYear == null) {
+            return new ApiResponse<>(400, "startMonth, startYear, endMonth, and endYear are required", null);
+        }
+
+        // Validate month
+        if (startMonth < 1 || startMonth > 12 || endMonth < 1 || endMonth > 12) {
+            return new ApiResponse<>(400, "Month must be between 1 and 12", null);
+        }
+
+        // Validate year
+        if (startYear < 2000 || startYear > 2100 || endYear < 2000 || endYear > 2100) {
+            return new ApiResponse<>(400, "Year must be between 2000 and 2100", null);
+        }
+
+        // Tính toán khoảng thời gian: từ tháng/năm bắt đầu đến tháng/năm kết thúc
+        java.time.YearMonth startYearMonth = java.time.YearMonth.of(startYear, startMonth);
+        java.time.YearMonth endYearMonth = java.time.YearMonth.of(endYear, endMonth);
+
+        // Validate: endDate phải >= startDate
+        if (endYearMonth.isBefore(startYearMonth)) {
+            return new ApiResponse<>(400, "End date must be greater than or equal to start date", null);
+        }
+
+        // Ngày bắt đầu: ngày 1 của tháng bắt đầu (00:00:00)
+        LocalDate startDate = startYearMonth.atDay(1);
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+
+        // Ngày kết thúc: ngày cuối cùng của tháng kết thúc (23:59:59.999)
+        LocalDate endDate = endYearMonth.atEndOfMonth();
+        LocalDateTime endDateTime = endDate.atTime(23, 59, 59, 999_999_999);
+
+        // Lọc bills theo khoảng thời gian (updatedAt hoặc createdAt)
+        List<Bill> filteredBills = billRepository.findByUpdatedAtOrCreatedAtBetween(startDateTime, endDateTime);
+
+        // Lấy tất cả transactions từ các bills đã lọc
+        List<Transaction> filteredTransactions = new java.util.ArrayList<>();
+        for (Bill bill : filteredBills) {
+            List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+            filteredTransactions.addAll(billTransactions);
+        }
+
+        // 1. Số tiền đã trả cho customer (từ transaction REFUND với status SUCCESS)
+        BigDecimal customerRefundPaid = filteredTransactions.stream()
+                .filter(t -> t.getTransactionType() == TypeTransaction.REFUND)
+                .filter(t -> t.getStatus() == StatusTransaction.SUCCESS)
+                .filter(t -> t.getAmount() != null)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 2. Số tiền chưa trả cho customer (các bill có status REFUNDED_PENDING hoặc CANCEL_REFUND_PENDING)
+        BigDecimal customerRefundPending = filteredBills.stream()
+                .filter(bill -> bill.getStatus() == StatusBill.REFUNDED_PENDING 
+                        || bill.getStatus() == StatusBill.CANCEL_REFUND_PENDING)
+                .filter(bill -> bill.getTotalAmount() != null)
+                .map(Bill::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Lấy commission rate từ system config (tỷ lệ từ 0-1, ví dụ: 0.1 = 10%)
+        BigDecimal commissionRate = systemConfigService.getConfigValueAsBigDecimal("ADMIN_COMMISSION_RATE")
+                .orElse(BigDecimal.ZERO);
+
+        // Lấy danh sách bills có status SUCCEED, REJECTED, CANCELLED, CHECKIN_EXPIRED
+        List<Bill> completedPayoutBills = filteredBills.stream()
+                .filter(bill -> bill.getStatus() == StatusBill.SUCCEED
+                        || bill.getStatus() == StatusBill.REJECTED
+                        || bill.getStatus() == StatusBill.CANCELLED
+                        || bill.getStatus() == StatusBill.CHECKIN_EXPIRED)
+                .toList();
+
+        // 3. Số tiền host dự định sẽ nhận được trong tháng
+        // (Từ các bill có status SUCCEED, REJECTED, CANCELLED, CHECKIN_EXPIRED
+        // chưa có transaction ADMIN_PAYMENT_HOST hoặc có transaction với status PENDING)
+        BigDecimal hostExpectedAmount = BigDecimal.ZERO;
+        for (Bill bill : completedPayoutBills) {
+            List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+            List<Transaction> payoutTransactions = billTransactions.stream()
+                    .filter(t -> t.getTransactionType() == TypeTransaction.ADMIN_PAYMENT_HOST)
+                    .toList();
+
+            // Nếu chưa có transaction ADMIN_PAYMENT_HOST
+            if (payoutTransactions.isEmpty()) {
+                // Tính từ totalReceived * (1 - commissionRate)
+                BigDecimal totalReceived = calculateTotalReceivedAmount(bill);
+                BigDecimal payoutAmount = totalReceived.multiply(BigDecimal.ONE.subtract(commissionRate))
+                        .setScale(2, java.math.RoundingMode.HALF_UP);
+                if (payoutAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    hostExpectedAmount = hostExpectedAmount.add(payoutAmount);
+                }
+            } else {
+                // Nếu có transaction, kiểm tra xem có transaction PENDING không
+                Transaction pendingPayoutTransaction = payoutTransactions.stream()
+                        .filter(t -> t.getStatus() == StatusTransaction.PENDING)
+                        .findFirst()
+                        .orElse(null);
+
+                if (pendingPayoutTransaction != null && pendingPayoutTransaction.getAmount() != null) {
+                    // Có transaction PENDING → lấy amount từ transaction
+                    hostExpectedAmount = hostExpectedAmount.add(pendingPayoutTransaction.getAmount());
+                }
+                // Nếu chỉ có transaction SUCCESS → bỏ qua (đã nhận rồi)
+            }
+        }
+
+        // 4. Số hoa hồng admin dự định nhận được
+        // Tính từ các bill chưa có transaction ADMIN_PAYMENT_HOST hoặc có transaction với status PENDING
+        BigDecimal adminExpectedCommission = BigDecimal.ZERO;
+        for (Bill bill : completedPayoutBills) {
+            List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+            List<Transaction> payoutTransactions = billTransactions.stream()
+                    .filter(t -> t.getTransactionType() == TypeTransaction.ADMIN_PAYMENT_HOST)
+                    .toList();
+
+            // Nếu chưa có transaction ADMIN_PAYMENT_HOST hoặc có transaction PENDING
+            boolean shouldCalculate = false;
+            if (payoutTransactions.isEmpty()) {
+                // Chưa có transaction → tính hoa hồng
+                shouldCalculate = true;
+            } else {
+                // Có transaction, kiểm tra xem có transaction PENDING không
+                boolean hasPending = payoutTransactions.stream()
+                        .anyMatch(t -> t.getStatus() == StatusTransaction.PENDING);
+                if (hasPending) {
+                    // Có transaction PENDING → tính hoa hồng
+                    shouldCalculate = true;
+                }
+                // Nếu chỉ có transaction SUCCESS → bỏ qua (đã nhận rồi)
+            }
+
+            if (shouldCalculate) {
+                // Tính hoa hồng từ totalReceived * commissionRate
+                BigDecimal totalReceived = calculateTotalReceivedAmount(bill);
+                BigDecimal expectedCommission = totalReceived.multiply(commissionRate)
+                        .setScale(2, java.math.RoundingMode.HALF_UP);
+                adminExpectedCommission = adminExpectedCommission.add(expectedCommission);
+            }
+        }
+
+        // 5. Số tiền ADMIN đã nhận được của customer
+        // (Từ các transaction CUSTOMER_PAYMENT_ADMIN_* với status SUCCESS)
+        BigDecimal adminReceivedFromCustomer = filteredTransactions.stream()
+                .filter(t -> CUSTOMER_REVENUE_TYPES.contains(t.getTransactionType()))
+                .filter(t -> t.getStatus() == StatusTransaction.SUCCESS)
+                .filter(t -> t.getAmount() != null)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 6. Số tiền host đã nhận được
+        // (Từ các bill có status SUCCEED, REJECTED, CANCELLED, CHECKIN_EXPIRED
+        // và có transaction ADMIN_PAYMENT_HOST với status SUCCESS)
+        BigDecimal hostReceivedAmount = BigDecimal.ZERO;
+        for (Bill bill : completedPayoutBills) {
+            List<Transaction> billTransactions = transactionRepository.findByBill(bill);
+            Transaction successPayoutTransaction = billTransactions.stream()
+                    .filter(t -> t.getTransactionType() == TypeTransaction.ADMIN_PAYMENT_HOST)
+                    .filter(t -> t.getStatus() == StatusTransaction.SUCCESS)
+                    .findFirst()
+                    .orElse(null);
+
+            if (successPayoutTransaction != null && successPayoutTransaction.getAmount() != null) {
+                hostReceivedAmount = hostReceivedAmount.add(successPayoutTransaction.getAmount());
+            }
+        }
+
+        // 6. Số tiền host dự kiến nhận được (tương tự hostExpectedAmount, từ transaction PENDING)
+        BigDecimal hostPendingAmount = hostExpectedAmount;
+
+        RevenueStatisticsResponse statistics = RevenueStatisticsResponse.builder()
+                .customerRefundPaid(customerRefundPaid)
+                .customerRefundPending(customerRefundPending)
+                .hostExpectedAmount(hostExpectedAmount)
+                .adminExpectedCommission(adminExpectedCommission)
+                .adminReceivedFromCustomer(adminReceivedFromCustomer)
+                .commission(commissionRate)
+                .hostReceivedAmount(hostReceivedAmount)
+                .hostPendingAmount(hostPendingAmount)
+                .build();
+
+        return new ApiResponse<>(200, 
+                String.format("Revenue statistics retrieved successfully for period: %s to %s", 
+                        startDateTime.toLocalDate(), endDateTime.toLocalDate()), 
+                statistics);
     }
 }

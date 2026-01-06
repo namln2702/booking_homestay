@@ -492,22 +492,50 @@ public class CustomerServiceImpl implements CustomerService {
         bill.setStatus(StatusBill.DEPOSIT_PENDING);
         bill.setGuestAllocations(buildGuestAllocations(bookingDTO.getListPersonHomestay(), bill));
 
+
+        // Tính hoa hồng cho ADMIN từ system config
+        Optional<BigDecimal> commissionRateOpt = systemConfigService.getConfigValueAsBigDecimal("ADMIN_COMMISSION_RATE");
+        if (commissionRateOpt.isEmpty()) {
+            return new ApiResponse<>(500, "System config 'ADMIN_COMMISSION_RATE' not found. Please configure it in system_config table.", null);
+        }
+
         Bill billResult = billRepository.save(bill);
 
-        // Khóa các daily prices (set isBooked = true và gán bill)
-        // Tất cả validation đã được check ở trên, giờ chỉ cần lock
-//        Bill finalBillResult = billResult;
-//        for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
-//            dailyPrice.setIsBooked(true);
-//            dailyPrice.setBill(finalBillResult);
-//            homestayDailyPricesRepository.save(dailyPrice);
-//        }
 
 
         // Lưu thông tin CustomerBookingInfo nếu là người mới
         if (!Objects.isNull(bookingDTO.getCustomerBookingInfoDTO())) {
-            CustomerBookingInfo customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingDTO.getCustomerBookingInfoDTO());
-            customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
+            CustomerBookingInfoDTO bookingInfoDTO = bookingDTO.getCustomerBookingInfoDTO();
+            
+            // Kiểm tra xem đã có CustomerBookingInfo với phoneNumber này chưa
+            CustomerBookingInfo customerBookingInfo = customerBookingInfoRepository
+                    .findByPhoneNumber(bookingInfoDTO.getPhoneNumber())
+                    .orElse(null);
+            
+            if (customerBookingInfo == null) {
+                // Chưa có, tạo mới
+                customerBookingInfo = CustomerBookingInfoMapper.toEntity(bookingInfoDTO);
+                customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
+            } else {
+                // Đã có, cập nhật thông tin nếu cần (name, email, specialRequires có thể thay đổi)
+                boolean needUpdate = false;
+                if (bookingInfoDTO.getName() != null && !bookingInfoDTO.getName().equals(customerBookingInfo.getName())) {
+                    customerBookingInfo.setName(bookingInfoDTO.getName());
+                    needUpdate = true;
+                }
+                if (bookingInfoDTO.getEmail() != null && !bookingInfoDTO.getEmail().equals(customerBookingInfo.getEmail())) {
+                    customerBookingInfo.setEmail(bookingInfoDTO.getEmail());
+                    needUpdate = true;
+                }
+                if (bookingInfoDTO.getSpecialRequires() != null && !bookingInfoDTO.getSpecialRequires().equals(customerBookingInfo.getSpecialRequires())) {
+                    customerBookingInfo.setSpecialRequires(bookingInfoDTO.getSpecialRequires());
+                    needUpdate = true;
+                }
+                if (needUpdate) {
+                    customerBookingInfo = customerBookingInfoRepository.save(customerBookingInfo);
+                }
+            }
+            
             billResult.setCustomerBookingInfo(customerBookingInfo);
         }
 
@@ -521,11 +549,7 @@ public class CustomerServiceImpl implements CustomerService {
         BigDecimal totalAmountBD = java.math.BigDecimal.valueOf(totalAmount);
         billResult.setTotalAmount(totalAmountBD);
 
-        // Tính hoa hồng cho ADMIN từ system config
-        Optional<BigDecimal> commissionRateOpt = systemConfigService.getConfigValueAsBigDecimal("ADMIN_COMMISSION_RATE");
-        if (commissionRateOpt.isEmpty()) {
-            return new ApiResponse<>(500, "System config 'ADMIN_COMMISSION_RATE' not found. Please configure it in system_config table.", null);
-        }
+
         BigDecimal commissionRate = commissionRateOpt.get();
         BigDecimal commission = totalAmountBD.multiply(commissionRate);
         billResult.setCommission(commission);

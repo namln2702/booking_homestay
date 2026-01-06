@@ -8,6 +8,7 @@ import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayStatusRequest;
 import org.example.do_an_v1.dto.response.PageResponse;
+import org.example.do_an_v1.dto.response.RevenueStatisticsResponse;
 import org.example.do_an_v1.enums.StatusHost;
 import org.example.do_an_v1.payload.ApiResponse;
 
@@ -90,4 +91,12 @@ public interface HostService {
      * Host lấy tất cả các khiếu nại (complaints) của các homestay thuộc về host
      */
     ApiResponse<?> getAllComplaints(Long hostUserId);
+
+    /**
+     * Host thống kê doanh thu
+     * Chỉ tính các bill của host này, không tính các phần thống kê của admin
+     */
+    ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
+            Long hostUserId, Integer startMonth, Integer startYear, Integer endMonth, Integer endYear
+    );
 }

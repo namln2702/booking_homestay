@@ -72,4 +72,16 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
             LocalDateTime startDate,
             LocalDateTime endDate
     );
+
+    /**
+     * Tìm bills có updatedAt hoặc createdAt trong khoảng thời gian
+     */
+    @Query("""
+        SELECT b FROM Bill b
+        WHERE (b.updatedAt >= :startDate AND b.updatedAt <= :endDate)
+        """)
+    List<Bill> findByUpdatedAtOrCreatedAtBetween(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

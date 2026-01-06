@@ -199,6 +199,22 @@ public class HostController {
         return hostService.getAllComplaints(hostUserId);
     }
 
+    /**
+     * Host thống kê doanh thu
+     * Chỉ tính các bill của host này, không tính các phần thống kê của admin
+     */
+    @PreAuthorize("hasAuthority('ROLE_HOST')")
+    @GetMapping("/reports/revenue-statistics")
+    public ApiResponse<org.example.do_an_v1.dto.response.RevenueStatisticsResponse> getRevenueStatistics(
+            @RequestParam Integer startMonth,
+            @RequestParam Integer startYear,
+            @RequestParam Integer endMonth,
+            @RequestParam Integer endYear
+    ) {
+        Long hostUserId = identityResolver.requireUserId(null);
+        return hostService.getRevenueStatistics(hostUserId, startMonth, startYear, endMonth, endYear);
+    }
+
     //  Cap nhap lai token host
     // @PreAuthorize("hasAuthority('ROLE_HOST')")
     // @PostMapping("/me/refresh-token")
