@@ -76,6 +76,44 @@ public class VNPayPaymentSupport {
             return null;
         }
 
+        // Validate: Kiểm tra các ngày đã đặt có trong quá khứ không
+        LocalDate checkInLocalDate = bill.getCheckIn().toLocalDate();
+        LocalDate today = LocalDate.now();
+        
+        if (checkInLocalDate.isBefore(today)) {
+            log.error("Cannot create payment URL: Bill {} has check-in date {} in the past (today: {})", 
+                    bill.getId(), checkInLocalDate, today);
+            return null;
+        }
+
+        // Validate: Kiểm tra các ngày đã đặt có đang trống (available) không
+        // Chỉ kiểm tra cho thanh toán lần đầu (DEPOSIT_PENDING)
+        if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
+            LocalDate checkOutLocalDate = bill.getCheckOut().toLocalDate();
+            Date startDate = Date.from(checkInLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+            Date endDate = Date.from(checkOutLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+            // Tìm tất cả HomestayDailyPrice trong khoảng thời gian của bill
+            List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findByHomestayAndDateRange(
+                    bill.getHomestay().getId(),
+                    startDate,
+                    endDate
+            );
+
+            // Kiểm tra xem có ngày nào đã được booked không
+            for (HomestayDailyPrice dailyPrice : dailyPrices) {
+                if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+                    // Kiểm tra xem ngày này có thuộc về bill hiện tại không
+                    // Nếu thuộc về bill khác thì không cho phép thanh toán
+                    if (dailyPrice.getBill() == null || !dailyPrice.getBill().getId().equals(bill.getId())) {
+                        log.error("Cannot create payment URL: Some dates in bill {} are already booked by another bill. Date: {}", 
+                                bill.getId(), dailyPrice.getPricePerDay() != null ? dailyPrice.getPricePerDay().getDay() : "unknown");
+                        return null;
+                    }
+                }
+            }
+        }
+
         // Khóa các ngày HomestayDailyPrice khi tạo payment URL (chỉ cho lần đầu thanh toán - DEPOSIT_PENDING)
         if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
             lockHomestayDailyPrices(bill);

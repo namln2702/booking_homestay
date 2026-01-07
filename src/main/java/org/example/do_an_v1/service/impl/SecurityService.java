@@ -63,7 +63,7 @@ public class SecurityService {
                 .subject(u.getEmail())
                 .issuer("lainguyennam270203@gmail.com")
                 .issueTime(new Date())
-                .expirationTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.MINUTES).toEpochMilli()))
+                .expirationTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.HOURS).toEpochMilli()))
                 .jwtID(UUID.randomUUID().toString())
                 .claim("id", u.getId())
                 .claim("scope", scope) // "ROLE_ADMIN ROLE_HOST ROLE_CUSTOMER"
