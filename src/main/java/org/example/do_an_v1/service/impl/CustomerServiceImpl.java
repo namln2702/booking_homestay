@@ -499,6 +499,14 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(500, "System config 'ADMIN_COMMISSION_RATE' not found. Please configure it in system_config table.", null);
         }
 
+        // Khởi tạo collection ManyToMany cho bill
+        if (bill.getListHomestayDailyPrices() == null) {
+            bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+        }
+        
+        // Thêm các dailyPrices vào collection của bill (quan hệ ManyToMany)
+        bill.getListHomestayDailyPrices().addAll(finalDailyPricesToLock);
+        
         Bill billResult = billRepository.save(bill);
 
 
@@ -1464,7 +1472,7 @@ public class CustomerServiceImpl implements CustomerService {
         /* TODO
         Kiểm tra xem những trạng thái nào thì được cancel bill
          */
-        if ( bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING) {
+        if ( bill.getStatus() != StatusBill.REMAINING_PAYMENT_PENDING && bill.getStatus() != StatusBill.DEPOSIT_PENDING) {
             return new ApiResponse<>(400, "Bill cannot be cancelled. Current status: " + bill.getStatus(), null);
         }
 
@@ -1475,18 +1483,21 @@ public class CustomerServiceImpl implements CustomerService {
         boolean canRefund = daysUntilCheckIn >= 2;
 
         // Unlock homestay_daily_prices
-        List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
-                .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
-                .toList();
-
-        for (HomestayDailyPrice dailyPrice : dailyPrices) {
-            dailyPrice.setIsBooked(false);
-            dailyPrice.setBill(null);
-            homestayDailyPricesRepository.save(dailyPrice);
+        // Reload bill để có collection đầy đủ
+        bill = billRepository.findById(bill.getId()).orElse(bill);
+        
+        if (bill.getListHomestayDailyPrices() != null ) {
+            for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
+                dailyPrice.setIsBooked(false);
+                homestayDailyPricesRepository.save(dailyPrice);
+            }
+            // Xóa tất cả quan hệ ManyToMany
+//            bill.getListHomestayDailyPrices().clear();
+            billRepository.save(bill);
         }
 
         // Nếu được hoàn tiền, tạo transaction REFUND
-        if (canRefund) {
+        if (bill.getStatus() != StatusBill.DEPOSIT_PENDING && canRefund) {
             // Tìm transaction thanh toán cọc đã thành công
             Transaction depositTransaction = transactionRepository.findByBillId(bill.getId()).stream()
                     .filter(t -> t.getTransactionType() == TypeTransaction.CUSTOMER_PAYMENT_ADMIN_FIRST

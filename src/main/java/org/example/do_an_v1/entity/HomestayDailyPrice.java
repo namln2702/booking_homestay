@@ -3,7 +3,6 @@ package org.example.do_an_v1.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.do_an_v1.enums.Status;
 
 @Entity
 @NoArgsConstructor
@@ -30,8 +29,4 @@ public class HomestayDailyPrice extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "homestay_id", nullable = false)
     private Homestay homestay;
-
-    @ManyToOne
-    @JoinColumn(name = "bill_id", nullable = true)
-    private Bill bill;
 }

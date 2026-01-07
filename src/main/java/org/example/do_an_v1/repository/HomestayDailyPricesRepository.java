@@ -77,11 +77,9 @@ public interface HomestayDailyPricesRepository extends JpaRepository<HomestayDai
         SELECT hdp
         FROM HomestayDailyPrice hdp
         JOIN hdp.pricePerDay ppd
-        WHERE hdp.homestay.id = :homestayId
-          AND ppd.day = :date
+        WHERE ppd.day = :date
 """)
     Optional<HomestayDailyPrice> findByHomestayAndDate(
-            @Param("homestayId") Long homestayId,
             @Param("date") Date date
     );
 

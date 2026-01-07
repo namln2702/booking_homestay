@@ -62,14 +62,16 @@ public class CheckinExpirationScheduler {
             for (Bill bill : remainingPaymentPendingBills) {
                 try {
                     // Unlock homestay_daily_prices (giống như cancelBill)
-                    List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
-                            .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
-                            .toList();
-
-                    for (HomestayDailyPrice dailyPrice : dailyPrices) {
-                        dailyPrice.setIsBooked(false);
-                        dailyPrice.setBill(null);
-                        homestayDailyPricesRepository.save(dailyPrice);
+                    // Reload bill để có collection đầy đủ
+                    bill = billRepository.findById(bill.getId()).orElse(bill);
+                    
+                    if (bill.getListHomestayDailyPrices() != null) {
+                        for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
+                            dailyPrice.setIsBooked(false);
+                            homestayDailyPricesRepository.save(dailyPrice);
+                        }
+                        // Xóa tất cả quan hệ ManyToMany
+                        bill.getListHomestayDailyPrices().clear();
                     }
 
                     // Cập nhật status bill thành CHECKIN_EXPIRED

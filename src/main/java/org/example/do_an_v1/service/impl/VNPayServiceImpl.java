@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -54,7 +53,7 @@ public class VNPayServiceImpl implements VNPayService {
         );
 
         if (response == null) {
-            return new ApiResponse<>(400, "Failed to create payment URL. Please check bill and transaction status.", null);
+            return new ApiResponse<>(400, "Failed to create payment URL. Please check bill", null);
         }
 
         return new ApiResponse<>(200, "Payment URL created successfully", response);
@@ -200,14 +199,17 @@ public class VNPayServiceImpl implements VNPayService {
         // Chỉ xử lý nếu bill đang ở trạng thái DEPOSIT_PENDING
         if (bill.getStatus() == StatusBill.DEPOSIT_PENDING) {
             // Unlock homestay_daily_prices
-            List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findAll().stream()
-                    .filter(hdp -> hdp.getBill() != null && hdp.getBill().getId().equals(bill.getId()))
-                    .toList();
-
-            for (HomestayDailyPrice dailyPrice : dailyPrices) {
-                dailyPrice.setIsBooked(false);
-                dailyPrice.setBill(null);
-                homestayDailyPricesRepository.save(dailyPrice);
+            // Reload bill để có collection đầy đủ
+            bill = billRepository.findById(bill.getId()).orElse(bill);
+            
+            if (bill.getListHomestayDailyPrices() != null) {
+                for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
+                    dailyPrice.setIsBooked(false);
+                    homestayDailyPricesRepository.save(dailyPrice);
+                }
+                // Xóa tất cả quan hệ ManyToMany
+                bill.getListHomestayDailyPrices().clear();
+                billRepository.save(bill);
             }
 
             // Update bill và transaction status

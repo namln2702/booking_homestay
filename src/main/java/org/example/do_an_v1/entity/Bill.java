@@ -61,7 +61,12 @@ public class Bill extends BaseEntity{
     @OneToMany(mappedBy = "bill")
     Set<Transaction> listTransaction;
 
-    @OneToMany(mappedBy = "bill")
+    @ManyToMany
+    @JoinTable(
+            name = "tbl_bill_homestay_daily_prices",
+            joinColumns = @JoinColumn(name = "bill_id"),
+            inverseJoinColumns = @JoinColumn(name = "homestay_daily_price_id")
+    )
     Set<HomestayDailyPrice> listHomestayDailyPrices;
 
     @OneToMany(mappedBy = "bill")

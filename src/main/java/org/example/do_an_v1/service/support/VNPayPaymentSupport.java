@@ -100,12 +100,21 @@ public class VNPayPaymentSupport {
                     endDate
             );
 
-            // Kiểm tra xem có ngày nào đã được booked không
+            // Kiểm tra xem có ngày nào đã được booked bởi bill khác không
+            // Reload bill để có collection đầy đủ
+            bill = billRepository.findById(bill.getId()).orElse(bill);
+            
+            // Khởi tạo collection nếu chưa có
+            if (bill.getListHomestayDailyPrices() == null) {
+                bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+            }
+            
             for (HomestayDailyPrice dailyPrice : dailyPrices) {
                 if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-                    // Kiểm tra xem ngày này có thuộc về bill hiện tại không
-                    // Nếu thuộc về bill khác thì không cho phép thanh toán
-                    if (dailyPrice.getBill() == null || !dailyPrice.getBill().getId().equals(bill.getId())) {
+
+                    
+                    // Nếu không thuộc về bill hiện tại và đã được booked, thì đã bị booked bởi bill khác
+                    if (dailyPrice.getIsBooked()) {
                         log.error("Cannot create payment URL: Some dates in bill {} are already booked by another bill. Date: {}", 
                                 bill.getId(), dailyPrice.getPricePerDay() != null ? dailyPrice.getPricePerDay().getDay() : "unknown");
                         return null;
@@ -223,7 +232,7 @@ public class VNPayPaymentSupport {
      * KHÔNG áp dụng cho thanh toán lần 2 (70% - REMAINING_PAYMENT_PENDING)
      */
     @Transactional
-    private void lockHomestayDailyPrices(Bill bill) {
+    protected void lockHomestayDailyPrices(Bill bill) {
         if (bill == null || bill.getHomestay() == null) {
             log.warn("Cannot lock daily prices: bill or homestay is null");
             return;
@@ -248,16 +257,25 @@ public class VNPayPaymentSupport {
                 endDate
         );
 
+        // Khởi tạo collection nếu chưa có
+        if (bill.getListHomestayDailyPrices() == null) {
+            bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+        }
+
         int lockedCount = 0;
         for (HomestayDailyPrice dailyPrice : dailyPrices) {
             // Chỉ khóa nếu chưa được book
             if (Boolean.FALSE.equals(dailyPrice.getIsBooked()) || dailyPrice.getIsBooked() == null) {
                 dailyPrice.setIsBooked(true);
-                dailyPrice.setBill(bill);
+                // Thêm vào collection ManyToMany
+                bill.getListHomestayDailyPrices().add(dailyPrice);
                 homestayDailyPricesRepository.save(dailyPrice);
                 lockedCount++;
             }
         }
+        
+        // Lưu bill để cập nhật quan hệ ManyToMany
+        billRepository.save(bill);
 
         log.info("Locked {} daily prices for bill {} (homestay {}, checkIn: {}, checkOut: {})",
                 lockedCount, bill.getId(), bill.getHomestay().getId(), checkInLocalDate, checkOutLocalDate);
