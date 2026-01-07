@@ -45,6 +45,7 @@ import org.example.do_an_v1.repository.HostRepository;
 import org.example.do_an_v1.repository.PricePerDayRepository;
 import org.example.do_an_v1.repository.TransactionRepository;
 import org.example.do_an_v1.repository.UserRepository;
+import org.example.do_an_v1.service.EmailService;
 import org.example.do_an_v1.service.HostService;
 import org.example.do_an_v1.service.support.UserRegistrationSupport;
 import org.example.do_an_v1.service.support.VNPayPaymentSupport;
@@ -101,6 +102,7 @@ public class HostServiceImpl implements HostService {
     private final VNPayPaymentSupport vnPayPaymentSupport;
     private final SystemConfigService systemConfigService;
     private final ComplaintRepository complaintRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -449,6 +451,12 @@ public class HostServiceImpl implements HostService {
             return new ApiResponse<>(400, "Complaint is no longer active for this bill", null);
         }
 
+        // Lưu trạng thái cũ để gửi email
+        StatusBill oldStatus = bill.getStatus();
+        String customerEmail = bill.getCustomer() != null && bill.getCustomer().getUser() != null 
+                ? bill.getCustomer().getUser().getEmail() 
+                : null;
+
         // Xử lý theo quyết định của host
         if (request.getApproved()) {
             // Host đồng ý -> chuyển thành REFUNDED và tạo transaction REFUND
@@ -478,6 +486,23 @@ public class HostServiceImpl implements HostService {
                 transactionRepository.save(refundTransaction);
             }
 
+            // Gửi email thông báo cho customer
+            if (customerEmail != null) {
+                try {
+                    emailService.sendComplaintStatusEmail(
+                            customerEmail,
+                            bill.getCode(),
+                            oldStatus.toString(),
+                            StatusBill.REFUNDED_PENDING.toString(),
+                            "Host"
+                    );
+                    log.info("Complaint status email sent to customer {} for bill {}", customerEmail, bill.getId());
+                } catch (Exception e) {
+                    log.error("Failed to send complaint status email to customer {} for bill {}: {}", 
+                            customerEmail, bill.getId(), e.getMessage());
+                }
+            }
+
             log.info("Host {} approved complaint {} for bill {}. Bill status changed to REFUNDED.", 
                     hostUserId, request.getComplaintId(), bill.getId());
 
@@ -488,6 +513,23 @@ public class HostServiceImpl implements HostService {
             // Host không đồng ý -> chuyển thành ADMIN_COMPLAINT_PROCESSING (để admin xử lý)
             bill.setStatus(StatusBill.ADMIN_COMPLAINT_PROCESSING);
             billRepository.save(bill);
+
+            // Gửi email thông báo cho customer
+            if (customerEmail != null) {
+                try {
+                    emailService.sendComplaintStatusEmail(
+                            customerEmail,
+                            bill.getCode(),
+                            oldStatus.toString(),
+                            StatusBill.ADMIN_COMPLAINT_PROCESSING.toString(),
+                            "Host"
+                    );
+                    log.info("Complaint status email sent to customer {} for bill {}", customerEmail, bill.getId());
+                } catch (Exception e) {
+                    log.error("Failed to send complaint status email to customer {} for bill {}: {}", 
+                            customerEmail, bill.getId(), e.getMessage());
+                }
+            }
 
             log.info("Host {} rejected complaint {} for bill {}. Bill status changed to ADMIN_COMPLAINT_PROCESSING.", 
                     hostUserId, request.getComplaintId(), bill.getId());

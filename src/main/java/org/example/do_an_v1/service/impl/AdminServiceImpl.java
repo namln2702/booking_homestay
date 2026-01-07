@@ -855,6 +855,12 @@ public class AdminServiceImpl implements AdminService {
                     null);
         }
 
+        // Lưu trạng thái cũ để gửi email
+        StatusBill oldStatus = bill.getStatus();
+        String customerEmail = bill.getCustomer() != null && bill.getCustomer().getUser() != null 
+                ? bill.getCustomer().getUser().getEmail() 
+                : null;
+
         // Xử lý theo quyết định
         if (Boolean.TRUE.equals(request.getApproved())) {
             // Đồng ý: chuyển bill sang REFUNDED và tạo transaction REFUND mới
@@ -887,6 +893,23 @@ public class AdminServiceImpl implements AdminService {
             bill.setStatus(StatusBill.REFUNDED_PENDING);
             billRepository.save(bill);
 
+            // Gửi email thông báo cho customer
+            if (customerEmail != null) {
+                try {
+                    emailService.sendComplaintStatusEmail(
+                            customerEmail,
+                            bill.getCode(),
+                            oldStatus.toString(),
+                            StatusBill.REFUNDED_PENDING.toString(),
+                            "Admin"
+                    );
+                } catch (Exception e) {
+                    // Log lỗi nhưng không fail transaction
+                    System.err.println("Failed to send complaint status email to customer " + customerEmail + 
+                            " for bill " + bill.getId() + ": " + e.getMessage());
+                }
+            }
+
             return new ApiResponse<>(200, 
                     "Complaint approved. Bill status changed to REFUNDED. Refund transaction created.", 
                     Map.of(
@@ -900,6 +923,23 @@ public class AdminServiceImpl implements AdminService {
             // Từ chối: chuyển bill sang REJECTED (không tạo transaction)
             bill.setStatus(StatusBill.REJECTED);
             billRepository.save(bill);
+
+            // Gửi email thông báo cho customer
+            if (customerEmail != null) {
+                try {
+                    emailService.sendComplaintStatusEmail(
+                            customerEmail,
+                            bill.getCode(),
+                            oldStatus.toString(),
+                            StatusBill.REJECTED.toString(),
+                            "Admin"
+                    );
+                } catch (Exception e) {
+                    // Log lỗi nhưng không fail transaction
+                    System.err.println("Failed to send complaint status email to customer " + customerEmail + 
+                            " for bill " + bill.getId() + ": " + e.getMessage());
+                }
+            }
 
             return new ApiResponse<>(200, 
                     "Complaint rejected. Bill status changed to REJECTED.", 
