@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.Date;
+
 /**
  * DTO cho giá homestay theo ngày
  * 
@@ -20,8 +22,9 @@ import lombok.Setter;
 @Builder
 public class HomestayDailyPricesDTO {
     private Long id;                      // ID của HomestayDailyPrice (khi response)
+    private Date day;                     // Ngày (lấy từ BillHomestayDailyPrice)
     
     @NotNull(message = "Price is required")
     @Positive(message = "Price must be positive")
-    private Float price;                  // Giá cho ngày đó
+    private Float price;                  // Giá cho ngày đó (lấy từ BillHomestayDailyPrice)
 }

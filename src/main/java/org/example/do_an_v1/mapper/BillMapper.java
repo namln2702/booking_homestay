@@ -4,8 +4,8 @@ import org.example.do_an_v1.dto.BillDTO;
 import org.example.do_an_v1.dto.HomestayDailyPricesDTO;
 import org.example.do_an_v1.dto.HomestaySummaryDTO;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.BillHomestayDailyPrice;
 import org.example.do_an_v1.entity.Homestay;
-import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.Host;
 import org.example.do_an_v1.entity.User;
 
@@ -48,9 +48,9 @@ public class BillMapper {
                         ? AddressMapper.toDTO(bill.getHomestay().getAddress())
                         : null)
 
-                // Danh sách giá theo ngày
-                .homestayDailyPricesDTOS(bill.getListHomestayDailyPrices() != null
-                        ? bill.getListHomestayDailyPrices().stream()
+                // Danh sách giá theo ngày - lấy từ BillHomestayDailyPrice
+                .homestayDailyPricesDTOS(bill.getListBillHomestayDailyPrices() != null
+                        ? bill.getListBillHomestayDailyPrices().stream()
                         .map(BillMapper::toHomestayDailyPricesDTO)
                         .collect(Collectors.toList())
                         : null)
@@ -116,14 +116,16 @@ public class BillMapper {
     }
 
     /**
-     * Map HomestayDailyPrice entity sang HomestayDailyPricesDTO
+     * Map BillHomestayDailyPrice entity sang HomestayDailyPricesDTO
+     * Lấy day và price từ BillHomestayDailyPrice
      */
-    private static HomestayDailyPricesDTO toHomestayDailyPricesDTO(HomestayDailyPrice entity) {
+    private static HomestayDailyPricesDTO toHomestayDailyPricesDTO(BillHomestayDailyPrice entity) {
         if (entity == null) {
             return null;
         }
         return HomestayDailyPricesDTO.builder()
-                .id(entity.getId())
+                .id(entity.getHomestayDailyPrice() != null ? entity.getHomestayDailyPrice().getId() : null)
+                .day(entity.getDay())
                 .price(entity.getPrice())
                 .build();
     }

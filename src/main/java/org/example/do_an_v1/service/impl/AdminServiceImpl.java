@@ -1265,15 +1265,15 @@ public class AdminServiceImpl implements AdminService {
             
             // Duyệt từ startDate đến checkOutLocalDate
             for (LocalDate date = startDate; !date.isAfter(checkOutLocalDate); date = date.plusDays(1)) {
-                // Tìm HomestayDailyPrice trong collection của bill theo ngày cụ thể
-                if (bill.getListHomestayDailyPrices() != null) {
-                    for (HomestayDailyPrice dailyPrice : new java.util.ArrayList<>(bill.getListHomestayDailyPrices())) {
-                        // Kiểm tra xem dailyPrice có ngày bằng date không (so sánh LocalDate)
-                        if (dailyPrice.getPricePerDay() != null 
-                                && dailyPrice.getPricePerDay().getDay() != null) {
+                // Tìm BillHomestayDailyPrice trong collection của bill theo ngày cụ thể
+                // Lấy day từ BillHomestayDailyPrice (không cần lấy từ pricePerDay nữa)
+                if (bill.getListBillHomestayDailyPrices() != null) {
+                    for (BillHomestayDailyPrice billDailyPrice : new java.util.ArrayList<>(bill.getListBillHomestayDailyPrices())) {
+                        // Kiểm tra xem billDailyPrice có ngày bằng date không (so sánh LocalDate)
+                        if (billDailyPrice.getDay() != null) {
                             // Chuyển đổi Date sang LocalDate để so sánh
                             LocalDate dailyPriceLocalDate;
-                            Date dayDate = dailyPrice.getPricePerDay().getDay();
+                            Date dayDate = billDailyPrice.getDay();
                             if (dayDate instanceof java.sql.Date) {
                                 // Nếu là java.sql.Date, dùng toLocalDate() trực tiếp
                                 dailyPriceLocalDate = ((java.sql.Date) dayDate).toLocalDate();
@@ -1286,9 +1286,12 @@ public class AdminServiceImpl implements AdminService {
                             
                             if (dailyPriceLocalDate.equals(date)) {
                                 // Unlock: set isBooked = false và remove khỏi collection
-                                dailyPrice.setIsBooked(false);
-                                bill.getListHomestayDailyPrices().remove(dailyPrice);
-                                homestayDailyPricesRepository.save(dailyPrice);
+                                if (billDailyPrice.getHomestayDailyPrice() != null) {
+                                    HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                                    dailyPrice.setIsBooked(false);
+                                    homestayDailyPricesRepository.save(dailyPrice);
+                                }
+                                bill.getListBillHomestayDailyPrices().remove(billDailyPrice);
                                 unlockedCount++;
                             }
                         }

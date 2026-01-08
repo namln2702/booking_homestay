@@ -130,10 +130,10 @@ public class PreferenceServiceImpl implements PreferenceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Preference not found with id: " + id));
 
         // Kiểm tra xem preference có đang được sử dụng bởi customer nào không
-        if (preference.getListCustomer() != null && !preference.getListCustomer().isEmpty()) {
-            throw new IllegalStateException("Cannot delete preference. It is currently associated with " + 
-                    preference.getListCustomer().size() + " customer(s)");
-        }
+//        if (preference.getListCustomer() != null && !preference.getListCustomer().isEmpty()) {
+//            throw new IllegalStateException("Cannot delete preference. It is currently associated with " +
+//                    preference.getListCustomer().size() + " customer(s)");
+//        }
 
         // Soft delete: set deleted = true
         preference.setDeleted(true);

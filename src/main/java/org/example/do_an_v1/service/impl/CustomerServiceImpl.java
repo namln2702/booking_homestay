@@ -110,6 +110,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final ComplaintRepository complaintRepository;
     private final TransactionRepository transactionRepository;
     private final PricePerDayRepository pricePerDayRepository;
+    private final BillHomestayDailyPriceRepository billHomestayDailyPriceRepository;
     private final EmailService emailService;
     private final AdminRepository adminRepository;
     private final SystemConfigService systemConfigService;
@@ -437,15 +438,10 @@ public class CustomerServiceImpl implements CustomerService {
                     .orElse(null);
 
             if (pricePerDay == null) {
-                // Chưa có thì tạo mới PricePerDay với ngày và giá
+                // Chưa có thì tạo mới PricePerDay với ngày
                 pricePerDay = PricePerDay.builder()
                         .day(day)
-                        .price(price)
                         .build();
-                pricePerDay = pricePerDayRepository.save(pricePerDay);
-            } else {
-                // Đã có thì lấy ra (có thể cập nhật giá nếu cần)
-                pricePerDay.setPrice(pricePerDayRequest.getPrice());
                 pricePerDay = pricePerDayRepository.save(pricePerDay);
             }
 
@@ -457,7 +453,7 @@ public class CustomerServiceImpl implements CustomerService {
             if (homestayDailyPrice == null) {
                 // Chưa có thì tạo mới HomestayDailyPrice
                 homestayDailyPrice = HomestayDailyPrice.builder()
-                        .price(pricePerDay.getPrice())
+                        .price(price)
                         .isBooked(Boolean.FALSE)
                         .activeHost(false)
                         .pricePerDay(pricePerDay)
@@ -499,15 +495,30 @@ public class CustomerServiceImpl implements CustomerService {
             return new ApiResponse<>(500, "System config 'ADMIN_COMMISSION_RATE' not found. Please configure it in system_config table.", null);
         }
 
-        // Khởi tạo collection ManyToMany cho bill
-        if (bill.getListHomestayDailyPrices() == null) {
-            bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+        // Lưu bill trước để có ID
+        Bill billResult = billRepository.save(bill);
+        
+        // Tạo BillHomestayDailyPrice cho mỗi dailyPrice với day và price
+        if (billResult.getListBillHomestayDailyPrices() == null) {
+            billResult.setListBillHomestayDailyPrices(new java.util.HashSet<>());
         }
         
-        // Thêm các dailyPrices vào collection của bill (quan hệ ManyToMany)
-        bill.getListHomestayDailyPrices().addAll(finalDailyPricesToLock);
+        for (HomestayDailyPrice dailyPrice : finalDailyPricesToLock) {
+            // Lấy day từ pricePerDay và price từ dailyPrice
+            Date day = dailyPrice.getPricePerDay() != null ? dailyPrice.getPricePerDay().getDay() : null;
+            Float price = dailyPrice.getPrice();
+            
+            BillHomestayDailyPrice billDailyPrice = BillHomestayDailyPrice.builder()
+                    .bill(billResult)
+                    .homestayDailyPrice(dailyPrice)
+                    .day(day)
+                    .price(price)
+                    .build();
+            
+            billResult.getListBillHomestayDailyPrices().add(billDailyPrice);
+        }
         
-        Bill billResult = billRepository.save(bill);
+        billResult = billRepository.save(billResult);
 
 
 
@@ -1104,36 +1115,41 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private List<CustomerOrderDailyPriceResponse> mapDailyPrices(Bill bill) {
-        if (bill == null || bill.getListHomestayDailyPrices() == null) {
+        if (bill == null || bill.getListBillHomestayDailyPrices() == null) {
             return List.of();
         }
 
         Comparator<CustomerOrderDailyPriceResponse> byDate = Comparator
                 .comparing(CustomerOrderDailyPriceResponse::getDate, Comparator.nullsLast(Comparator.naturalOrder()));
 
-        return bill.getListHomestayDailyPrices().stream()
+        return bill.getListBillHomestayDailyPrices().stream()
                 .map(this::mapDailyPrice)
                 .filter(Objects::nonNull)
                 .sorted(byDate)
                 .toList();
     }
 
-    private CustomerOrderDailyPriceResponse mapDailyPrice(HomestayDailyPrice entity) {
+    private CustomerOrderDailyPriceResponse mapDailyPrice(BillHomestayDailyPrice entity) {
         if (entity == null) {
             return null;
         }
 
+        // Lấy day và price từ BillHomestayDailyPrice
         LocalDate date = null;
-        if (entity.getPricePerDay() != null && entity.getPricePerDay().getDay() != null) {
-            date = entity.getPricePerDay().getDay().toInstant()
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate();
+        if (entity.getDay() != null) {
+            if (entity.getDay() instanceof java.sql.Date) {
+                date = ((java.sql.Date) entity.getDay()).toLocalDate();
+            } else {
+                date = entity.getDay().toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate();
+            }
         }
 
         return CustomerOrderDailyPriceResponse.builder()
-                .dailyPriceId(entity.getId())
+                .dailyPriceId(entity.getHomestayDailyPrice() != null ? entity.getHomestayDailyPrice().getId() : null)
                 .date(date)
-                .price(entity.getPrice())
+                .price(entity.getPrice()) // Lấy price từ BillHomestayDailyPrice
                 .build();
     }
 
@@ -1486,13 +1502,16 @@ public class CustomerServiceImpl implements CustomerService {
         // Reload bill để có collection đầy đủ
         bill = billRepository.findById(bill.getId()).orElse(bill);
         
-        if (bill.getListHomestayDailyPrices() != null ) {
-            for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
-                dailyPrice.setIsBooked(false);
-                homestayDailyPricesRepository.save(dailyPrice);
+        if (bill.getListBillHomestayDailyPrices() != null ) {
+            for (BillHomestayDailyPrice billDailyPrice : bill.getListBillHomestayDailyPrices()) {
+                if (billDailyPrice.getHomestayDailyPrice() != null) {
+                    HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                    dailyPrice.setIsBooked(false);
+                    homestayDailyPricesRepository.save(dailyPrice);
+                }
             }
-            // Xóa tất cả quan hệ ManyToMany
-//            bill.getListHomestayDailyPrices().clear();
+            // Xóa tất cả quan hệ
+            // bill.getListBillHomestayDailyPrices().clear();
             billRepository.save(bill);
         }
 

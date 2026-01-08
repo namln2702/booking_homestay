@@ -729,13 +729,16 @@ public class HostServiceImpl implements HostService {
         // Reload bill để có collection đầy đủ
         bill = billRepository.findById(bill.getId()).orElse(bill);
         
-        if (bill.getListHomestayDailyPrices() != null) {
-            for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
-                dailyPrice.setIsBooked(false);
-                homestayDailyPricesRepository.save(dailyPrice);
+        if (bill.getListBillHomestayDailyPrices() != null) {
+            for (BillHomestayDailyPrice billDailyPrice : bill.getListBillHomestayDailyPrices()) {
+                if (billDailyPrice.getHomestayDailyPrice() != null) {
+                    HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                    dailyPrice.setIsBooked(false);
+                    homestayDailyPricesRepository.save(dailyPrice);
+                }
             }
-            // Xóa tất cả quan hệ ManyToMany
-            bill.getListHomestayDailyPrices().clear();
+            // Xóa tất cả quan hệ
+            bill.getListBillHomestayDailyPrices().clear();
         }
 
         // Cập nhật trạng thái bill thành SUCCEED
@@ -785,15 +788,8 @@ public class HostServiceImpl implements HostService {
                 if (pricePerDay == null) {
                     pricePerDay = PricePerDay.builder()
                             .day(day)
-                            .price(price)
                             .build();
                     pricePerDay = pricePerDayRepository.save(pricePerDay);
-                } else {
-                    // Cập nhật giá nếu khác
-                    if (!pricePerDay.getPrice().equals(price)) {
-                        pricePerDay.setPrice(price);
-                        pricePerDayRepository.save(pricePerDay);
-                    }
                 }
 
                 // Tìm HomestayDailyPrice đã tồn tại
@@ -816,11 +812,15 @@ public class HostServiceImpl implements HostService {
                     dailyPrice.setPrice(price);
                     // Xóa bill nếu có (unlock) - tìm và remove khỏi collection của bill
                     List<Bill> billsContainingDailyPrice = billRepository.findAll().stream()
-                            .filter(b -> b.getListHomestayDailyPrices() != null 
-                                    && b.getListHomestayDailyPrices().contains(dailyPrice))
+                            .filter(b -> b.getListBillHomestayDailyPrices() != null 
+                                    && b.getListBillHomestayDailyPrices().stream()
+                                        .anyMatch(bhdp -> bhdp.getHomestayDailyPrice() != null 
+                                                && bhdp.getHomestayDailyPrice().getId().equals(dailyPrice.getId())))
                             .toList();
                     for (Bill b : billsContainingDailyPrice) {
-                        b.getListHomestayDailyPrices().remove(dailyPrice);
+                        b.getListBillHomestayDailyPrices().removeIf(bhdp -> 
+                                bhdp.getHomestayDailyPrice() != null 
+                                && bhdp.getHomestayDailyPrice().getId().equals(dailyPrice.getId()));
                         billRepository.save(b);
                     }
                     homestayDailyPricesRepository.save(dailyPrice);
@@ -871,7 +871,6 @@ public class HostServiceImpl implements HostService {
                     // Nếu chưa có PricePerDay thì tạo mới
                     pricePerDay = PricePerDay.builder()
                             .day(day)
-                            .price(price != null ? price : homestay.getBasePrice())
                             .build();
                     pricePerDay = pricePerDayRepository.save(pricePerDay);
                 }
@@ -941,33 +940,29 @@ public class HostServiceImpl implements HostService {
                 if (pricePerDay == null) {
                     pricePerDay = PricePerDay.builder()
                             .day(day)
-                            .price(price)
                             .build();
                     pricePerDay = pricePerDayRepository.save(pricePerDay);
-                } else {
-                    // Cập nhật giá nếu khác
-                    if (!pricePerDay.getPrice().equals(price)) {
-                        pricePerDay.setPrice(price);
-                        pricePerDayRepository.save(pricePerDay);
-                    }
                 }
 
-                // Tìm HomestayDailyPrice hiện có cho homestay và pricePerDay này
-                Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
-                        .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
+                // Tìm tất cả HomestayDailyPrice của homestay này có cùng pricePerDay (cùng ngày)
+                List<HomestayDailyPrice> allDailyPricesForDay = homestayDailyPricesRepository
+                        .findByHomestayAndPricePerDay(homestay.getId(), pricePerDay.getId());
 
-                if (existingDailyPrice.isPresent()) {
-                    // Cập nhật giá nếu đã tồn tại (chỉ cập nhật nếu chưa được booked)
-                    HomestayDailyPrice dailyPrice = existingDailyPrice.get();
-                    // Kiểm tra xem có bill nào chứa dailyPrice không
-                    boolean isInAnyBill = billRepository.findAll().stream()
-                            .anyMatch(b -> b.getListHomestayDailyPrices() != null 
-                                    && b.getListHomestayDailyPrices().contains(dailyPrice));
-                    if (!Boolean.TRUE.equals(dailyPrice.getIsBooked()) && !isInAnyBill) {
+                // Cập nhật giá cho tất cả HomestayDailyPrice của homestay này có cùng ngày
+                for (HomestayDailyPrice dailyPrice : allDailyPricesForDay) {
+
+                    // Chỉ cập nhật giá nếu chưa được booked và không có trong bill nào
+                    if (!Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
                         dailyPrice.setPrice(price);
                         homestayDailyPricesRepository.save(dailyPrice);
                     }
-                } else {
+                }
+
+                // Nếu chưa có HomestayDailyPrice nào cho homestay và pricePerDay này, tạo mới
+                Optional<HomestayDailyPrice> existingDailyPrice = homestayDailyPricesRepository
+                        .findOneByHomestayAndPricePerDay(homestay, pricePerDay);
+
+                if (!existingDailyPrice.isPresent()) {
                     // Tạo mới HomestayDailyPrice
                     HomestayDailyPrice newDailyPrice = HomestayDailyPrice.builder()
                             .price(price)
@@ -1196,15 +1191,15 @@ public class HostServiceImpl implements HostService {
             
             // Duyệt từ startDate đến checkOutLocalDate
             for (LocalDate date = startDate; !date.isAfter(checkOutLocalDate); date = date.plusDays(1)) {
-                // Tìm HomestayDailyPrice trong collection của bill theo ngày cụ thể
-                if (bill.getListHomestayDailyPrices() != null) {
-                    for (HomestayDailyPrice dailyPrice : new java.util.ArrayList<>(bill.getListHomestayDailyPrices())) {
-                        // Kiểm tra xem dailyPrice có ngày bằng date không (so sánh LocalDate)
-                        if (dailyPrice.getPricePerDay() != null 
-                                && dailyPrice.getPricePerDay().getDay() != null) {
+                // Tìm BillHomestayDailyPrice trong collection của bill theo ngày cụ thể
+                // Lấy day từ BillHomestayDailyPrice (không cần lấy từ pricePerDay nữa)
+                if (bill.getListBillHomestayDailyPrices() != null) {
+                    for (BillHomestayDailyPrice billDailyPrice : new java.util.ArrayList<>(bill.getListBillHomestayDailyPrices())) {
+                        // Kiểm tra xem billDailyPrice có ngày bằng date không (so sánh LocalDate)
+                        if (billDailyPrice.getDay() != null) {
                             // Chuyển đổi Date sang LocalDate để so sánh
                             LocalDate dailyPriceLocalDate;
-                            Date dayDate = dailyPrice.getPricePerDay().getDay();
+                            Date dayDate = billDailyPrice.getDay();
                             if (dayDate instanceof java.sql.Date) {
                                 // Nếu là java.sql.Date, dùng toLocalDate() trực tiếp
                                 dailyPriceLocalDate = ((java.sql.Date) dayDate).toLocalDate();
@@ -1217,9 +1212,12 @@ public class HostServiceImpl implements HostService {
                             
                             if (dailyPriceLocalDate.equals(date)) {
                                 // Unlock: set isBooked = false và remove khỏi collection
-                                dailyPrice.setIsBooked(false);
-                                bill.getListHomestayDailyPrices().remove(dailyPrice);
-                                homestayDailyPricesRepository.save(dailyPrice);
+                                if (billDailyPrice.getHomestayDailyPrice() != null) {
+                                    HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                                    dailyPrice.setIsBooked(false);
+                                    homestayDailyPricesRepository.save(dailyPrice);
+                                }
+                                bill.getListBillHomestayDailyPrices().remove(billDailyPrice);
                                 unlockedCount++;
                             }
                         }

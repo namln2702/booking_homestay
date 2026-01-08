@@ -7,6 +7,7 @@ import org.example.do_an_v1.dto.request.VNPayPaymentRequest;
 import org.example.do_an_v1.dto.request.VNPayReturnRequest;
 import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.BillHomestayDailyPrice;
 import org.example.do_an_v1.entity.Customer;
 import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.Transaction;
@@ -202,13 +203,16 @@ public class VNPayServiceImpl implements VNPayService {
             // Reload bill để có collection đầy đủ
             bill = billRepository.findById(bill.getId()).orElse(bill);
             
-            if (bill.getListHomestayDailyPrices() != null) {
-                for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
-                    dailyPrice.setIsBooked(false);
-                    homestayDailyPricesRepository.save(dailyPrice);
+            if (bill.getListBillHomestayDailyPrices() != null) {
+                for (BillHomestayDailyPrice billDailyPrice : bill.getListBillHomestayDailyPrices()) {
+                    if (billDailyPrice.getHomestayDailyPrice() != null) {
+                        HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                        dailyPrice.setIsBooked(false);
+                        homestayDailyPricesRepository.save(dailyPrice);
+                    }
                 }
-                // Xóa tất cả quan hệ ManyToMany
-                bill.getListHomestayDailyPrices().clear();
+                // Xóa tất cả quan hệ
+                bill.getListBillHomestayDailyPrices().clear();
                 billRepository.save(bill);
             }
 

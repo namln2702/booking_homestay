@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.do_an_v1.enums.StatusBill;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -38,10 +39,10 @@ public class Bill extends BaseEntity{
     private LocalDateTime actualCheckoutTime;
 
     @Column(name = "total_amount", precision = 12, scale = 2)
-    private java.math.BigDecimal totalAmount; // Tổng giá trị bill (100%)
+    private BigDecimal totalAmount; // Tổng giá trị bill (100%)
 
     @Column(name = "commission", precision = 12, scale = 2)
-    private java.math.BigDecimal commission; // Hoa hồng của ADMIN cho bill này
+    private BigDecimal commission; // Hoa hồng của ADMIN cho bill này
 
     @ManyToOne
     @JoinColumn(name = "homestay_id")
@@ -61,13 +62,8 @@ public class Bill extends BaseEntity{
     @OneToMany(mappedBy = "bill")
     Set<Transaction> listTransaction;
 
-    @ManyToMany
-    @JoinTable(
-            name = "tbl_bill_homestay_daily_prices",
-            joinColumns = @JoinColumn(name = "bill_id"),
-            inverseJoinColumns = @JoinColumn(name = "homestay_daily_price_id")
-    )
-    Set<HomestayDailyPrice> listHomestayDailyPrices;
+    @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL, orphanRemoval = true)
+    Set<BillHomestayDailyPrice> listBillHomestayDailyPrices;
 
     @OneToMany(mappedBy = "bill")
     Set<Complaint> listComplaint;

@@ -348,7 +348,6 @@ public class HomestayServiceImpl implements HomestayService {
         }
         PricePerDay newPricePerDay = PricePerDay.builder()
                 .day(day)
-                .price(price)
                 .build();
         return pricePerDayRepository.save(newPricePerDay);
     }

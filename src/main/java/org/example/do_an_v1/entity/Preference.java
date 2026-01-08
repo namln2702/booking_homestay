@@ -28,7 +28,5 @@ public class Preference extends BaseEntity {
     @Builder.Default
     private Boolean deleted = false;
 
-    @ManyToMany
-    Set<Customer> listCustomer;
 
 }

@@ -6,10 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.do_an_v1.configuration.VNPayConfig;
 import org.example.do_an_v1.dto.response.VNPayPaymentResponse;
 import org.example.do_an_v1.entity.Bill;
+import org.example.do_an_v1.entity.BillHomestayDailyPrice;
 import org.example.do_an_v1.entity.HomestayDailyPrice;
 import org.example.do_an_v1.entity.Transaction;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.enums.StatusTransaction;
+import org.example.do_an_v1.repository.BillHomestayDailyPriceRepository;
 import org.example.do_an_v1.repository.BillRepository;
 import org.example.do_an_v1.repository.HomestayDailyPricesRepository;
 import org.example.do_an_v1.repository.TransactionRepository;
@@ -36,6 +38,7 @@ public class VNPayPaymentSupport {
     private final BillRepository billRepository;
     private final TransactionRepository transactionRepository;
     private final HomestayDailyPricesRepository homestayDailyPricesRepository;
+    private final BillHomestayDailyPriceRepository billHomestayDailyPriceRepository;
 
     /**
      * Tạo VNPay payment URL cho một transaction
@@ -104,19 +107,25 @@ public class VNPayPaymentSupport {
             // Reload bill để có collection đầy đủ
             bill = billRepository.findById(bill.getId()).orElse(bill);
             // Khởi tạo collection nếu chưa có
-            if (bill.getListHomestayDailyPrices() == null) {
-                bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+            if (bill.getListBillHomestayDailyPrices() == null) {
+                bill.setListBillHomestayDailyPrices(new java.util.HashSet<>());
             }
             
-            for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
-                if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
-
-                    
-                    // Nếu không thuộc về bill hiện tại và đã được booked, thì đã bị booked bởi bill khác
-                    if (dailyPrice.getIsBooked()) {
-                        log.error("Cannot create payment URL: Some dates in bill {} are already booked by another bill. Date: {}", 
-                                bill.getId(), dailyPrice.getPricePerDay() != null ? dailyPrice.getPricePerDay().getDay() : "unknown");
-                        return null;
+            for (BillHomestayDailyPrice billDailyPrice : bill.getListBillHomestayDailyPrices()) {
+                if (billDailyPrice.getHomestayDailyPrice() != null) {
+                    HomestayDailyPrice dailyPrice = billDailyPrice.getHomestayDailyPrice();
+                    if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
+                        // Nếu không thuộc về bill hiện tại và đã được booked, thì đã bị booked bởi bill khác
+                        // Kiểm tra xem dailyPrice có thuộc về bill này không
+                        boolean belongsToThisBill = bill.getListBillHomestayDailyPrices().stream()
+                                .anyMatch(bhdp -> bhdp.getHomestayDailyPrice() != null 
+                                        && bhdp.getHomestayDailyPrice().getId().equals(dailyPrice.getId()));
+                        
+                        if (!belongsToThisBill) {
+                            log.error("Cannot create payment URL: Some dates in bill {} are already booked by another bill. Date: {}", 
+                                    bill.getId(), billDailyPrice.getDay() != null ? billDailyPrice.getDay() : "unknown");
+                            return null;
+                        }
                     }
                 }
             }
@@ -257,8 +266,8 @@ public class VNPayPaymentSupport {
         );
 
         // Khởi tạo collection nếu chưa có
-        if (bill.getListHomestayDailyPrices() == null) {
-            bill.setListHomestayDailyPrices(new java.util.HashSet<>());
+        if (bill.getListBillHomestayDailyPrices() == null) {
+            bill.setListBillHomestayDailyPrices(new java.util.HashSet<>());
         }
 
         int lockedCount = 0;
@@ -266,14 +275,33 @@ public class VNPayPaymentSupport {
             // Chỉ khóa nếu chưa được book
             if (Boolean.FALSE.equals(dailyPrice.getIsBooked()) || dailyPrice.getIsBooked() == null) {
                 dailyPrice.setIsBooked(true);
-                // Thêm vào collection ManyToMany
-                bill.getListHomestayDailyPrices().add(dailyPrice);
                 homestayDailyPricesRepository.save(dailyPrice);
+                
+                // Kiểm tra xem đã có BillHomestayDailyPrice chưa
+                boolean alreadyExists = bill.getListBillHomestayDailyPrices().stream()
+                        .anyMatch(bhdp -> bhdp.getHomestayDailyPrice() != null 
+                                && bhdp.getHomestayDailyPrice().getId().equals(dailyPrice.getId()));
+                
+                if (!alreadyExists) {
+                    // Lấy day từ pricePerDay và price từ dailyPrice
+                    Date day = dailyPrice.getPricePerDay() != null ? dailyPrice.getPricePerDay().getDay() : null;
+                    Float price = dailyPrice.getPrice();
+                    
+                    // Tạo BillHomestayDailyPrice mới
+                    BillHomestayDailyPrice billDailyPrice = BillHomestayDailyPrice.builder()
+                            .bill(bill)
+                            .homestayDailyPrice(dailyPrice)
+                            .day(day)
+                            .price(price)
+                            .build();
+                    
+                    bill.getListBillHomestayDailyPrices().add(billDailyPrice);
+                }
                 lockedCount++;
             }
         }
         
-        // Lưu bill để cập nhật quan hệ ManyToMany
+        // Lưu bill để cập nhật quan hệ
         billRepository.save(bill);
 
         log.info("Locked {} daily prices for bill {} (homestay {}, checkIn: {}, checkOut: {})",
