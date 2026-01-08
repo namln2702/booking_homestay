@@ -65,6 +65,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.REFUNDED,
             StatusBill.REJECTED,
             StatusBill.SUCCEED,
+            StatusBill.CANCEL_REFUND_PENDING,
             StatusBill.CANCELLED_REFUNDED,
             StatusBill.CANCELLED
     );
@@ -77,6 +78,7 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
             StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
+            StatusBill.CANCEL_REFUND_PENDING,
             StatusBill.REJECTED,
             StatusBill.SUCCEED,
             StatusBill.CANCELLED_REFUNDED,
@@ -89,8 +91,11 @@ public class CustomerServiceImpl implements CustomerService {
             StatusBill.ADMIN_COMPLAINT_PROCESSING,
             StatusBill.REFUNDED_PENDING,
             StatusBill.REFUNDED,
+            StatusBill.CANCEL_REFUND_PENDING,
             StatusBill.REJECTED,
-            StatusBill.SUCCEED
+            StatusBill.SUCCEED,
+            StatusBill.CANCELLED_REFUNDED,
+            StatusBill.CANCELLED
     );
     private static final EnumSet<StatusBill> REMAINING_PAYMENT_REQUIRED_STATUSES = EnumSet.of(
             StatusBill.REMAINING_PAYMENT_PENDING
@@ -1238,7 +1243,9 @@ public class CustomerServiceImpl implements CustomerService {
                 || status == StatusBill.REFUNDED_PENDING
                 || status == StatusBill.CANCEL_REFUND_PENDING
                 || status == StatusBill.REFUNDED
-                || status == StatusBill.REJECTED;
+                || status == StatusBill.CANCELLED_REFUNDED
+                || status == StatusBill.REJECTED
+                || status == StatusBill.CANCELLED;
 
         Complaint latestComplaint = findLatestComplaint(bill);
         boolean hasActiveComplaint = latestComplaint != null;
@@ -1302,6 +1309,7 @@ public class CustomerServiceImpl implements CustomerService {
             case CANCEL_REFUND_PENDING -> "CANCEL_REFUND_PENDING";
             case CANCELLED_REFUNDED -> "CANCELLED_REFUNDED";
             case CANCELLED -> "CANCELLED";
+            default -> "UNKNOWN";
         };
     }
 
