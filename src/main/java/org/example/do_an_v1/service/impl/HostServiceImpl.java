@@ -14,16 +14,9 @@ import org.example.do_an_v1.dto.request.ProcessComplaintRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayPriceRequest;
 import org.example.do_an_v1.dto.request.UpdateHomestayStatusRequest;
 import org.example.do_an_v1.dto.response.RevenueStatisticsResponse;
+import org.example.do_an_v1.entity.*;
 import org.example.do_an_v1.enums.StatusHomestay;
 import org.example.do_an_v1.dto.request.UserRegistrationRequest;
-import org.example.do_an_v1.entity.Admin;
-import org.example.do_an_v1.entity.Complaint;
-import org.example.do_an_v1.entity.Host;
-import org.example.do_an_v1.entity.Homestay;
-import org.example.do_an_v1.entity.HomestayDailyPrice;
-import org.example.do_an_v1.entity.PricePerDay;
-import org.example.do_an_v1.entity.Transaction;
-import org.example.do_an_v1.entity.User;
 import org.example.do_an_v1.enums.RoleUser;
 import org.example.do_an_v1.enums.Status;
 import org.example.do_an_v1.enums.StatusHost;
@@ -32,7 +25,6 @@ import org.example.do_an_v1.enums.TypeTransaction;
 import org.example.do_an_v1.mapper.profile.ProfileMapper;
 import org.example.do_an_v1.payload.ApiResponse;
 import org.example.do_an_v1.dto.response.PageResponse;
-import org.example.do_an_v1.entity.Bill;
 import org.example.do_an_v1.enums.StatusBill;
 import org.example.do_an_v1.mapper.BillMapper;
 import org.example.do_an_v1.mapper.ComplaintMapper;
@@ -290,17 +282,36 @@ public class HostServiceImpl implements HostService {
         List<Homestay> homestays = homestayRepository.findByHost(host);
 
         List<HomestaySummaryDTO> summaries = homestays.stream()
-                .map(h -> HomestaySummaryDTO.builder()
-                        .id(h.getId())
-                        .title(h.getTitle())
-                        .category(h.getCategory())
-                        .status(h.getStatusHomestay())
-                        .hostId(host.getId())
-                        .hostName(user.getName())
-                        .city(h.getAddress() != null ? h.getAddress().getCity() : null)
-                        .state(h.getAddress() != null ? h.getAddress().getState() : null)
-                        .createdAt(h.getCreatedAt())
-                        .build())
+                .map(h -> {
+                    // Tìm ảnh chính (isPrimary = true) từ danh sách ảnh của homestay
+                    String primaryImageUrl = null;
+                    if (h.getListImage() != null) {
+                        primaryImageUrl = h.getListImage().stream()
+                                .filter(img -> img != null && Boolean.TRUE.equals(img.getIsPrimary()))
+                                .map(Image::getImage_url)
+                                .findFirst()
+                                .orElse(null);
+                        
+                        // Nếu không có ảnh chính, lấy ảnh đầu tiên
+                        if (primaryImageUrl == null && !h.getListImage().isEmpty()) {
+                            Image firstImage = h.getListImage().iterator().next();
+                            primaryImageUrl = firstImage != null ? firstImage.getImage_url() : null;
+                        }
+                    }
+                    
+                    return HomestaySummaryDTO.builder()
+                            .id(h.getId())
+                            .title(h.getTitle())
+                            .category(h.getCategory())
+                            .status(h.getStatusHomestay())
+                            .hostId(host.getId())
+                            .hostName(user.getName())
+                            .city(h.getAddress() != null ? h.getAddress().getCity() : null)
+                            .state(h.getAddress() != null ? h.getAddress().getState() : null)
+                            .primaryImageUrl(primaryImageUrl)
+                            .createdAt(h.getCreatedAt())
+                            .build();
+                })
                 .toList();
 
         return new ApiResponse<>(200, "Homestays for host retrieved successfully", summaries);

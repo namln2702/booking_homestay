@@ -49,6 +49,7 @@ public class HomestayDetailDTO {
     private List<HomestayDailyPriceDTO> dailyPrices;
     private List<HomestayImageDTO> images;
     private List<PersonCapacityDTO> personCapacities;
+    private List<TouristAttractionDTO> touristAttractions;
     private PriceInsightDTO priceInsight;
     private List<ReviewDetailDTO> reviews;
 

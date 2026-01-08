@@ -658,6 +658,7 @@ public class HomestayServiceImpl implements HomestayService {
                 .dailyPrices(baseDto.getDailyPrices())
                 .images(baseDto.getImages())
                 .personCapacities(baseDto.getPersonCapacities())
+                .touristAttractions(baseDto.getTouristAttractions())
                 .host(mapHostSummary(homestay.getHost()))
                 .priceInsight(buildPriceInsight(homestay))
                 .reviews(mapReviewDetails(reviews))

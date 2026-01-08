@@ -93,23 +93,22 @@ public class VNPayPaymentSupport {
             Date startDate = Date.from(checkInLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
             Date endDate = Date.from(checkOutLocalDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
 
-            // Tìm tất cả HomestayDailyPrice trong khoảng thời gian của bill
-            List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findByHomestayAndDateRange(
-                    bill.getHomestay().getId(),
-                    startDate,
-                    endDate
-            );
+            // // Tìm tất cả HomestayDailyPrice trong khoảng thời gian của bill
+            // List<HomestayDailyPrice> dailyPrices = homestayDailyPricesRepository.findByHomestayAndDateRange(
+            //         bill.getHomestay().getId(),
+            //         startDate,
+            //         endDate
+            // );
 
             // Kiểm tra xem có ngày nào đã được booked bởi bill khác không
             // Reload bill để có collection đầy đủ
             bill = billRepository.findById(bill.getId()).orElse(bill);
-            
             // Khởi tạo collection nếu chưa có
             if (bill.getListHomestayDailyPrices() == null) {
                 bill.setListHomestayDailyPrices(new java.util.HashSet<>());
             }
             
-            for (HomestayDailyPrice dailyPrice : dailyPrices) {
+            for (HomestayDailyPrice dailyPrice : bill.getListHomestayDailyPrices()) {
                 if (Boolean.TRUE.equals(dailyPrice.getIsBooked())) {
 
                     
@@ -232,7 +231,7 @@ public class VNPayPaymentSupport {
      * KHÔNG áp dụng cho thanh toán lần 2 (70% - REMAINING_PAYMENT_PENDING)
      */
     @Transactional
-    protected void lockHomestayDailyPrices(Bill bill) {
+    private void lockHomestayDailyPrices(Bill bill) {
         if (bill == null || bill.getHomestay() == null) {
             log.warn("Cannot lock daily prices: bill or homestay is null");
             return;
