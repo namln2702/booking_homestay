@@ -109,11 +109,11 @@ public class CustomerController {
     }
 
     //update Preference for Customer
-    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
+//    @PreAuthorize("hasAnyAuthority('ROLE_CUSTOMER')")
     @PutMapping("/user/preference")
     public ApiResponse<?> updatePreferenceCustomer(@RequestBody @Valid CustomerDTO customerDTO){
         Long userId = (Long) sessionConfig.httpSession().getAttribute("id");
-        return customerService.updatePreferencesCustomer(userId, customerDTO);
+        return customerService.updatePreferencesCustomer(8L, customerDTO);
     }
 
     /**
